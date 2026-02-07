@@ -1,0 +1,411 @@
+import React from 'react';
+import { BrowserRouter, Link, Route, Routes, useNavigate } from 'react-router-dom';
+import { Dashboard } from './Dashboard';
+import './style.css';
+
+const AUTH_KEY = 'fda_auth';
+
+const HomePage: React.FC = () => {
+  return (
+    <div className="auth-page">
+      <div className="auth-container">
+        <header className="auth-header">
+          <div className="auth-logo-section">
+            <div className="auth-logo">M</div>
+            <div>
+              <h1 className="auth-title">MC Wallet</h1>
+              <p className="auth-subtitle">Secure P2P Trading Platform</p>
+            </div>
+          </div>
+          <nav className="auth-nav">
+            <Link to="/login" className="auth-nav-link auth-nav-link-primary">Login</Link>
+          </nav>
+        </header>
+
+        <div className="auth-hero">
+          <h2 className="auth-hero-title">Your Gateway to Decentralized Finance</h2>
+          <p className="auth-hero-description">
+            Manage your tokens securely with our non-custodial wallet. Trade peer-to-peer with zero fees on internal transfers.
+          </p>
+        </div>
+
+        <div className="auth-features">
+          <div className="auth-feature-card">
+            <div className="auth-feature-icon">🔐</div>
+            <h3 className="auth-feature-title">Secure & Non-Custodial</h3>
+            <p className="auth-feature-text">Your keys, your control. Private keys encrypted locally with 12+1 seed phrase.</p>
+          </div>
+          <div className="auth-feature-card">
+            <div className="auth-feature-icon">💱</div>
+            <h3 className="auth-feature-title">P2P Trading</h3>
+            <p className="auth-feature-text">Trade FDA tokens directly with other users. Fast, secure, and transparent.</p>
+          </div>
+          <div className="auth-feature-card">
+            <div className="auth-feature-icon">⚡</div>
+            <h3 className="auth-feature-title">Zero Fee Transfers</h3>
+            <p className="auth-feature-text">Send FDA tokens internally with zero transaction fees. Instant transfers.</p>
+          </div>
+        </div>
+
+        <div className="auth-get-started">
+          <h3 className="auth-get-started-title">Get Started in 3 Steps</h3>
+          <ol className="auth-steps-list">
+            <li className="auth-step-item">
+              <span className="auth-step-number">1</span>
+              <span>Create your account or login</span>
+            </li>
+            <li className="auth-step-item">
+              <span className="auth-step-number">2</span>
+              <span>Create or import your wallet</span>
+            </li>
+            <li className="auth-step-item">
+              <span className="auth-step-number">3</span>
+              <span>Start trading and managing your tokens</span>
+            </li>
+          </ol>
+          <div className="auth-cta-buttons">
+            <Link to="/login" className="auth-cta-button auth-cta-primary">Login</Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LoginPage: React.FC = () => {
+  const [username, setUsername] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setMessage('Please enter both user ID and password');
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch('http://localhost:4000/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || 'Login failed');
+        setLoading(false);
+        return;
+      }
+      
+      // Log full FDA data if available
+      if (data.fdaUserData) {
+        console.log('========================================');
+        console.log('📥 FDA Remote Login Response Data:');
+        console.log('========================================');
+        console.log('Full Response:', data);
+        console.log('FDA User Data:', data.fdaUserData);
+        console.log('All FDA Fields:', Object.keys(data.fdaUserData));
+        console.log('User Object:', data.user);
+        console.log('========================================\n');
+      }
+      
+      // Debug: Check admin status
+      console.log('🔍 Login Response Debug:');
+      console.log('  User object:', data.user);
+      console.log('  isAdmin value:', data.user?.isAdmin);
+      console.log('  isAdmin type:', typeof data.user?.isAdmin);
+      console.log('  Full auth data:', JSON.stringify(data, null, 2));
+      console.log('');
+      
+      localStorage.setItem(AUTH_KEY, JSON.stringify(data));
+      navigate('/app');
+    } catch {
+      setMessage('Unable to reach backend API.');
+      setLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
+  return (
+    <div className="auth-page">
+      <div className="auth-form-container">
+        <div className="auth-form-header">
+          <Link to="/" className="auth-back-link">← Back to Home</Link>
+          <div className="auth-logo-section">
+            <div className="auth-logo">M</div>
+            <div>
+              <h1 className="auth-form-title">Welcome Back</h1>
+              <p className="auth-form-subtitle">Sign in to your MC wallet</p>
+            </div>
+          </div>
+        </div>
+        <div className="auth-form-card">
+          <div className="auth-form-group">
+            <label className="auth-form-label">User ID</label>
+            <input
+              type="text"
+              className="auth-form-input"
+              placeholder="Enter your user ID"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={loading}
+            />
+          </div>
+          <div className="auth-form-group">
+            <label className="auth-form-label">Password</label>
+            <input
+              type="password"
+              className="auth-form-input"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={loading}
+            />
+            <Link to="/forgot-password" className="auth-forgot-link">Forgot password?</Link>
+          </div>
+          {message && (
+            <div className={`auth-message ${message.includes('Unable') || message.includes('failed') || message.includes('Invalid') ? 'auth-message-error' : 'auth-message-success'}`}>
+              {message}
+            </div>
+          )}
+          <button 
+            className="auth-form-button auth-form-button-primary" 
+            onClick={handleLogin}
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+const ForgotPasswordPage: React.FC = () => {
+  const [email, setEmail] = React.useState('');
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+  const navigate = useNavigate();
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setMessage('Please enter your email address');
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch('http://localhost:4000/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || 'Failed to send reset email');
+        setLoading(false);
+        return;
+      }
+      setSent(true);
+      setMessage('Password reset link has been sent to your email');
+    } catch {
+      setMessage('Unable to reach backend API.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-page">
+      <div className="auth-form-container">
+        <div className="auth-form-header">
+          <Link to="/login" className="auth-back-link">← Back to Login</Link>
+          <div className="auth-logo-section">
+            <div className="auth-logo">M</div>
+            <div>
+              <h1 className="auth-form-title">Forgot Password</h1>
+              <p className="auth-form-subtitle">Enter your email to reset your password</p>
+            </div>
+          </div>
+        </div>
+        <div className="auth-form-card">
+          {!sent ? (
+            <>
+              <div className="auth-form-group">
+                <label className="auth-form-label">Email Address</label>
+                <input
+                  type="email"
+                  className="auth-form-input"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleForgotPassword()}
+                  disabled={loading}
+                />
+              </div>
+              {message && (
+                <div className={`auth-message ${message.includes('Unable') || message.includes('Failed') ? 'auth-message-error' : 'auth-message-success'}`}>
+                  {message}
+                </div>
+              )}
+              <button 
+                className="auth-form-button auth-form-button-primary" 
+                onClick={handleForgotPassword}
+                disabled={loading}
+              >
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </>
+          ) : (
+            <div className="auth-success-box">
+              <div className="auth-success-icon">✓</div>
+              <h3 className="auth-success-title">Check Your Email</h3>
+              <p className="auth-success-text">
+                We've sent a password reset link to <strong>{email}</strong>. Please check your inbox and follow the instructions.
+              </p>
+              <button 
+                className="auth-form-button auth-form-button-secondary" 
+                onClick={() => navigate('/login')}
+              >
+                Back to Login
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ResetPasswordPage: React.FC = () => {
+  const [token, setToken] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenParam = params.get('token');
+    if (tokenParam) {
+      setToken(tokenParam);
+    } else {
+      setMessage('Invalid or missing reset token');
+    }
+  }, []);
+
+  const handleResetPassword = async () => {
+    if (!token) {
+      setMessage('Invalid reset token');
+      return;
+    }
+    if (password.length < 6) {
+      setMessage('Password must be at least 6 characters');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setMessage('Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch('http://localhost:4000/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error || 'Failed to reset password');
+        setLoading(false);
+        return;
+      }
+      setMessage('Password reset successful! Redirecting to login...');
+      setTimeout(() => navigate('/login'), 2000);
+    } catch {
+      setMessage('Unable to reach backend API.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-page">
+      <div className="auth-form-container">
+        <div className="auth-form-header">
+          <Link to="/login" className="auth-back-link">← Back to Login</Link>
+          <div className="auth-logo-section">
+            <div className="auth-logo">M</div>
+            <div>
+              <h1 className="auth-form-title">Reset Password</h1>
+              <p className="auth-form-subtitle">Enter your new password</p>
+            </div>
+          </div>
+        </div>
+        <div className="auth-form-card">
+          <div className="auth-form-group">
+            <label className="auth-form-label">New Password</label>
+            <input
+              type="password"
+              className="auth-form-input"
+              placeholder="Enter new password (min 6 characters)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading || !token}
+            />
+          </div>
+          <div className="auth-form-group">
+            <label className="auth-form-label">Confirm New Password</label>
+            <input
+              type="password"
+              className="auth-form-input"
+              placeholder="Confirm your new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleResetPassword()}
+              disabled={loading || !token}
+            />
+          </div>
+          {message && (
+            <div className={`auth-message ${message.includes('successful') ? 'auth-message-success' : 'auth-message-error'}`}>
+              {message}
+            </div>
+          )}
+          <button 
+            className="auth-form-button auth-form-button-primary" 
+            onClick={handleResetPassword}
+            disabled={loading || !token}
+          >
+            {loading ? 'Resetting...' : 'Reset Password'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/app" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
+
