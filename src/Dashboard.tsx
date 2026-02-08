@@ -34,6 +34,7 @@ import {
   type WalletMeta,
   type StoredWallet,
 } from './walletStorage';
+import { getApiUrl } from './config';
 
 // Import components
 import { 
@@ -337,7 +338,7 @@ export const Dashboard: React.FC = () => {
   const fetchInternalBalance = async () => {
     if (!auth) return;
     try {
-      const res = await fetch('http://localhost:4000/internal/balance', {
+      const res = await fetch(getApiUrl('internal/balance'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (res.ok) {
@@ -355,7 +356,7 @@ export const Dashboard: React.FC = () => {
   const registerWalletAddress = async (address: string, label?: string) => {
     if (!auth) return;
     try {
-      const res = await fetch('http://localhost:4000/wallets/register', {
+      const res = await fetch(getApiUrl('wallets/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -375,7 +376,7 @@ export const Dashboard: React.FC = () => {
   const checkIfFdaWallet = async (address: string) => {
     if (!auth) return null;
     try {
-      const res = await fetch(`http://localhost:4000/internal/user-by-address?address=${address}`, {
+      const res = await fetch(getApiUrl(`internal/user-by-address?address=${address}`), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (res.ok) {
@@ -568,7 +569,7 @@ export const Dashboard: React.FC = () => {
   const fetchRegisteredFdaWallets = async () => {
     if (!auth) return;
     try {
-      const res = await fetch('http://localhost:4000/wallets', {
+      const res = await fetch(getApiUrl('wallets'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (res.ok) {
@@ -604,7 +605,7 @@ export const Dashboard: React.FC = () => {
     
     try {
       setRegisteringWallet(true);
-      const res = await fetch('http://localhost:4000/wallets/register', {
+      const res = await fetch(getApiUrl('wallets/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -655,7 +656,7 @@ export const Dashboard: React.FC = () => {
       const address = wallet.address;
       
       // Register it with the backend
-      const res = await fetch('http://localhost:4000/wallets/register', {
+      const res = await fetch(getApiUrl('wallets/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -712,7 +713,7 @@ export const Dashboard: React.FC = () => {
 
   const fetchP2PFeeRate = async () => {
     try {
-      const res = await fetch('http://localhost:4000/settings/p2p-fee-rate');
+      const res = await fetch(getApiUrl('settings/p2p-fee-rate'));
       if (res.ok) {
         const data = await res.json();
         // Handle 0 as valid value (don't use || which treats 0 as falsy)
@@ -733,7 +734,7 @@ export const Dashboard: React.FC = () => {
     if (!auth) return;
     
     try {
-      const res = await fetch('http://localhost:4000/auth/profile', {
+      const res = await fetch(getApiUrl('auth/profile'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },
@@ -1023,7 +1024,7 @@ export const Dashboard: React.FC = () => {
     }
     setLoadingOffers(true);
     try {
-      const res = await fetch('http://localhost:4000/offers', {
+      const res = await fetch(getApiUrl('offers'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },
@@ -1058,7 +1059,7 @@ export const Dashboard: React.FC = () => {
       setAddingFdaBalance(true);
       setMessage(null); // Clear previous messages
       
-      const res = await fetch('http://localhost:4000/internal/add-balance', {
+      const res = await fetch(getApiUrl('internal/add-balance'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1200,7 +1201,7 @@ export const Dashboard: React.FC = () => {
         amount: Number(offerAmount),
       });
       console.log('[FRONTEND] ========================================');
-      const res = await fetch('http://localhost:4000/offers', {
+      const res = await fetch(getApiUrl('offers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1261,7 +1262,7 @@ export const Dashboard: React.FC = () => {
     setLoadingMyTrades(true);
     try {
       // Get trades where user is buyer or seller
-      const res = await fetch('http://localhost:4000/trades', {
+      const res = await fetch(getApiUrl('trades'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },
@@ -1326,7 +1327,7 @@ export const Dashboard: React.FC = () => {
     
     setAcceptingOffer(selectedOffer.id);
     try {
-      const res = await fetch('http://localhost:4000/trades', {
+      const res = await fetch(getApiUrl('trades'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1357,7 +1358,7 @@ export const Dashboard: React.FC = () => {
     if (!auth) return;
     setMarkingAsPaid(tradeId);
     try {
-      const res = await fetch(`http://localhost:4000/trades/${tradeId}/mark-paid`, {
+      const res = await fetch(getApiUrl(`trades/${tradeId}/mark-paid`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1473,7 +1474,7 @@ export const Dashboard: React.FC = () => {
     const tradeId = selectedTradeToRelease.id;
     setReleasingTokens(tradeId);
     try {
-      const res = await fetch(`http://localhost:4000/trades/${tradeId}/release`, {
+      const res = await fetch(getApiUrl(`trades/${tradeId}/release`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${auth.token}`,
@@ -1502,7 +1503,7 @@ export const Dashboard: React.FC = () => {
     
     setCancellingTrade(tradeId);
     try {
-      const res = await fetch(`http://localhost:4000/trades/${tradeId}/cancel`, {
+      const res = await fetch(getApiUrl(`trades/${tradeId}/cancel`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${auth.token}`,
@@ -1539,7 +1540,7 @@ export const Dashboard: React.FC = () => {
     
     setCancellingOffer(selectedOfferToCancel.id);
     try {
-      const res = await fetch(`http://localhost:4000/offers/${selectedOfferToCancel.id}/cancel`, {
+      const res = await fetch(getApiUrl(`offers/${selectedOfferToCancel.id}/cancel`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${auth.token}`,
@@ -1583,7 +1584,7 @@ export const Dashboard: React.FC = () => {
     
     setDisputingTrade(tradeId);
     try {
-      const res = await fetch(`http://localhost:4000/trades/${tradeId}/disputes`, {
+      const res = await fetch(getApiUrl(`trades/${tradeId}/disputes`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1746,7 +1747,7 @@ export const Dashboard: React.FC = () => {
       
       try {
         // Processing message - no need to show modal for this
-        const res = await fetch('http://localhost:4000/internal/transfer', {
+        const res = await fetch(getApiUrl('internal/transfer'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1963,10 +1964,10 @@ export const Dashboard: React.FC = () => {
     }
     try {
       const [tradesRes, disputesRes] = await Promise.all([
-        fetch('http://localhost:4000/admin/trades', {
+        fetch(getApiUrl('admin/trades'), {
           headers: { Authorization: `Bearer ${auth.token}` },
         }),
-        fetch('http://localhost:4000/admin/disputes', {
+        fetch(getApiUrl('admin/disputes'), {
           headers: { Authorization: `Bearer ${auth.token}` },
         }),
       ]);
@@ -1984,7 +1985,7 @@ export const Dashboard: React.FC = () => {
       setAdminDisputes(disputesData);
       
       // Load settings
-      const settingsRes = await fetch('http://localhost:4000/admin/settings', {
+      const settingsRes = await fetch(getApiUrl('admin/settings'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (settingsRes.ok) {
@@ -2017,7 +2018,7 @@ export const Dashboard: React.FC = () => {
         fetchP2PFeeRate();
         // Try to fetch holding FDA amount from public endpoint
         try {
-          const holdingRes = await fetch('http://localhost:4000/settings/holding-fda-amount');
+          const holdingRes = await fetch(getApiUrl('settings/holding-fda-amount'));
           if (holdingRes.ok) {
             const holdingData = await holdingRes.json();
             const holdingValue = holdingData.holdingAmount?.toString() || '0';
@@ -2050,7 +2051,7 @@ export const Dashboard: React.FC = () => {
 
     setUpdatingFeeRate(true);
     try {
-      const res = await fetch('http://localhost:4000/admin/settings/p2p_fee_rate', {
+      const res = await fetch(getApiUrl('admin/settings/p2p_fee_rate'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2104,7 +2105,7 @@ export const Dashboard: React.FC = () => {
     
     setUpdatingHoldingFda(true);
     try {
-      const res = await fetch('http://localhost:4000/admin/settings/holding_fda_amount', {
+      const res = await fetch(getApiUrl('admin/settings/holding_fda_amount'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

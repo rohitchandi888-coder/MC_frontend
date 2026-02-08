@@ -12,6 +12,7 @@ import {
   CrosshairMode,
   CandlestickSeries,
 } from 'lightweight-charts';
+import { getApiUrl } from '../../config';
 
 interface OHLCData {
   time: string;
@@ -568,7 +569,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
     }
 
     try {
-      const res = await fetch('http://localhost:4000/trades', {
+      const res = await fetch(getApiUrl('trades'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },

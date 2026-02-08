@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiUrl } from '../../config';
 import type { AuthState } from '../types';
 
 interface ProfileProps {
@@ -52,7 +53,7 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:4000/auth/profile', {
+      const res = await fetch(getApiUrl('auth/profile'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },
@@ -87,7 +88,7 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
     setSuccess(null);
 
     try {
-      const res = await fetch('http://localhost:4000/auth/profile', {
+      const res = await fetch(getApiUrl('auth/profile'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -160,7 +161,7 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
     setSuccess(null);
 
     try {
-      const res = await fetch('http://localhost:4000/auth/change-password', {
+      const res = await fetch(getApiUrl('auth/change-password'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

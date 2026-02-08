@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { AuthState } from '../types';
+import { getApiUrl } from '../../config';
 
 interface Transaction {
   id: number;
@@ -36,7 +37,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:4000/internal/transfers', {
+      const res = await fetch(getApiUrl('internal/transfers'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },

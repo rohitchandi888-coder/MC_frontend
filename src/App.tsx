@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Link, Route, Routes, useNavigate } from 'react-router-dom';
 import { Dashboard } from './Dashboard';
+import { getApiUrl } from './config';
 import './style.css';
 
 const AUTH_KEY = 'fda_auth';
@@ -87,7 +88,7 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('http://localhost:4000/auth/login', {
+      const res = await fetch(getApiUrl('auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -206,7 +207,7 @@ const ForgotPasswordPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('http://localhost:4000/auth/forgot-password', {
+      const res = await fetch(getApiUrl('auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -321,7 +322,7 @@ const ResetPasswordPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('http://localhost:4000/auth/reset-password', {
+      const res = await fetch(getApiUrl('auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),

@@ -1,0 +1,8 @@
+// Runtime Configuration for Production
+// Copy this file to config.js and update with your production API URL
+// This file is loaded before the app, allowing runtime configuration
+
+window.APP_CONFIG = {
+  API_URL: 'https://api.merchantcoinwallet.com'
+  // Change this to your actual backend API URL
+};

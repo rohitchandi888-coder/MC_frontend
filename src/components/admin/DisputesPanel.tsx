@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { type AuthState } from '../types';
+import { getApiUrl } from '../../config';
 
 interface DisputesPanelProps {
   auth: AuthState | null;
@@ -39,7 +40,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
     
     setResolvingDispute(selectedDispute.id);
     try {
-      const res = await fetch(`http://localhost:4000/admin/disputes/${selectedDispute.id}/resolve`, {
+      const res = await fetch(getApiUrl(`admin/disputes/${selectedDispute.id}/resolve`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
