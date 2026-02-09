@@ -18,7 +18,7 @@
     <script>
       // CRITICAL: Force correct API URL - reject any old/broken URLs
       (function() {
-        const CORRECT_URL = 'https://merchantcoinwallet.com/ap';
+        const CORRECT_URL = 'https://merchantcoinwallet.com/api';
         const OLD_BAD_URL = '89.116.32.223:4000';
         
         // Initialize with correct URL
@@ -74,9 +74,9 @@
         // Also intercept XMLHttpRequest
         const originalXHROpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-          if (typeof url === 'string' && (url.includes(OLD_BAD_URL) || (url.includes('merchantcoinwallet.com') && !url.includes('/ap')))) {
+          if (typeof url === 'string' && (url.includes(OLD_BAD_URL) || (url.includes('merchantcoinwallet.com') && !url.includes('/api')))) {
             let fixedUrl = url.replace(/https?:\/\/[^\/]*89\.116\.32\.223:4000/g, CORRECT_URL);
-            fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/api\//g, 'https://merchantcoinwallet.com/ap/');
+            fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/ap\//g, 'https://merchantcoinwallet.com/api/');
             console.error('🚨 INTERCEPTED XHR with OLD URL!', url);
             console.warn('✅ FIXING to:', fixedUrl);
             url = fixedUrl;
@@ -93,7 +93,7 @@
     <script>
         // Verify and enforce correct config after config.js loads
       (function() {
-        const CORRECT_URL = 'https://merchantcoinwallet.com/ap';
+        const CORRECT_URL = 'https://merchantcoinwallet.com/api';
         const OLD_BAD_URL = '89.116.32.223:4000';
         
         // Wait a moment for config.js to load

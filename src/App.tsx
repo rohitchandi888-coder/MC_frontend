@@ -88,11 +88,28 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch(getApiUrl('auth/login'), {
+      const loginUrl = getApiUrl('auth/login');
+      console.log('🔍 Login attempt - URL:', loginUrl);
+      console.log('🔍 Login attempt - Config:', window.APP_CONFIG?.API_URL);
+      
+      const res = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+      
+      console.log('🔍 Login response status:', res.status, res.statusText);
+      
+      // Check if response is JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('❌ Non-JSON response:', text);
+        setMessage(`Server error: ${res.status} ${res.statusText}. Please check backend configuration.`);
+        setLoading(false);
+        return;
+      }
+      
       const data = await res.json();
       if (!res.ok) {
         setMessage(data.error || 'Login failed');
@@ -122,8 +139,30 @@ const LoginPage: React.FC = () => {
       
       localStorage.setItem(AUTH_KEY, JSON.stringify(data));
       navigate('/app');
-    } catch {
-      setMessage('Unable to reach backend API.');
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        url: getApiUrl('auth/login')
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = 'Unable to reach backend API.';
+      if (error.message) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMessage = 'Network error: Cannot connect to backend. Please check if the server is running at ' + getApiUrl('auth/login');
+        } else if (error.message.includes('CORS')) {
+          errorMessage = 'CORS error: Backend server may not allow requests from this domain.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      setMessage(errorMessage);
       setLoading(false);
     }
   };

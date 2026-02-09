@@ -3,7 +3,7 @@
 // Update this file with your actual backend API URL
 
 window.APP_CONFIG = {
-  // Backend is running at https://merchantcoinwallet.com/ap
-  API_URL: 'https://merchantcoinwallet.com/ap'
-  // Backend endpoint: https://merchantcoinwallet.com/ap
+  // Backend is running at https://merchantcoinwallet.com/api
+  API_URL: 'https://merchantcoinwallet.com/api'
+  // Backend endpoint: https://merchantcoinwallet.com/api
 };

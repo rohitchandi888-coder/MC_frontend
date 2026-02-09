@@ -1,11 +1,11 @@
 // STANDALONE URL FIX SCRIPT - ULTRA AGGRESSIVE VERSION
 // This script MUST load FIRST before any other scripts
-// Backend is at: https://merchantcoinwallet.com/ap
+// Backend is at: https://merchantcoinwallet.com/api
 
 (function() {
   'use strict';
   
-  const CORRECT_URL = 'https://merchantcoinwallet.com/ap';
+  const CORRECT_URL = 'https://merchantcoinwallet.com/api';
   const OLD_BAD_URL = '89.116.32.223:4000';
   
   console.log('🔧🔧🔧 LOADING URL FIX SCRIPT... 🔧🔧🔧');
@@ -16,7 +16,7 @@
   const currentUrl = String(window.APP_CONFIG.API_URL || '');
   if (!window.APP_CONFIG.API_URL || 
       currentUrl.includes(OLD_BAD_URL) || 
-      (currentUrl.includes('merchantcoinwallet.com') && !currentUrl.includes('/ap'))) {
+      (currentUrl.includes('merchantcoinwallet.com') && !currentUrl.includes('/api'))) {
     window.APP_CONFIG.API_URL = CORRECT_URL;
     console.log('✅ Forced APP_CONFIG.API_URL to:', CORRECT_URL);
   }
@@ -32,9 +32,9 @@
     if (args[0] && typeof args[0] === 'string') {
       urlToFix = args[0];
       // Check for old IP address or wrong endpoint
-      if (urlToFix.includes(OLD_BAD_URL) || (urlToFix.includes('merchantcoinwallet.com') && !urlToFix.includes('/ap'))) {
+      if (urlToFix.includes(OLD_BAD_URL) || (urlToFix.includes('merchantcoinwallet.com') && !urlToFix.includes('/api'))) {
         fixedUrl = urlToFix.replace(/https?:\/\/[^\/]*89\.116\.32\.223:4000/g, CORRECT_URL);
-        fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/api\//g, 'https://merchantcoinwallet.com/ap/');
+        fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/ap\//g, 'https://merchantcoinwallet.com/api/');
         console.error('🚨🚨🚨 [FIX SCRIPT] INTERCEPTED fetch() with OLD URL:', urlToFix);
         console.warn('✅✅✅ [FIX SCRIPT] FIXING to:', fixedUrl);
         args[0] = fixedUrl;
@@ -45,9 +45,9 @@
     else if (args[0] && args[0] instanceof Request) {
       urlToFix = args[0].url;
       // Check for old IP address or wrong endpoint
-      if (urlToFix && (urlToFix.includes(OLD_BAD_URL) || (urlToFix.includes('merchantcoinwallet.com') && !urlToFix.includes('/ap')))) {
+      if (urlToFix && (urlToFix.includes(OLD_BAD_URL) || (urlToFix.includes('merchantcoinwallet.com') && !urlToFix.includes('/api')))) {
         fixedUrl = urlToFix.replace(/https?:\/\/[^\/]*89\.116\.32\.223:4000/g, CORRECT_URL);
-        fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/api\//g, 'https://merchantcoinwallet.com/ap/');
+        fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/ap\//g, 'https://merchantcoinwallet.com/api/');
         console.error('🚨🚨🚨 [FIX SCRIPT] INTERCEPTED Request object with OLD URL:', urlToFix);
         console.warn('✅✅✅ [FIX SCRIPT] FIXING to:', fixedUrl);
         // Create new Request with fixed URL, preserving all options
@@ -82,9 +82,9 @@
   const originalXHROpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     this._url = url;
-    if (typeof url === 'string' && (url.includes(OLD_BAD_URL) || (url.includes('merchantcoinwallet.com') && !url.includes('/ap')))) {
+    if (typeof url === 'string' && (url.includes(OLD_BAD_URL) || (url.includes('merchantcoinwallet.com') && !url.includes('/api')))) {
       let fixedUrl = url.replace(/https?:\/\/[^\/]*89\.116\.32\.223:4000/g, CORRECT_URL);
-      fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/api\//g, 'https://merchantcoinwallet.com/ap/');
+      fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/ap\//g, 'https://merchantcoinwallet.com/api/');
       console.error('🚨🚨🚨 [FIX SCRIPT] INTERCEPTED XHR open() with OLD URL:', url);
       console.warn('✅✅✅ [FIX SCRIPT] FIXING to:', fixedUrl);
       url = fixedUrl;
@@ -96,7 +96,7 @@
   // Monitor XHR send
   const originalSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function(...args) {
-    if (this._url && (this._url.includes(OLD_BAD_URL) || (this._url.includes('merchantcoinwallet.com') && !this._url.includes('/ap')))) {
+    if (this._url && (this._url.includes(OLD_BAD_URL) || (this._url.includes('merchantcoinwallet.com') && !this._url.includes('/api')))) {
       console.error('🚨 [FIX SCRIPT] XHR send() detected OLD URL:', this._url);
     }
     return originalSend.apply(this, args);

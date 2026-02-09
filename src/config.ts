@@ -4,18 +4,18 @@
 // 2. VITE_API_URL (build-time env var)
 // 3. http://localhost:4000 (default fallback)
 
-// CORRECT BACKEND URL - Backend is at https://merchantcoinwallet.com/ap
-const CORRECT_API_URL = 'https://merchantcoinwallet.com/ap';
+// CORRECT BACKEND URL - Backend is at https://merchantcoinwallet.com/api
+const CORRECT_API_URL = 'https://merchantcoinwallet.com/api';
 
 // Get API URL with runtime support - called every time to ensure latest config
 function getApiUrlFromConfig(): string {
-  // CRITICAL: Always reject the old/broken URL
-  const OLD_BAD_URL = 'merchantcoinwallet.com';
+  // CRITICAL: Always reject the old/broken HTTP IP address
+  const OLD_BAD_URL = '89.116.32.223:4000';
   
   // ALWAYS check runtime config first (highest priority)
   if (typeof window !== 'undefined' && (window as any).APP_CONFIG?.API_URL) {
     const runtimeUrl = String((window as any).APP_CONFIG.API_URL).trim();
-    // Reject old/bad URLs - force use correct URL
+    // Reject old HTTP IP address - but allow correct HTTPS domain
     if (runtimeUrl && !runtimeUrl.includes(OLD_BAD_URL) && runtimeUrl.length > 0) {
       return runtimeUrl;
     }
@@ -56,7 +56,7 @@ export const getApiUrl = (endpoint: string): string => {
   
   // If API_URL is empty, use relative URLs (for reverse proxy)
   if (!apiUrl || apiUrl.trim() === '') {
-    return `/ap/${cleanEndpoint}`;
+    return `/api/${cleanEndpoint}`;
   }
   
   const finalUrl = `${apiUrl}/${cleanEndpoint}`;
@@ -84,11 +84,12 @@ if (typeof window !== 'undefined') {
       source: hasRuntimeConfig ? '✅ runtime (config.js)' : (buildTimeUrl ? '⚠️ build-time (env)' : '✅ default'),
       runtimeConfig: hasRuntimeConfig ? (window as any).APP_CONFIG?.API_URL : '❌ not found',
       buildTimeUrl: buildTimeUrl || 'not set',
-      warning: buildTimeUrl && buildTimeUrl.includes('merchantcoinwallet.com') ? '⚠️ OLD URL IN BUILD - REBUILD NEEDED!' : ''
+      warning: buildTimeUrl && buildTimeUrl.includes('89.116.32.223:4000') ? '⚠️ OLD HTTP IP IN BUILD - REBUILD NEEDED!' : ''
     });
     
-    if (currentApiUrl.includes('merchantcoinwallet.com')) {
-      console.error('❌ ERROR: Still using old URL! Rebuild required with correct config.');
+    // Check if using old HTTP IP address
+    if (currentApiUrl.includes('89.116.32.223:4000')) {
+      console.error('❌ ERROR: Still using old HTTP IP address! Rebuild required with correct config.');
     }
   }, 100);
 }
