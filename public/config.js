@@ -3,10 +3,7 @@
 // Update this file with your actual backend API URL
 
 window.APP_CONFIG = {
-  API_URL: 'https://api.merchantcoinwallet.com'
-  // Change this to your actual backend API URL
-  // Examples:
-  //   API_URL: 'https://api.yourdomain.com'
-  //   API_URL: 'http://localhost:4000'  // for local development
-  //   API_URL: ''  // for relative URLs (same domain)
+  // Backend is running at https://merchantcoinwallet.com/ap
+  API_URL: 'https://merchantcoinwallet.com/ap'
+  // Backend endpoint: https://merchantcoinwallet.com/ap
 };

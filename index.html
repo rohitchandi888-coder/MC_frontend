@@ -4,8 +4,117 @@
     <meta charset="UTF-8" />
     <title>FDA Web Wallet & P2P Trading</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Runtime configuration - load before app starts -->
+    <!-- Runtime configuration - MUST load synchronously before app starts -->
+    <!-- Standalone fix script - loads FIRST before anything else -->
+    <script src="/fix-url.js"></script>
+    <script>
+      // Verify fix-url.js loaded
+      if (typeof window.fetch !== 'undefined') {
+        console.log('✅ fix-url.js loaded - fetch is available for interception');
+      } else {
+        console.error('❌ CRITICAL: fetch not available yet!');
+      }
+    </script>
+    <script>
+      // CRITICAL: Force correct API URL - reject any old/broken URLs
+      (function() {
+        const CORRECT_URL = 'https://merchantcoinwallet.com/ap';
+        const OLD_BAD_URL = '89.116.32.223:4000';
+        
+        // Initialize with correct URL
+        if (!window.APP_CONFIG) {
+          window.APP_CONFIG = { API_URL: CORRECT_URL };
+        }
+        
+        // ALWAYS override if old URL is present
+        if (window.APP_CONFIG.API_URL && String(window.APP_CONFIG.API_URL).includes(OLD_BAD_URL)) {
+          console.warn('⚠️ Rejecting old/broken URL, using correct backend:', CORRECT_URL);
+          window.APP_CONFIG.API_URL = CORRECT_URL;
+        }
+        
+        // Ensure it's set to correct URL
+        if (!window.APP_CONFIG.API_URL || window.APP_CONFIG.API_URL === '') {
+          window.APP_CONFIG.API_URL = CORRECT_URL;
+        }
+        
+        console.log('🔧 Initial API URL set:', window.APP_CONFIG.API_URL);
+        
+        // AGGRESSIVE FIX: Intercept fetch() calls and fix URLs
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+          let urlToFix = null;
+          let fixedUrl = null;
+          
+          // Handle string URL
+          if (args[0] && typeof args[0] === 'string') {
+            urlToFix = args[0];
+            if (urlToFix.includes(OLD_BAD_URL)) {
+              fixedUrl = urlToFix.replace(/https?:\/\/[^\/]*merchantcoinwallet\.com/g, CORRECT_URL);
+              console.error('🚨 INTERCEPTED fetch() with OLD URL!', urlToFix);
+              console.warn('✅ FIXING to:', fixedUrl);
+              args[0] = fixedUrl;
+            }
+          }
+          // Handle Request object
+          else if (args[0] && args[0] instanceof Request) {
+            urlToFix = args[0].url;
+            if (urlToFix && urlToFix.includes(OLD_BAD_URL)) {
+              fixedUrl = urlToFix.replace(/https?:\/\/[^\/]*merchantcoinwallet\.com/g, CORRECT_URL);
+              console.error('🚨 INTERCEPTED Request object with OLD URL!', urlToFix);
+              console.warn('✅ FIXING to:', fixedUrl);
+              // Create new Request with fixed URL
+              const newRequest = new Request(fixedUrl, args[0]);
+              args[0] = newRequest;
+            }
+          }
+          
+          return originalFetch.apply(this, args);
+        };
+        
+        // Also intercept XMLHttpRequest
+        const originalXHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          if (typeof url === 'string' && (url.includes(OLD_BAD_URL) || (url.includes('merchantcoinwallet.com') && !url.includes('/ap')))) {
+            let fixedUrl = url.replace(/https?:\/\/[^\/]*89\.116\.32\.223:4000/g, CORRECT_URL);
+            fixedUrl = fixedUrl.replace(/https?:\/\/merchantcoinwallet\.com\/api\//g, 'https://merchantcoinwallet.com/ap/');
+            console.error('🚨 INTERCEPTED XHR with OLD URL!', url);
+            console.warn('✅ FIXING to:', fixedUrl);
+            url = fixedUrl;
+          }
+          return originalXHROpen.call(this, method, url, ...rest);
+        };
+        
+        console.log('✅✅✅ URL INTERCEPTOR INSTALLED ✅✅✅');
+        console.log('   All requests to merchantcoinwallet.com will be AUTOMATICALLY redirected to:', CORRECT_URL);
+        console.log('   Check console for 🚨 messages when intercepting requests');
+      })();
+    </script>
     <script src="/config.js"></script>
+    <script>
+        // Verify and enforce correct config after config.js loads
+      (function() {
+        const CORRECT_URL = 'https://merchantcoinwallet.com/ap';
+        const OLD_BAD_URL = '89.116.32.223:4000';
+        
+        // Wait a moment for config.js to load
+        setTimeout(function() {
+          if (window.APP_CONFIG && window.APP_CONFIG.API_URL) {
+            const currentUrl = String(window.APP_CONFIG.API_URL);
+            
+            // REJECT old URL if somehow it got set
+            if (currentUrl.includes(OLD_BAD_URL)) {
+              console.error('❌ REJECTED old/broken URL! Forcing correct URL.');
+              window.APP_CONFIG.API_URL = CORRECT_URL;
+            }
+            
+            console.log('✅ Final API URL:', window.APP_CONFIG.API_URL);
+          } else {
+            console.warn('⚠️ Config not loaded, using fallback:', CORRECT_URL);
+            window.APP_CONFIG = { API_URL: CORRECT_URL };
+          }
+        }, 50);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
