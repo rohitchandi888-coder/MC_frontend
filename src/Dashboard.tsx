@@ -89,7 +89,16 @@ export const Dashboard: React.FC = () => {
   const [auth, setAuth] = useState<AuthState | null>(() => {
     try {
       const raw = localStorage.getItem(AUTH_KEY);
-      return raw ? (JSON.parse(raw) as AuthState) : null;
+      const parsed = raw ? (JSON.parse(raw) as AuthState) : null;
+      if (parsed) {
+        console.log('🔍 Loaded auth from localStorage:', {
+          userId: parsed.user.id,
+          email: parsed.user.email,
+          isAdmin: parsed.user.isAdmin,
+          isAdminType: typeof parsed.user.isAdmin
+        });
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -731,36 +740,56 @@ export const Dashboard: React.FC = () => {
 
   // Refresh user profile to get latest admin status
   const refreshUserProfile = async () => {
-    if (!auth) return;
+    const currentAuth = auth;
+    if (!currentAuth || !currentAuth.token) {
+      console.warn('⚠️ Cannot refresh profile: no auth token');
+      return;
+    }
     
     try {
+      console.log('🔄 Starting profile refresh...');
       const res = await fetch(getApiUrl('auth/profile'), {
         headers: {
-          Authorization: `Bearer ${auth.token}`,
+          Authorization: `Bearer ${currentAuth.token}`,
         },
       });
 
       if (res.ok) {
         const profileData = await res.json();
-        console.log('🔄 Refreshing user profile. Current isAdmin:', auth.user.isAdmin, 'New isAdmin:', !!profileData.is_admin);
+        console.log('🔄 Refreshing user profile. Current isAdmin:', currentAuth.user.isAdmin, 'New isAdmin:', !!profileData.is_admin);
+        console.log('📊 Profile data received:', {
+          is_admin: profileData.is_admin,
+          is_admin_type: typeof profileData.is_admin,
+          email: profileData.email
+        });
         // Update auth state with latest profile data
         const updatedAuth = {
-          ...auth,
+          ...currentAuth,
           user: {
-            ...auth.user,
+            ...currentAuth.user,
             email: profileData.email,
             phone: profileData.phone,
             fullName: profileData.full_name,
-            isAdmin: !!profileData.is_admin, // Update admin status
+            isAdmin: !!profileData.is_admin, // Update admin status - ensure boolean
           },
         };
         setAuth(updatedAuth);
         // Update localStorage
         localStorage.setItem(AUTH_KEY, JSON.stringify(updatedAuth));
-        console.log('✅ User profile refreshed. isAdmin:', !!profileData.is_admin);
+        console.log('✅ User profile refreshed. isAdmin:', updatedAuth.user.isAdmin);
+        console.log('✅ Auth state updated:', {
+          userId: updatedAuth.user.id,
+          email: updatedAuth.user.email,
+          isAdmin: updatedAuth.user.isAdmin,
+          isAdminType: typeof updatedAuth.user.isAdmin
+        });
+        console.log('✅ Sidebar should now show admin menu:', updatedAuth.user.isAdmin === true);
+      } else {
+        const errorText = await res.text();
+        console.error('❌ Failed to refresh profile. Status:', res.status, 'Response:', errorText);
       }
     } catch (err) {
-      console.error('Failed to refresh profile:', err);
+      console.error('❌ Failed to refresh profile:', err);
     }
   };
 
@@ -777,6 +806,15 @@ export const Dashboard: React.FC = () => {
       setCustomTokens([]);
     }
   }, [auth?.token]); // Only run when token changes, not on every auth change
+
+  // Also refresh profile on initial mount to ensure admin status is up to date
+  useEffect(() => {
+    if (auth && auth.token) {
+      console.log('🔄 Initial mount - refreshing profile to check admin status...');
+      refreshUserProfile();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - refreshUserProfile uses current auth from closure
 
   // Check if recipient is MC wallet
   useEffect(() => {
