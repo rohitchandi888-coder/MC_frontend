@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { WalletMeta } from '../../walletStorage';
 
 interface ManageWalletsProps {
@@ -26,6 +26,14 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
   onSwitchWallet,
   onDeleteWallet,
 }) => {
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  
+  const copyToClipboard = (text: string, address: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedAddress(address);
+      setTimeout(() => setCopiedAddress(null), 2000);
+    });
+  };
   return (
     <div>
       <p className="text-sm mb-3" style={{ color: '#374151', fontWeight: '500' }}>
@@ -86,9 +94,18 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-white font-mono mt-2 mb-1" style={{ fontSize: '0.8125rem', wordBreak: 'break-all', fontWeight: '500' }}>
-                          {wallet.address}
-                        </p>
+                        <div className="flex items-center gap-2 mt-2 mb-1">
+                          <p className="text-sm text-white font-mono flex-1" style={{ fontSize: '0.8125rem', wordBreak: 'break-all', fontWeight: '500' }}>
+                            {wallet.address}
+                          </p>
+                          <button
+                            className="copy-address-btn"
+                            onClick={() => copyToClipboard(wallet.address, wallet.address)}
+                            title="Copy address"
+                          >
+                            {copiedAddress === wallet.address ? '✓' : '📋'}
+                          </button>
+                        </div>
                         <p className="text-xs text-slate-300 mt-2">
                           Created: {new Date(wallet.createdAt).toLocaleDateString()}
                         </p>

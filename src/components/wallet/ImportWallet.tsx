@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export type WalletNetwork = 'BNB Chain' | 'Solana' | 'Bitcoin' | 'Tron';
 
@@ -29,6 +29,8 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
   onLabelChange,
   onImport,
 }) => {
+  const [showExtraWord, setShowExtraWord] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <div className="layout-2-col">
       <div>
@@ -65,20 +67,40 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
           onChange={(e) => onSeedChange(e.target.value)}
         />
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <input
-            type="text"
-            className="form-input"
-            placeholder="Custom 13th word"
-            value={importExtraWord}
-            onChange={(e) => onExtraWordChange(e.target.value)}
-          />
-          <input
-            type="password"
-            className="form-input"
-            placeholder="New wallet password"
-            value={walletPassword}
-            onChange={(e) => onPasswordChange(e.target.value)}
-          />
+          <div className="password-input-wrapper">
+            <input
+              type={showExtraWord ? "text" : "password"}
+              className="form-input"
+              placeholder="Custom 13th word"
+              value={importExtraWord}
+              onChange={(e) => onExtraWordChange(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowExtraWord(!showExtraWord)}
+              title={showExtraWord ? "Hide" : "Show"}
+            >
+              {showExtraWord ? "👁️" : "👁️‍🗨️"}
+            </button>
+          </div>
+          <div className="password-input-wrapper">
+            <input
+              type={showPassword ? "text" : "password"}
+              className="form-input"
+              placeholder="New wallet password"
+              value={walletPassword}
+              onChange={(e) => onPasswordChange(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowPassword(!showPassword)}
+              title={showPassword ? "Hide" : "Show"}
+            >
+              {showPassword ? "👁️" : "👁️‍🗨️"}
+            </button>
+          </div>
         </div>
         <input
           type="text"

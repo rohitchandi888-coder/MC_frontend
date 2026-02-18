@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { AuthState } from '../types';
 import type { CustomToken, WalletMeta } from '../../walletStorage';
 
@@ -27,8 +27,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   customTokenBalances,
   onSetActiveTab,
 }) => {
+  const [copied, setCopied] = useState(false);
+  const activeAddress = storedMeta?.address || checkAddress;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <>
+      {/* Action Buttons (Send, Receive, Swap) */}
+      {activeAddress && (
+        <div className="wallet-action-buttons">
+          <button
+            className="wallet-action-btn wallet-action-btn-send"
+            onClick={() => onSetActiveTab('send')}
+            title="Send tokens"
+          >
+            <span className="wallet-action-icon">📤</span>
+            <span className="wallet-action-label">Send</span>
+          </button>
+          <button
+            className="wallet-action-btn wallet-action-btn-receive"
+            onClick={() => {
+              if (activeAddress) {
+                copyToClipboard(activeAddress);
+              }
+            }}
+            title="Copy wallet address to receive"
+          >
+            <span className="wallet-action-icon">📥</span>
+            <span className="wallet-action-label">Receive</span>
+          </button>
+          <button
+            className="wallet-action-btn wallet-action-btn-swap"
+            onClick={() => onSetActiveTab('p2p')}
+            title="Swap tokens via P2P"
+          >
+            <span className="wallet-action-icon">🔄</span>
+            <span className="wallet-action-label">Swap</span>
+          </button>
+        </div>
+      )}
+
       {/* Balance Display Section */}
       {(storedMeta?.address || checkAddress) && (
         <div className="mt-6">
@@ -110,7 +154,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button className="action-card-light" onClick={() => onSetActiveTab('tokens')}>
             <div className="action-card-icon">🪙</div>
             <p className="action-card-title">Custom Tokens</p>
-            <p className="action-card-desc">Manage ERC-20 tokens</p>
+            <p className="action-card-desc">Manage custom tokens</p>
           </button>
         </div>
       </div>

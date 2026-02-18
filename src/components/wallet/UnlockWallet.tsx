@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { WalletMeta } from '../../walletStorage';
 
 interface UnlockWalletProps {
@@ -22,6 +22,8 @@ export const UnlockWallet: React.FC<UnlockWalletProps> = ({
   onPasswordChange,
   onUnlock,
 }) => {
+  const [showExtraWord, setShowExtraWord] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <div>
       <p className="text-sm mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6', color: '#374151' }}>
@@ -53,20 +55,40 @@ export const UnlockWallet: React.FC<UnlockWalletProps> = ({
       )}
 
       <div className="grid grid-cols-2 gap-2 mb-2">
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Custom 13th word"
-          value={unlockExtraWord}
-          onChange={(e) => onExtraWordChange(e.target.value)}
-        />
-        <input
-          type="password"
-          className="form-input"
-          placeholder="Wallet password"
-          value={unlockPassword}
-          onChange={(e) => onPasswordChange(e.target.value)}
-        />
+        <div className="password-input-wrapper">
+          <input
+            type={showExtraWord ? "text" : "password"}
+            className="form-input"
+            placeholder="Custom 13th word"
+            value={unlockExtraWord}
+            onChange={(e) => onExtraWordChange(e.target.value)}
+          />
+          <button
+            type="button"
+            className="password-toggle-btn"
+            onClick={() => setShowExtraWord(!showExtraWord)}
+            title={showExtraWord ? "Hide" : "Show"}
+          >
+            {showExtraWord ? "👁️" : "👁️‍🗨️"}
+          </button>
+        </div>
+        <div className="password-input-wrapper">
+          <input
+            type={showPassword ? "text" : "password"}
+            className="form-input"
+            placeholder="Wallet password"
+            value={unlockPassword}
+            onChange={(e) => onPasswordChange(e.target.value)}
+          />
+          <button
+            type="button"
+            className="password-toggle-btn"
+            onClick={() => setShowPassword(!showPassword)}
+            title={showPassword ? "Hide" : "Show"}
+          >
+            {showPassword ? "👁️" : "👁️‍🗨️"}
+          </button>
+        </div>
       </div>
       <button className="btn btn-primary" onClick={onUnlock} disabled={allWallets.length === 0}>
         Unlock wallet

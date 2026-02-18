@@ -59,7 +59,7 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   return (
     <div>
       <p className="text-sm text-slate-300 mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
-        Send native tokens (BNB) or ERC-20 tokens (USDT, FDA, etc.) using your unlocked wallet. 
+        Send native tokens (BNB) or tokens (USDT, FDA, etc.) using your unlocked wallet. 
         On-chain transactions require gas fees paid in BNB. Transactions are signed locally and broadcast via the configured RPC endpoint.
       </p>
       <div className="info-box">
@@ -95,15 +95,12 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
           </p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <input
-          type="text"
-          placeholder="RPC URL"
-          value={rpcUrl}
-          onChange={(e) => setRpcUrl(e.target.value)}
-          disabled={transferType === 'internal' && assetType === 'token' && tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()}
-        />
+      <div className="mb-2">
+        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: '#f1f5f9' }}>
+          Asset Type:
+        </label>
         <select
+          className="form-select-dark w-full"
           value={assetType}
           onChange={(e) => {
             setAssetType(e.target.value as 'native' | 'token');
@@ -113,7 +110,7 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
           }}
         >
           <option value="native">Native coin (e.g. BNB)</option>
-          <option value="token">ERC-20 Token (USDT, FDA, etc.)</option>
+          <option value="token">Token (USDT, FDA, etc.)</option>
         </select>
       </div>
       {assetType === 'token' && (

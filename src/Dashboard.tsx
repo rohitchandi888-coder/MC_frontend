@@ -39,6 +39,7 @@ import { getApiUrl } from './config';
 // Import components
 import { 
   Sidebar, 
+  TopHeader,
   MessageModal, 
   AcceptOfferModal, 
   PaymentModal, 
@@ -53,6 +54,7 @@ import {
   ManageWallets,
   SendTransfer,
   FDAWallets,
+  PaymentMethods,
   MetaMaskConnect,
   P2PTrading,
   TradeListing,
@@ -167,7 +169,6 @@ export const Dashboard: React.FC = () => {
   const [addFdaAmount, setAddFdaAmount] = useState('');
   const [addingFdaBalance, setAddingFdaBalance] = useState(false);
 
-  const [rpcUrl, setRpcUrl] = useState(DEFAULT_RPC_URL);
   const [sendTo, setSendTo] = useState('');
   const [sendAmount, setSendAmount] = useState('');
   const [assetType, setAssetType] = useState<'native' | 'token'>('native');
@@ -286,9 +287,20 @@ export const Dashboard: React.FC = () => {
   const fetchBalances = async (address: string) => {
     if (!address || !ethers.isAddress(address)) return;
     
+    // Check if address belongs to user's own wallets
+    const isOwnWallet = allWallets.some(w => w.address.toLowerCase() === address.toLowerCase()) ||
+                       registeredFdaWallets.some((w: any) => w.address.toLowerCase() === address.toLowerCase());
+    
+    if (!isOwnWallet) {
+      showErrorModal('⚠️ You can only check balance for your own wallets. Please select a wallet from your wallet list.');
+      setCheckAddress('');
+      setBalanceLoading(false);
+      return;
+    }
+    
     setBalanceLoading(true);
     try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       
       // Fetch native balance
       const nativeBal = await provider.getBalance(address);
@@ -706,7 +718,7 @@ export const Dashboard: React.FC = () => {
         fetchP2PFeeRate();
       }
     }
-  }, [storedMeta?.address, rpcUrl, auth]);
+  }, [storedMeta?.address, auth]);
 
   useEffect(() => {
     if (activeTab === 'wallets') {
@@ -842,7 +854,7 @@ export const Dashboard: React.FC = () => {
     } else {
       setEstimatedGas(null);
     }
-  }, [sendTo, assetType, tokenAddress, rpcUrl, activeTab, transferType]);
+  }, [sendTo, assetType, tokenAddress, activeTab, transferType]);
 
   useEffect(() => {
     if (activeTab === 'p2p' && auth) {
@@ -1050,6 +1062,13 @@ export const Dashboard: React.FC = () => {
       );
       unlockedPrivateKeyRef.current = privateKey;
       showSuccessModal(`✅ Wallet unlocked in memory. Address: ${encrypted.address}`);
+      
+      // Clear fields after successful unlock
+      setUnlockPassword('');
+      setUnlockExtraWord('');
+      if (allWallets.length > 0) {
+        setSelectedUnlockWalletId(allWallets[0].id);
+      }
     } catch {
       showErrorModal('⚠️ Failed to unlock wallet. Check your password and 13th word.');
     }
@@ -1147,6 +1166,13 @@ export const Dashboard: React.FC = () => {
   const createOffer = async () => {
     if (!auth) {
       showErrorModal('Please login to create offers.');
+      return;
+    }
+    
+    // Require 13th word for creating offers
+    if (!unlockedPrivateKeyRef.current) {
+      showErrorModal('⚠️ Please unlock your wallet first. You need to enter your Custom 13th word to create offers.');
+      setActiveTab('unlock');
       return;
     }
     
@@ -1647,14 +1673,14 @@ export const Dashboard: React.FC = () => {
   };
 
   const estimateGasAndMax = async () => {
-    if (!unlockedPrivateKeyRef.current || !rpcUrl.trim() || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
+      if (!unlockedPrivateKeyRef.current || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
       setEstimatedGas(null);
       return;
     }
 
     try {
       setEstimatingGas(true);
-      const provider = new ethers.JsonRpcProvider(rpcUrl.trim());
+      const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
       const senderBalance = await provider.getBalance(wallet.address);
       const balanceEth = parseFloat(ethers.formatEther(senderBalance));
@@ -1694,13 +1720,13 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleMaxAmount = async () => {
-    if (!unlockedPrivateKeyRef.current || !rpcUrl.trim() || !storedMeta?.address) {
-      showErrorModal('⚠️ Unlock wallet and set RPC URL first.');
+    if (!unlockedPrivateKeyRef.current || !storedMeta?.address) {
+      showErrorModal('⚠️ Unlock wallet first.');
       return;
     }
 
     try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl.trim());
+      const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
       const senderBalance = await provider.getBalance(wallet.address);
       const balanceEth = parseFloat(ethers.formatEther(senderBalance));
@@ -1842,11 +1868,7 @@ export const Dashboard: React.FC = () => {
       }
     } else if (unlockedPrivateKeyRef.current) {
       // Use unlocked local wallet
-      if (!rpcUrl.trim()) {
-        showErrorModal('⚠️ RPC URL is required for local wallet transactions.');
-        return;
-      }
-      provider = new ethers.JsonRpcProvider(rpcUrl.trim());
+      provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       const tempWallet = new ethers.Wallet(unlockedPrivateKeyRef.current);
       walletAddress = tempWallet.address;
       wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
@@ -2185,7 +2207,7 @@ export const Dashboard: React.FC = () => {
     setTokenInfoLoading(true);
     setMessage(null);
     try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       const tokenContract = new ethers.Contract(address.trim(), ERC20_ABI, provider);
       
       const [name, symbol] = await Promise.all([
@@ -2388,6 +2410,14 @@ export const Dashboard: React.FC = () => {
 
         {/* Main content */}
         <main id="main-content" className="flex-1 main-container">
+          {/* Top Header with Profile and Balances */}
+          <TopHeader
+            auth={auth}
+            internalFdaBalance={internalFdaBalance}
+            storedMeta={storedMeta}
+            onProfileClick={() => setActiveTab('profile')}
+          />
+          
           <header id="main-header" className="main-header">
             <div>
               <h1 id="dashboard-title" className="main-title">MC Wallet Dashboard</h1>
@@ -2440,6 +2470,9 @@ export const Dashboard: React.FC = () => {
               >
                 Check Balance
               </button>
+              <p className="text-xs text-slate-400 mt-2">
+                💡 You can only check balance for your own wallets
+              </p>
             </div>
             {allWallets.length > 0 && (
               <div id="wallet-selector-group" className="form-group">
@@ -2463,12 +2496,25 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
             {storedMeta && (
-              <p id="active-wallet-display" className="text-xs text-slate-400 mb-2">
-                Active wallet:{' '}
-                <span className="font-mono text-xs">
+              <div id="active-wallet-display" className="flex items-center gap-2 mb-2">
+                <p className="text-xs text-slate-400">
+                  Active wallet:{' '}
+                </p>
+                <span className="font-mono text-xs text-slate-300 flex-1">
                   {storedMeta.address}
                 </span>
-              </p>
+                <button
+                  className="copy-address-btn-small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(storedMeta.address).then(() => {
+                      showSuccessModal('✅ Wallet address copied to clipboard!');
+                    });
+                  }}
+                  title="Copy wallet address"
+                >
+                  📋
+                </button>
+              </div>
             )}
             <DashboardView
               auth={auth}
@@ -2535,8 +2581,8 @@ export const Dashboard: React.FC = () => {
                 storedMeta={storedMeta}
                 allWallets={allWallets}
                 auth={auth}
-                rpcUrl={rpcUrl}
-                setRpcUrl={setRpcUrl}
+                rpcUrl={DEFAULT_RPC_URL}
+                setRpcUrl={() => {}}
                 sendTo={sendTo}
                 setSendTo={setSendTo}
                 sendAmount={sendAmount}
@@ -2568,6 +2614,7 @@ export const Dashboard: React.FC = () => {
                 newTokenName={newTokenName}
                 onNameChange={setNewTokenName}
                 tokenInfoLoading={tokenInfoLoading}
+                customTokenBalances={customTokenBalances}
                 onFetchTokenInfo={fetchTokenInfo}
                 onAddToken={handleAddCustomToken}
                 customTokens={customTokens}
@@ -2757,6 +2804,10 @@ export const Dashboard: React.FC = () => {
 
             {activeTab === 'charts' && (
               <TradingChart selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']} auth={auth} />
+            )}
+
+            {activeTab === 'payment-methods' && (
+              <PaymentMethods auth={auth} />
             )}
 
         </main>

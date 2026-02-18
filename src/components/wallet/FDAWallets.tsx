@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { type AuthState } from '../types';
 
 interface FDAWalletsProps {
@@ -26,6 +26,15 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
   handleCreateAndRegisterFdaWallet,
   registerRecipientWallet,
 }) => {
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  
+  const copyToClipboard = (text: string, address: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedAddress(address);
+      setTimeout(() => setCopiedAddress(null), 2000);
+    });
+  };
+  
   // Find local wallets that aren't registered yet
   const registeredAddresses = new Set(registeredFdaWallets.map((w: any) => w.address.toLowerCase()));
   const unregisteredWallets = allWallets.filter((wallet: any) => {
@@ -94,9 +103,18 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
                             </span>
                           )}
                         </div>
-                        <p className="wallet-card-address">
-                          {wallet.address}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="wallet-card-address flex-1">
+                            {wallet.address}
+                          </p>
+                          <button
+                            className="copy-address-btn"
+                            onClick={() => copyToClipboard(wallet.address, wallet.address)}
+                            title="Copy address"
+                          >
+                            {copiedAddress === wallet.address ? '✓' : '📋'}
+                          </button>
+                        </div>
                       </div>
                       <div className="wallet-status-badge">
                         <span className="wallet-status-icon">✓</span>
@@ -172,9 +190,18 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
                               </span>
                             )}
                           </div>
-                          <p className="wallet-card-address">
-                            {wallet.address}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="wallet-card-address flex-1">
+                              {wallet.address}
+                            </p>
+                            <button
+                              className="copy-address-btn"
+                              onClick={() => copyToClipboard(wallet.address, wallet.address)}
+                              title="Copy address"
+                            >
+                              {copiedAddress === wallet.address ? '✓' : '📋'}
+                            </button>
+                          </div>
                         </div>
                         <div className="wallet-status-badge" style={{ background: '#f59e0b' }}>
                           <span className="wallet-status-icon">⚠</span>

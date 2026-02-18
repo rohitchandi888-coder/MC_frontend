@@ -7,6 +7,7 @@ interface CustomTokensProps {
   newTokenSymbol: string;
   newTokenName: string;
   tokenInfoLoading: boolean;
+  customTokenBalances?: Record<string, string>;
   onAddressChange: (address: string) => void;
   onSymbolChange: (symbol: string) => void;
   onNameChange: (name: string) => void;
@@ -22,6 +23,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   newTokenSymbol,
   newTokenName,
   tokenInfoLoading,
+  customTokenBalances = {},
   onAddressChange,
   onSymbolChange,
   onNameChange,
@@ -33,7 +35,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   return (
     <div>
       <p className="text-sm text-slate-300 mb-3">
-        Import and manage custom ERC-20 tokens. Token balances will be displayed in the wallet overview.
+        Import and manage custom tokens. Token balances will be displayed in the wallet overview.
       </p>
       
       <div className="add-token-form">
@@ -84,28 +86,46 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
       {customTokens.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-slate-300 mb-2">Your Custom Tokens</p>
-          <div className="token-list">
-            {customTokens.map((token) => (
-              <div key={token.address} className="token-item">
-                <div>
-                  <p className="text-sm font-semibold text-slate-50">
-                    {token.symbol}
-                    {token.name && (
-                      <span className="text-xs text-slate-400 ml-2">({token.name})</span>
+          <div className="token-list-metamask">
+            {customTokens.map((token) => {
+              const balance = customTokenBalances[token.address.toLowerCase()];
+              const balanceNum = balance ? parseFloat(balance) : 0;
+              const hasBalance = balanceNum > 0;
+              
+              return (
+                <div key={token.address} className="token-item-metamask">
+                  <div className="token-item-left">
+                    <div className="token-icon-placeholder">
+                      {token.symbol.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="token-info">
+                      <p className="token-symbol">{token.symbol}</p>
+                      {token.name && (
+                        <p className="token-name">{token.name}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="token-item-right">
+                    {hasBalance ? (
+                      <>
+                        <p className="token-balance">${(balanceNum * 0).toFixed(2)}</p>
+                        <p className="token-balance-change">0.00%</p>
+                        <p className="token-quantity">{balanceNum.toFixed(4)} {token.symbol}</p>
+                      </>
+                    ) : (
+                      <p className="token-no-rate">No conversion rate available</p>
                     )}
-                  </p>
-                  <p className="text-xs text-slate-400 font-mono" style={{ fontSize: '0.7rem' }}>
-                    {token.address}
-                  </p>
+                    <button
+                      className="token-remove-btn"
+                      onClick={() => onRemoveToken(token.address)}
+                      title="Remove token"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-                <button
-                  className="btn-small btn-small-red"
-                  onClick={() => onRemoveToken(token.address)}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

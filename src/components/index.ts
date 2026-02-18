@@ -1,5 +1,6 @@
 // Export all components
 export { Sidebar } from './Sidebar';
+export { TopHeader } from './TopHeader';
 export { MessageModal } from './modals/MessageModal';
 export { AcceptOfferModal } from './modals/AcceptOfferModal';
 export { PaymentModal } from './modals/PaymentModal';
@@ -16,6 +17,7 @@ export { CustomTokens } from './wallet/CustomTokens';
 export { ManageWallets } from './wallet/ManageWallets';
 export { SendTransfer } from './wallet/SendTransfer';
 export { FDAWallets } from './wallet/FDAWallets';
+export { PaymentMethods } from './wallet/PaymentMethods';
 export { MetaMaskConnect } from './wallet/MetaMaskConnect';
 
 // P2P components
