@@ -205,6 +205,7 @@ export type CustomToken = {
   address: string;
   symbol: string;
   name?: string;
+  enabled?: boolean; // Default to true if not specified
 };
 
 const CUSTOM_TOKENS_KEY = 'fda_custom_tokens';
@@ -270,7 +271,12 @@ export function addCustomToken(token: CustomToken, userId?: number | null) {
   if (tokens.find((t) => t.address.toLowerCase() === token.address.toLowerCase())) {
     return false; // Token already exists
   }
-  tokens.push(token);
+  // Set enabled to true by default if not specified
+  const newToken: CustomToken = {
+    ...token,
+    enabled: token.enabled !== undefined ? token.enabled : true,
+  };
+  tokens.push(newToken);
   saveCustomTokens(tokens, userId);
   return true;
 }
@@ -280,6 +286,17 @@ export function removeCustomToken(address: string, userId?: number | null) {
   const filtered = tokens.filter((t) => t.address.toLowerCase() !== address.toLowerCase());
   saveCustomTokens(filtered, userId);
   return filtered.length !== tokens.length;
+}
+
+export function toggleCustomToken(address: string, userId?: number | null) {
+  const tokens = loadCustomTokens(userId);
+  const token = tokens.find((t) => t.address.toLowerCase() === address.toLowerCase());
+  if (token) {
+    token.enabled = token.enabled === undefined ? false : !token.enabled;
+    saveCustomTokens(tokens, userId);
+    return true;
+  }
+  return false;
 }
 
 

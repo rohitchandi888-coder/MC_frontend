@@ -76,6 +76,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth,
             <button className={`sidebar-nav-button ${activeTab === 'payment-methods' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('payment-methods')}>
               💳 Payment Methods
             </button>
+            <button className={`sidebar-nav-button ${activeTab === 'view-phrases' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('view-phrases')}>
+              🔐 View Phrases
+            </button>
             {/* MetaMask Connect menu hidden as requested */}
           </div>
         </div>

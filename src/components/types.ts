@@ -1,4 +1,4 @@
-export type Tab = 'dashboard' | 'create' | 'import' | 'unlock' | 'send' | 'tokens' | 'wallets' | 'fdawallets' | 'metamask' | 'p2p' | 'trade-listing' | 'admin' | 'disputes' | 'history' | 'profile' | 'charts' | 'payment-methods';
+export type Tab = 'dashboard' | 'create' | 'import' | 'unlock' | 'send' | 'tokens' | 'wallets' | 'fdawallets' | 'metamask' | 'p2p' | 'trade-listing' | 'admin' | 'disputes' | 'history' | 'profile' | 'charts' | 'payment-methods' | 'view-phrases';
 
 export type AuthState = {
   token: string;

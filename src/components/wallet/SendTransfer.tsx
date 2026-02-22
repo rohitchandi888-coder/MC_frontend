@@ -7,8 +7,6 @@ interface SendTransferProps {
   storedMeta: WalletMeta | null;
   allWallets: WalletMeta[];
   auth: AuthState | null;
-  rpcUrl: string;
-  setRpcUrl: (url: string) => void;
   sendTo: string;
   setSendTo: (address: string) => void;
   sendAmount: string;
@@ -34,8 +32,6 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   storedMeta,
   allWallets,
   auth,
-  rpcUrl,
-  setRpcUrl,
   sendTo,
   setSendTo,
   sendAmount,
@@ -59,8 +55,8 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
 return (
     <div>
       <p className="text-sm text-slate-300 mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
-        Send native tokens (BNB) or ERC-20 tokens (USDT, FDA, etc.) using your unlocked wallet. 
-        On-chain transactions require gas fees paid in BNB. Transactions are signed locally and broadcast via the configured RPC endpoint.
+        Send native tokens (BNB) or tokens (USDT, FDA, etc.) using your unlocked wallet. 
+        On-chain transactions require gas fees paid in BNB. Transactions are signed with your wallet's private key and broadcast to the blockchain.
       </p>
       <div className="info-box" >
         <p className="text-xs  mb-2" style={{ padding: '0.5rem 1rem',color: '#fff' }}>📝 Important:</p>
@@ -95,15 +91,9 @@ return (
           </p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <input
-          type="text"
-          placeholder="RPC URL"
-          value={rpcUrl}
-          onChange={(e) => setRpcUrl(e.target.value)}
-          disabled={transferType === 'internal' && assetType === 'token' && tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()}
-        />
+      <div className="mb-2">
         <select
+          className="form-select-dark w-full"
           value={assetType}
           onChange={(e) => {
             setAssetType(e.target.value as 'native' | 'token');
@@ -113,7 +103,7 @@ return (
           }}
         >
           <option value="native">Native coin (e.g. BNB)</option>
-          <option value="token">ERC-20 Token (USDT, FDA, etc.)</option>
+          <option value="token">Token (USDT, FDA, etc.)</option>
         </select>
       </div>
       {assetType === 'token' && (
@@ -327,7 +317,7 @@ return (
       </button>
       {transferType === 'onchain' && !unlockedPrivateKeyRef.current && (
         <p className="text-xs text-slate-400 mt-2">
-          ⚠️ Unlock your wallet first before sending on-chain transactions.
+          ⚠️ Please unlock your wallet first to send on-chain transactions. Transactions are signed with your wallet's private key.
         </p>
       )}
       {transferType === 'internal' && !auth && (

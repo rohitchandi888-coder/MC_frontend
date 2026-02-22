@@ -6261,7 +6261,46 @@ img {
 
 }
 
+/* Wallets Dropdown */
+.wallets-dropdown-menu {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #1e293b;
+}
 
+.wallets-dropdown-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.wallets-dropdown-menu::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.wallets-dropdown-menu::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+.wallets-dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.wallet-dropdown-item:hover {
+  background: #334155 !important;
+}
+
+.top-header-wallets-dropdown button {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.top-header-wallets-dropdown button:hover {
+  background: rgba(15, 23, 42, 0.7) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
 
 /* Password Input Wrapper with Eye Icon */
 

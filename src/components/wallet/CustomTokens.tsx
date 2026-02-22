@@ -14,6 +14,7 @@ interface CustomTokensProps {
   onFetchTokenInfo: (address: string) => void;
   onAddToken: () => void;
   onRemoveToken: (address: string) => void;
+  onToggleToken: (address: string) => void;
   isValidAddress: (address: string) => boolean;
 }
 
@@ -30,6 +31,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   onFetchTokenInfo,
   onAddToken,
   onRemoveToken,
+  onToggleToken,
   isValidAddress,
 }) => {
   return (
@@ -91,6 +93,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
               const balance = customTokenBalances[token.address.toLowerCase()];
               const balanceNum = balance ? parseFloat(balance) : 0;
               const hasBalance = balanceNum > 0;
+              const isEnabled = token.enabled !== false; // Default to true if not specified
               
               return (
                 <div key={token.address} className="token-item-metamask">
@@ -115,49 +118,58 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
                     ) : (
                       <p className="token-no-rate">No conversion rate available</p>
                     )}
-                     <div
-  style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "8px",
-    fontFamily: "sans-serif"
-  }}
->
-  <span style={{ fontSize: "13px", fontWeight: "500", color: "#64748b" }}>
-    Status
-  </span>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontFamily: "sans-serif",
+                        marginTop: "0.5rem"
+                      }}
+                    >
+                      <span style={{ fontSize: "13px", fontWeight: "500", color: "#64748b" }}>
+                        Status
+                      </span>
 
-  <div
-    style={{
-      width: "52px",
-      height: "28px",
-      background: "linear-gradient(135deg, #22c55e, #16a34a)",
-      borderRadius: "50px",
-      position: "relative",
-      cursor: "pointer",
-      boxShadow: "inset 0 2px 6px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15)",
-      transition: "0.3s ease"
-    }}
-  >
-    <div
-      style={{
-        width: "24px",
-        height: "24px",
-        background: "#fff",
-        borderRadius: "50%",
-        position: "absolute",
-        top: "2px",
-        right: "2px",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-        transition: "0.3s ease"
-      }}
-    ></div>
-  </div>
+                      <div
+                        onClick={() => onToggleToken(token.address)}
+                        style={{
+                          width: "52px",
+                          height: "28px",
+                          background: isEnabled 
+                            ? "linear-gradient(135deg, #22c55e, #16a34a)" 
+                            : "linear-gradient(135deg, #64748b, #475569)",
+                          borderRadius: "50px",
+                          position: "relative",
+                          cursor: "pointer",
+                          boxShadow: "inset 0 2px 6px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15)",
+                          transition: "0.3s ease"
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            background: "#fff",
+                            borderRadius: "50%",
+                            position: "absolute",
+                            top: "2px",
+                            right: isEnabled ? "2px" : "26px",
+                            left: isEnabled ? "auto" : "2px",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                            transition: "0.3s ease"
+                          }}
+                        ></div>
+                      </div>
 
-  <span style={{ fontSize: "13px", fontWeight: "600", color: "#16a34a" }}>
-    ON
-  </span>
-</div>  
+                      <span style={{ 
+                        fontSize: "13px", 
+                        fontWeight: "600", 
+                        color: isEnabled ? "#16a34a" : "#64748b" 
+                      }}>
+                        {isEnabled ? "ON" : "OFF"}
+                      </span>
+                    </div>  
                   </div>
                 </div>
               );

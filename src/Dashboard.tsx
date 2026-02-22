@@ -14,6 +14,7 @@ declare global {
 import {
   decryptPrivateKey,
   encryptPrivateKey,
+  encryptPhrase,
   walletFromMnemonicAndExtraWord,
 } from './walletCrypto';
 import {
@@ -24,6 +25,7 @@ import {
   loadCustomTokens,
   addCustomToken,
   removeCustomToken,
+  toggleCustomToken,
   getAllWalletMetas,
   getActiveWalletId,
   setActiveWalletId,
@@ -55,6 +57,7 @@ import {
   SendTransfer,
   FDAWallets,
   PaymentMethods,
+  ViewPhrases,
   MetaMaskConnect,
   P2PTrading,
   TradeListing,
@@ -590,15 +593,29 @@ export const Dashboard: React.FC = () => {
   const fetchRegisteredFdaWallets = async () => {
     if (!auth) return;
     try {
+      console.log('[Dashboard] Fetching registered wallets...');
       const res = await fetch(getApiUrl('wallets'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
+      
+      if (!res.ok) {
+        console.error('[Dashboard] Failed to fetch wallets, status:', res.status);
+        return;
+      }
+      
+      const data = await res.json();
+      console.log('[Dashboard] Fetched wallets:', Array.isArray(data) ? data.length : 'not array', data);
+      
+      // Ensure data is an array
+      if (Array.isArray(data)) {
         setRegisteredFdaWallets(data);
+      } else {
+        console.error('[Dashboard] Wallets data is not an array:', data);
+        setRegisteredFdaWallets([]);
       }
     } catch (err) {
-      console.error('Failed to fetch registered wallets:', err);
+      console.error('[Dashboard] Failed to fetch registered wallets:', err);
+      setRegisteredFdaWallets([]);
     }
   };
 
@@ -937,6 +954,51 @@ export const Dashboard: React.FC = () => {
       );
       if (auth) {
         saveUserWallet(encrypted, walletAddress, walletLabel.trim() || undefined, selectedNetwork);
+        
+        // Save encrypted phrase to database
+        try {
+          console.log('[Wallet Creation] Encrypting phrase for database storage...');
+          const encryptedPhrase = await encryptPhrase(mnemonic12, extraWord.trim(), walletPassword);
+          console.log('[Wallet Creation] Phrase encrypted, saving to database...');
+          
+          const savePhraseUrl = getApiUrl('wallets/save-phrase');
+          console.log('[Wallet Creation] Saving phrase to:', savePhraseUrl);
+          
+          const res = await fetch(savePhraseUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${auth.token}`,
+            },
+            body: JSON.stringify({
+              walletAddress,
+              encryptedPhrase,
+              network: selectedNetwork,
+              label: walletLabel.trim() || undefined,
+            }),
+          });
+          
+          // Check if response is JSON
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            console.error('[Wallet Creation] Non-JSON response from save-phrase:', text.substring(0, 200));
+            console.error('[Wallet Creation] Response status:', res.status);
+            // Don't fail wallet creation, but log the error
+          } else {
+            const data = await res.json();
+            if (!res.ok) {
+              console.error('[Wallet Creation] Failed to save phrase to database:', data.error);
+              console.error('[Wallet Creation] Response status:', res.status);
+            } else {
+              console.log('[Wallet Creation] ✅ Phrase saved successfully to database');
+            }
+          }
+        } catch (phraseErr: any) {
+          console.error('[Wallet Creation] Error saving phrase to database:', phraseErr);
+          console.error('[Wallet Creation] Error details:', phraseErr.message);
+          // Don't fail wallet creation if phrase save fails, but log it
+        }
       } else {
         // For non-authenticated users, save with network
         const walletId = saveEncryptedWallet(encrypted, walletAddress, walletLabel.trim() || undefined, selectedNetwork);
@@ -946,7 +1008,10 @@ export const Dashboard: React.FC = () => {
       setExtraWord('');
       setWalletPassword('');
       setWalletLabel('');
-      showSuccessModal(`✅ ${selectedNetwork} wallet created and stored in your browser (encrypted). Keep all 13 words and your password safe.`);
+      
+      // Show success message
+      const phraseSaveStatus = auth ? 'Phrase saved to database.' : '';
+      showSuccessModal(`✅ ${selectedNetwork} wallet created and stored in your browser (encrypted). ${phraseSaveStatus} Keep all 13 words and your password safe.`);
     } catch (err: any) {
       console.error('Wallet creation error:', err);
       showErrorModal(`⚠️ Failed to create wallet: ${err.message || 'Please try again.'}`);
@@ -1841,56 +1906,19 @@ export const Dashboard: React.FC = () => {
       }
     }
     
-    // On-chain transfers (can use MetaMask or unlocked local wallet)
-    // Check if MetaMask is connected first
-    let wallet: ethers.Wallet | ethers.JsonRpcSigner | null = null;
-    let provider: ethers.Provider | null = null;
-    let walletAddress: string = '';
-    
-    if (metamaskConnected && metamaskAddress && typeof window.ethereum !== 'undefined') {
-      // Use MetaMask for signing
-      try {
-        const browserProvider = new ethers.BrowserProvider(window.ethereum);
-        provider = browserProvider;
-        // Get signer for the specific selected address
-        const signer = await browserProvider.getSigner(metamaskAddress);
-        wallet = signer as any;
-        // Verify the signer address matches
-        const signerAddress = await signer.getAddress();
-        if (signerAddress.toLowerCase() !== metamaskAddress.toLowerCase()) {
-          showErrorModal(`⚠️ MetaMask account mismatch. Please switch to account ${metamaskAddress.slice(0, 6)}...${metamaskAddress.slice(-4)} in MetaMask.`);
-          return;
-        }
-        walletAddress = metamaskAddress;
-      } catch (err: any) {
-        showErrorModal('⚠️ Failed to connect to MetaMask. Please reconnect MetaMask.');
-        return;
-      }
-    } else if (unlockedPrivateKeyRef.current) {
-      // Use unlocked local wallet
-      provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
-      const tempWallet = new ethers.Wallet(unlockedPrivateKeyRef.current);
-      walletAddress = tempWallet.address;
-      wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
-    } else {
-      // No MetaMask session and no local wallet unlocked.
-      // If MetaMask is installed, trigger the connection popup so the user can connect.
-      if (typeof window.ethereum !== 'undefined') {
-        try {
-          await connectMetaMask(); // This will open MetaMask extension popup (eth_requestAccounts)
-          showErrorModal('⚠️ MetaMask connection updated. Please try sending again.');
-          return;
-        } catch (err) {
-          showErrorModal('⚠️ Please connect MetaMask or unlock your local wallet first.');
-          return;
-        }
-      } else {
-        showErrorModal('⚠️ MetaMask is not installed. Please install MetaMask or unlock your local wallet first.');
-        return;
-      }
+    // On-chain transfers - use only unlocked local wallet (no MetaMask)
+    if (!unlockedPrivateKeyRef.current) {
+      showErrorModal('⚠️ Please unlock your wallet first before sending on-chain transactions.');
+      return;
     }
     
-    if (!provider || !wallet || !walletAddress) {
+    // Use unlocked local wallet
+    const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
+    const tempWallet = new ethers.Wallet(unlockedPrivateKeyRef.current);
+    const walletAddress = tempWallet.address;
+    const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
+    
+    if (!wallet || !walletAddress) {
       showErrorModal('⚠️ Failed to initialize wallet. Please try again.');
       return;
     }
@@ -2269,6 +2297,13 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleToggleCustomToken = (address: string) => {
+    if (toggleCustomToken(address, auth?.user.id)) {
+      setCustomTokens(loadCustomTokens(auth?.user.id));
+      // State is updated silently, no modal needed
+    }
+  };
+
   const handleSwitchWallet = (walletId: string) => {
     setActiveWalletId(walletId);
     refreshWallets();
@@ -2417,6 +2452,8 @@ export const Dashboard: React.FC = () => {
             auth={auth}
             internalFdaBalance={internalFdaBalance}
             storedMeta={storedMeta}
+            allWallets={allWallets}
+            registeredFdaWallets={registeredFdaWallets}
             onProfileClick={() => setActiveTab('profile')}
           />
           
@@ -2583,8 +2620,6 @@ export const Dashboard: React.FC = () => {
                 storedMeta={storedMeta}
                 allWallets={allWallets}
                 auth={auth}
-                rpcUrl={DEFAULT_RPC_URL}
-                setRpcUrl={() => {}}
                 sendTo={sendTo}
                 setSendTo={setSendTo}
                 sendAmount={sendAmount}
@@ -2621,6 +2656,7 @@ export const Dashboard: React.FC = () => {
                 onAddToken={handleAddCustomToken}
                 customTokens={customTokens}
                 onRemoveToken={handleRemoveCustomToken}
+                onToggleToken={handleToggleCustomToken}
                 isValidAddress={(address: string) => ethers.isAddress(address)}
               />
             )}
@@ -2810,6 +2846,10 @@ export const Dashboard: React.FC = () => {
 
             {activeTab === 'payment-methods' && (
               <PaymentMethods auth={auth} />
+            )}
+
+            {activeTab === 'view-phrases' && (
+              <ViewPhrases auth={auth} />
             )}
 
         </main>

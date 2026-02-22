@@ -18,6 +18,7 @@ export { ManageWallets } from './wallet/ManageWallets';
 export { SendTransfer } from './wallet/SendTransfer';
 export { FDAWallets } from './wallet/FDAWallets';
 export { PaymentMethods } from './wallet/PaymentMethods';
+export { ViewPhrases } from './wallet/ViewPhrases';
 export { MetaMaskConnect } from './wallet/MetaMaskConnect';
 
 // P2P components
