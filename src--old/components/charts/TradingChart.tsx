@@ -886,7 +886,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
           <div className="flex items-center gap-6">
             <div>
               <p className="text-xs text-slate-400 mb-1 font-semibold">{coinNames[selectedCoin]}</p>
-              <p className="text-3xl font-bold " style={{ color: "#ce1010" }}>
+              <p className="text-3xl font-bold text-white">
                 {formatPrice(currentPrice, selectedCoin)}
               </p>
             </div>

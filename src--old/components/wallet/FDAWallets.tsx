@@ -54,9 +54,9 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
         <div className="warning-box">
           <div className="warning-box-content">
             <span className="warning-icon">⚠️</span>
-            <p className="text-sm font-semibold warn-text">Login Required</p>
+            <p className="text-sm font-semibold text-slate-50">Login Required</p>
           </div>
-          <p className="text-xs waring-para">
+          <p className="text-xs text-slate-200">
             Please login to view and manage your registered MC wallets.
           </p>
         </div>
@@ -112,7 +112,7 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
                             onClick={() => copyToClipboard(wallet.address, wallet.address)}
                             title="Copy address"
                           >
-                            {copiedAddress === wallet.address ? '✓' : '⧉'}
+                            {copiedAddress === wallet.address ? '✓' : '📋'}
                           </button>
                         </div>
                       </div>
@@ -139,9 +139,9 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
               </div>
             ) : (
               <div className="empty-state">
-                <p className="empty-state-icon" >🔷</p>
-                <p className="empty-state-title" style={{ color: "#fff" }}>No registered wallets yet</p>
-                <p className="empty-state-description" style={{ color: "#fff" }}>
+                <p className="empty-state-icon">🔷</p>
+                <p className="empty-state-title">No registered wallets yet</p>
+                <p className="empty-state-description">
                   Create or register a wallet above to get started
                 </p>
               </div>
@@ -199,7 +199,7 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
                               onClick={() => copyToClipboard(wallet.address, wallet.address)}
                               title="Copy address"
                             >
-                              {copiedAddress === wallet.address ? '✓' : '⧉'}
+                              {copiedAddress === wallet.address ? '✓' : '📋'}
                             </button>
                           </div>
                         </div>

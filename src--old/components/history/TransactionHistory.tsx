@@ -68,7 +68,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
             return fromMatch || toMatch;
           }
           // If no addresses in transaction, show it anyway (it's for this user)
-          return true;;
+          return true;
         });
       }
 
@@ -125,9 +125,9 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
         <div className="warning-box">
           <div className="warning-box-content">
             <span className="warning-icon">⚠️</span>
-            <p className="text-sm font-semibold warn-text">Login Required</p>
+            <p className="text-sm font-semibold text-slate-50">Login Required</p>
           </div>
-          <p className="text-xs waring-para">
+          <p className="text-xs text-slate-200">
             Please login to view your transaction history.
           </p>
         </div>
@@ -155,7 +155,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
           </p>
           {auth?.user?.fdaUserId && (
             <p className="text-xs text-slate-500">
-              FDA User ID: <span className=" font-semibold" style={{color: '#fff'}}>{auth.user.fdaUserId}</span>
+              FDA User ID: <span className="text-slate-300 font-semibold">{auth.user.fdaUserId}</span>
             </p>
           )}
         </div>
@@ -186,7 +186,6 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
           </p>
         </div>
       ) : (
-        <div className='transactionHistory-Cont'>
         <div className="transaction-list">
           {transactions.map((tx) => {
             const isFromUser = tx.from_address ? userWalletAddresses.some(
@@ -201,10 +200,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-3">
-                      <span className={`text-base font-bold ${getTransactionColor(tx)}`} style={{color: '#fff'}}>
+                      <span className={`text-base font-bold ${getTransactionColor(tx)}`}>
                         {getTransactionType(tx)}
                       </span>
-                      <span className="text-sm" style={{color: '#fff'}}>
+                      <span className="text-sm text-slate-300">
                         {formatDate(tx.created_at)}
                       </span>
                     </div>
@@ -213,19 +212,19 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                       {isFromUser && (
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm  font-semibold" style={{color:'#fff'}}>From:</span>
+                            <span className="text-sm text-slate-300 font-semibold">From:</span>
                             {tx.from_address && (
-                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{color: '#fff'}}>
+                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded">
                                 {formatAddress(tx.from_address)}
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap ml-6">
-                            <span className="text-sm " style={{color: '#fff'}}>
+                            <span className="text-sm text-slate-400">
                               {tx.from_email || tx.from_phone || 'You'}
                             </span>
                             {tx.from_fda_user_id && (
-                              <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounde" style={{color: '#fff'}}>
+                              <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
                                 FDA ID: {tx.from_fda_user_id}
                               </span>
                             )}
@@ -236,19 +235,19 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                       {isToUser && (
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm  font-semibold" style={{color: '#fff'}}>To:</span>
+                            <span className="text-sm text-slate-300 font-semibold">To:</span>
                             {tx.to_address && (
-                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{color: '#fff'}}>
+                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded">
                                 {formatAddress(tx.to_address)}
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap ml-6">
-                            <span className="text-sm " style={{color: '#fff'}}>
+                            <span className="text-sm text-slate-400">
                               {tx.to_email || tx.to_phone || 'Unknown'}
                             </span>
                             {tx.to_fda_user_id && (
-                              <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounded" style={{color: '#fff'}}>
+                              <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
                                 FDA ID: {tx.to_fda_user_id}
                               </span>
                             )}
@@ -285,7 +284,6 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
               </div>
             );
           })}
-        </div>
         </div>
       )}
     </div>

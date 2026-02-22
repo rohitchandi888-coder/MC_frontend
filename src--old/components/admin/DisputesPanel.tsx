@@ -106,7 +106,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
         </div>
 
         {adminDisputes.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' ,height:'82vh', overflowY:'scroll' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
             {adminDisputes.map((d) => (
               <div 
                 key={d.id} 
@@ -114,19 +114,18 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 style={{
                   width: '33%',
                   minWidth: '300px',
-                  
-                  
+                  border: '2px solid #f59e0b',
+                  background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
                   borderRadius: '10px',
                   display: 'flex',
                   flexDirection: 'column',
                   padding: '0.875rem',
-                  color: 'black'
                 }}
               >
                 <div className="flex justify-between items-start mb-1.5">
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                      <p className="text-sm font-bold text-black-900" style={{ padding: 0 }}>
+                      <p className="text-sm font-bold text-gray-900" style={{ padding: 0 }}>
                         Trade #{d.trade_id}
                       </p>
                       <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-200 text-yellow-800">
@@ -138,7 +137,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
+                    <p className="text-xs text-gray-600" style={{ padding: 0 }}>
                       {d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
@@ -146,16 +145,16 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
 
                 <div className="grid grid-cols-1 gap-2 mb-1.5">
                   <div className="p-1.5 bg-white rounded border border-gray-200">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>Trade: {d.amount} {d.asset_symbol} @ {d.price} {d.fiat_currency}</p>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
+                    <p className="text-xs font-semibold text-gray-700 mb-0.5" style={{ padding: 0 }}>Trade: {d.amount} {d.asset_symbol} @ {d.price} {d.fiat_currency}</p>
+                    <p className="text-xs text-gray-800" style={{ padding: 0 }}>
                       <strong>Total:</strong> {(parseFloat(d.amount || 0) * parseFloat(d.price || 0)).toFixed(2)} {d.fiat_currency}
                     </p>
-                    <p className="text-xs text-black mt-0.5" style={{ padding: 0 }}>
+                    <p className="text-xs text-gray-800 mt-0.5" style={{ padding: 0 }}>
                       <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
                         d.trade_status === 'DISPUTED' ? 'bg-yellow-200 text-yellow-800' :
                         d.trade_status === 'COMPLETED' ? 'bg-green-200 text-green-800' :
                         d.trade_status === 'CANCELLED' ? 'bg-red-200 text-red-800' :
-                        'bg-gray-200 text-black'
+                        'bg-gray-200 text-gray-800'
                       }`}>
                         {d.trade_status}
                       </span>
@@ -163,21 +162,21 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                   </div>
 
                   <div className="p-1.5 bg-white rounded border border-gray-200">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>Parties</p>
-                    <p className="text-xs text-black mb-0.5" style={{ padding: 0 }}>
+                    <p className="text-xs font-semibold text-gray-700 mb-0.5" style={{ padding: 0 }}>Parties</p>
+                    <p className="text-xs text-gray-800 mb-0.5" style={{ padding: 0 }}>
                       <strong>Raised:</strong> {d.raised_by_name || d.raised_by_email || d.raised_by_phone || 'Unknown'}
                     </p>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
+                    <p className="text-xs text-gray-800" style={{ padding: 0 }}>
                       <strong>Buyer/Seller:</strong> {d.buyer_name || d.buyer_email || d.buyer_phone || 'Unknown'} / {d.seller_name || d.seller_email || d.seller_phone || 'Unknown'}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-1.5 p-1.5 bg-white rounded border-2 border-yellow-400">
-                  <p className="text-xs font-bold text-black mb-0.5" style={{ padding: 0 }}>
+                  <p className="text-xs font-bold text-gray-900 mb-0.5" style={{ padding: 0 }}>
                     ⚠️ Reason:
                   </p>
-                  <p className="text-xs text-black whitespace-pre-wrap bg-gray-50 p-1 rounded line-clamp-3" style={{
+                  <p className="text-xs text-gray-800 whitespace-pre-wrap bg-gray-50 p-1 rounded line-clamp-3" style={{
                     display: '-webkit-box',
                     WebkitLineClamp: 3,
                     WebkitBoxOrient: 'vertical',
@@ -192,7 +191,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 {/* Payment Screenshot - Admin View */}
                 {d.payment_screenshot && (
                   <div className="mt-1.5 p-1 bg-white rounded border border-blue-300">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>
+                    <p className="text-xs font-semibold text-gray-700 mb-0.5" style={{ padding: 0 }}>
                       📸 Screenshot:
                     </p>
                     <img
@@ -212,10 +211,10 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 {/* Resolution Info */}
                 {d.status !== 'OPEN' && d.resolution_note && (
                   <div className="mt-1.5 p-1.5 bg-blue-50 rounded border border-blue-300">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>
+                    <p className="text-xs font-semibold text-gray-700 mb-0.5" style={{ padding: 0 }}>
                       Resolution ({d.status}):
                     </p>
-                    <p className="text-xs text-black whitespace-pre-wrap line-clamp-2" style={{
+                    <p className="text-xs text-gray-800 whitespace-pre-wrap line-clamp-2" style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical',
@@ -245,10 +244,10 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
         ) : (
           <div className="p-8 bg-gray-50 rounded border border-gray-200 text-center">
             <div className="text-4xl mb-3">✅</div>
-            <p className="text-sm font-semibold text-black mb-1">
+            <p className="text-sm font-semibold text-gray-700 mb-1">
               No Active Disputes
             </p>
-            <p className="text-xs text-black">
+            <p className="text-xs text-gray-600">
               All disputes have been resolved or there are no disputes at this time.
             </p>
           </div>

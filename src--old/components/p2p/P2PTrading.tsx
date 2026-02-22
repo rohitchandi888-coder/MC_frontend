@@ -38,7 +38,7 @@ interface P2PTradingProps {
 }
 
 const PAYMENT_OPTIONS_INR = [
-  { id: 'gpay', label: 'GPay Scanner', value: 'GPay Scanner' },
+  { id: 'gpay', label: 'GPay Screenshot', value: 'GPay Screenshot' },
   { id: 'phonepe', label: 'PhonePe Scanner', value: 'PhonePe Scanner' },
   { id: 'paytm', label: 'PayTM Scanner', value: 'PayTM Scanner' },
   { id: 'bank', label: 'Bank Transfer', value: 'Bank Transfer' },
@@ -138,9 +138,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
         <div className="warning-box">
           <div className="warning-box-content">
             <span className="warning-icon">⚠️</span>
-            <p className="text-sm font-semibold warn-text" style={{ padding: '0.5rem 1rem' }}>Login Required</p>
+            <p className="text-sm font-semibold text-slate-50" style={{ padding: '0.5rem 1rem' }}>Login Required</p>
           </div>
-          <p className="text-xs waring-para" style={{ padding: '0.5rem 1rem' }}>
+          <p className="text-xs text-slate-200" style={{ padding: '0.5rem 1rem' }}>
             Please login to use P2P trading features.
           </p>
         </div>
@@ -172,17 +172,17 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
           <div className="action-card mb-6">
             <div className="action-card-header">
               <span className="action-card-icon">📝</span>
-              <p className="action-card-title" style={{color: 'rgb(249, 250, 251)'}}>Create Offer (MC Wallet to MC Wallet Only)</p>
+              <p className="action-card-title">Create Offer (MC Wallet to MC Wallet Only)</p>
             </div>
             <div className="p2p-info-box mb-4">
-              <p className="p2p-info-text" style={{ lineHeight: '1.4',color:'#fde68a' }}>
+              <p className="p2p-info-text" style={{ lineHeight: '1.4' }}>
                 ⚠️ This is MC Wallet internal trading only. {offerType === 'SELL' ? 'For SELL offers, you need tokens in your internal wallet balance.' : 'For BUY offers, you are looking to buy tokens from sellers.'} {p2pFeeRate > 0 ? `${p2pFeeRate}% trading fee applies.` : 'No trading fee applies.'}
               </p>
             </div>
             
             {/* BUY/SELL Dropdown */}
             <div className="mb-4">
-              <p className="text-xs text-white mb-2 font-semibold p2p-subheading">Offer Type</p>
+              <p className="text-xs text-white mb-2 font-semibold">Offer Type</p>
               <select
                 className="form-select-dark w-full py-3"
                 value={offerType}
@@ -212,7 +212,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             
             <div className="mb-4">
               <div>
-                <p className="text-xs  mb-2 p2p-subheading">Fiat Currency</p>
+                <p className="text-xs text-slate-300 mb-2">Fiat Currency</p>
                 <select
                   className="form-select-dark w-full py-3"
                   value={offerFiatCurrency}
@@ -228,7 +228,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <p className="text-xs  mb-2 font-semibold p2p-subheading">
+                <p className="text-xs text-white mb-2 font-semibold">
                   Amount (FDA) {offerType === 'SELL' && internalFdaBalance !== null && (
                     <span className="text-slate-200" style={{ fontSize: '0.7rem' }}>
                       (Available: {internalFdaBalance.toFixed(2)})
@@ -261,7 +261,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 </div>
               </div>
               <div>
-                <p className="text-xs  mb-2 font-semibold p2p-subheading">Price per FDA</p>
+                <p className="text-xs text-white mb-2 font-semibold">Price per FDA</p>
                 <input
                   type="number"
                   step="any"
@@ -275,7 +275,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <p className="text-xs mb-2 font-semibold p2p-subheading">Min Limit ({offerFiatCurrency})</p>
+                <p className="text-xs text-white mb-2 font-semibold">Min Limit ({offerFiatCurrency})</p>
                 <input
                   type="number"
                   step="any"
@@ -286,7 +286,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 />
               </div>
               <div>
-                <p className="text-xs  mb-2 font-semibold p2p-subheading">Max Limit ({offerFiatCurrency})</p>
+                <p className="text-xs text-white mb-2 font-semibold">Max Limit ({offerFiatCurrency})</p>
                 <input
                   type="number"
                   step="any"
@@ -299,7 +299,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             </div>
 
             <div className="mb-4">
-              <p className="text-xs  mb-2 p2p-subheading">Payment Methods</p>
+              <p className="text-xs text-slate-300 mb-2">Payment Methods</p>
               {offerFiatCurrency === 'INR' ? (
                 <div className="space-y-2">
                   {PAYMENT_OPTIONS_INR.map((option) => (
@@ -317,7 +317,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                     </label>
                   ))}
                   {selectedPaymentOptions.length === 0 && (
-                    <p className="text-xs  mt-2" style={{color:'#93b65a'}}>⚠️ Please select at least one payment method</p>
+                    <p className="text-xs text-slate-500 mt-2">⚠️ Please select at least one payment method</p>
                   )}
                 </div>
               ) : (
@@ -592,9 +592,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               </div>
             ) : (
               <div className="empty-state">
-                <p className="empty-state-icon" >💼</p>
-                <p className="empty-state-title" style={{ color: "#b09b9b" }}>No trades yet</p>
-                <p className="empty-state-description" style={{ color: "#b09b9b" }}>Accept an offer above to start trading</p>
+                <p className="empty-state-icon">💼</p>
+                <p className="empty-state-title">No trades yet</p>
+                <p className="empty-state-description">Accept an offer above to start trading</p>
               </div>
             )}
           </div>

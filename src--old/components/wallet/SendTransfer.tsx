@@ -56,19 +56,19 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   handleMaxAmount,
   registerRecipientWallet,
 }) => {
-return (
+  return (
     <div>
       <p className="text-sm text-slate-300 mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
-        Send native tokens (BNB) or ERC-20 tokens (USDT, FDA, etc.) using your unlocked wallet. 
+        Send native tokens (BNB) or tokens (USDT, FDA, etc.) using your unlocked wallet. 
         On-chain transactions require gas fees paid in BNB. Transactions are signed locally and broadcast via the configured RPC endpoint.
       </p>
-      <div className="info-box" >
-        <p className="text-xs  mb-2" style={{ padding: '0.5rem 1rem',color: '#fff' }}>📝 Important:</p>
-        <p className="text-xs mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6', color: '#fff' }}>
+      <div className="info-box">
+        <p className="text-xs text-slate-400 mb-2" style={{ padding: '0.5rem 1rem' }}>📝 Important:</p>
+        <p className="text-xs text-slate-300 mb-2" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
           <strong>For Tokens:</strong> You can use <strong>Internal Transfer (zero fee, instant)</strong> if the recipient is registered as an MC wallet. 
           Otherwise, use <strong>On-Chain Transfer</strong> which requires gas fees in BNB.
         </p>
-        <p className="text-xs " style={{ padding: '0.5rem 1rem', lineHeight: '1.6',color: '#fff' }}>
+        <p className="text-xs text-slate-300" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
           <strong>For Native BNB:</strong> All blockchain transactions require <strong>gas fees paid in BNB</strong> (the native token). 
           This is a network requirement, not a wallet fee.
         </p>
@@ -95,15 +95,12 @@ return (
           </p>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <input
-          type="text"
-          placeholder="RPC URL"
-          value={rpcUrl}
-          onChange={(e) => setRpcUrl(e.target.value)}
-          disabled={transferType === 'internal' && assetType === 'token' && tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()}
-        />
+      <div className="mb-2">
+        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: '#f1f5f9' }}>
+          Asset Type:
+        </label>
         <select
+          className="form-select-dark w-full"
           value={assetType}
           onChange={(e) => {
             setAssetType(e.target.value as 'native' | 'token');
@@ -113,7 +110,7 @@ return (
           }}
         >
           <option value="native">Native coin (e.g. BNB)</option>
-          <option value="token">ERC-20 Token (USDT, FDA, etc.)</option>
+          <option value="token">Token (USDT, FDA, etc.)</option>
         </select>
       </div>
       {assetType === 'token' && (
@@ -181,7 +178,7 @@ return (
       
       {/* Recipient Address Section */}
       <div className="mb-4">
-        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: 'rgb(88 119 149)' }}>
+        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: '#f1f5f9' }}>
           📍 Destination Address (Recipient Wallet)
         </label>
         <div className="flex gap-2 items-center">
@@ -261,7 +258,7 @@ return (
         
       {/* Amount Section */}
       <div className="mb-4">
-        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: 'rgb(88 119 149)' }}>
+        <label className="block text-sm text-white mb-2 font-semibold" style={{ color: '#f1f5f9' }}>
           💰 Amount
         </label>
         <div className="flex gap-2">

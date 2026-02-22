@@ -180,7 +180,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                       >
                         <div className="flex-1 flex flex-col">
                           <div className="offer-card-header-listing">
-                            <div className="buyAndOffer">
+                            <div className="offer-card-badges">
                               {(() => {
                                 const offerType = (offer.type || offer.offer_type || 'SELL').toUpperCase();
                                 // Debug log for first offer
@@ -194,30 +194,25 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                   });
                                 }
                                 return (
-                                 <div className='buy'>
-                                   <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
+                                  <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
                                     {offerType}
                                   </span>
-                                  <span className='buyTxt'>
-                                {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
-                              </span>
-                                 </div>
                                 );
                               })()}
-                              
+                              <span className="text-lg font-bold text-gray-900">
+                                {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
+                              </span>
                               {isMyOffer && (
-                                <span className="yourOffer">
+                                <span className="offer-badge-my">
                                   Your Offer
                                 </span>
                               )}
                             </div>
-                            <div className={`${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}>
-                              <div className='perItemParent'>
-                                <p className="offer-price-large">
+                            <div className={`offer-price-box ${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}>
+                              <p className="offer-price-large">
                                 {offer.price} <span className="offer-price-currency">{offer.fiatCurrency || offer.fiat_currency}</span>
                               </p>
-                              <p className="perItemBottonCorner">per {offer.assetSymbol || offer.asset_symbol}</p>
-                              </div>
+                              <p className="text-xs text-gray-600">per {offer.assetSymbol || offer.asset_symbol}</p>
                             </div>
                             <div className="offer-info-list">
                               <div className="offer-info-row">

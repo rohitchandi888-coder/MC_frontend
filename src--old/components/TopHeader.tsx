@@ -37,22 +37,22 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       <div className="top-header-right">
         {auth && internalFdaBalance !== null && (
           <div className="top-header-balance-item">
-            <span className="top-header-balance-label" style={{color:'white'}}>FDA Balance:</span>
-            <span className="top-header-balance-value" style={{color:'#b3a7a7'}}>{internalFdaBalance.toFixed(2)} FDA</span>
+            <span className="top-header-balance-label">FDA Balance:</span>
+            <span className="top-header-balance-value">{internalFdaBalance.toFixed(2)} FDA</span>
             <button
               className="top-header-copy-btn"
               onClick={() => copyToClipboard(internalFdaBalance.toFixed(2), 'fda')}
               title="Copy FDA balance"
             >
-              {copied === 'fda' ? '✓' : '⧉'}
+              {copied === 'fda' ? '✓' : '📋'}
             </button>
           </div>
         )}
         
         {storedMeta && (
           <div className="top-header-balance-item">
-            <span className="top-header-balance-label" style={{color:'white'}}>MC Wallet:</span>
-            <span className="top-header-balance-value" title={storedMeta.address} style={{color:'#b3a7a7'}}>
+            <span className="top-header-balance-label">MC Wallet:</span>
+            <span className="top-header-balance-value" title={storedMeta.address}>
               {storedMeta.address.slice(0, 6)}...{storedMeta.address.slice(-4)}
             </span>
             <button
@@ -60,7 +60,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               onClick={() => copyToClipboard(storedMeta.address, 'wallet')}
               title="Copy wallet address"
             >
-              {copied === 'wallet' ? '✓' : '⧉'}
+              {copied === 'wallet' ? '✓' : '📋'}
             </button>
           </div>
         )}

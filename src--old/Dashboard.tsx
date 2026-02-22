@@ -2406,8 +2406,6 @@ export const Dashboard: React.FC = () => {
           auth={auth}
           onLogout={handleLogout}
           isMobileOpen={sidebarOpen}
-          sideBarClose={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
         />
 
         {/* Main content */}
@@ -2514,7 +2512,7 @@ export const Dashboard: React.FC = () => {
                   }}
                   title="Copy wallet address"
                 >
-                  ⧉
+                  📋
                 </button>
               </div>
             )}

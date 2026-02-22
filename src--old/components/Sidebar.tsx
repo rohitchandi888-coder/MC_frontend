@@ -7,34 +7,18 @@ interface SidebarProps {
   auth: AuthState | null;
   onLogout: () => void;
   isMobileOpen?: boolean;
-  sideBarClose?: boolean;
-  onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth, onLogout, isMobileOpen = false,onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth, onLogout, isMobileOpen = false }) => {
   return (
     <aside id="sidebar" className={`sidebar sidebar-container ${isMobileOpen ? 'mobile-open' : ''}`}>
-      <div
-          id="sidebar-header"
-          className="flex items-center gap-3 mb-10 sidebar-header"
-        >
-          <div className="MobileSidebar">
-            <div className="header-logo-badge">M</div>
-            {isMobileOpen && (
-              <button
-                className="sidebar-close-btn"
-                onClick={onClose}
-                aria-label="Close sidebar"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          <div>
-            <p className="text-xs text-slate-400 mb-1">MC Wallet</p>
-            <p className="text-sm font-semibold text-white">Dashboard</p>
-          </div>
+      <div id="sidebar-header" className="flex items-center gap-3 mb-10 sidebar-header">
+        <div className="header-logo-badge">M</div>
+        <div>
+          <p className="text-xs text-slate-400 mb-1">MC Wallet</p>
+          <p className="text-sm font-semibold text-white">Dashboard</p>
         </div>
+      </div>
 
       <nav className="space-y-6">
         <div>

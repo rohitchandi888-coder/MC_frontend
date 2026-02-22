@@ -115,49 +115,13 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
                     ) : (
                       <p className="token-no-rate">No conversion rate available</p>
                     )}
-                     <div
-  style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "8px",
-    fontFamily: "sans-serif"
-  }}
->
-  <span style={{ fontSize: "13px", fontWeight: "500", color: "#64748b" }}>
-    Status
-  </span>
-
-  <div
-    style={{
-      width: "52px",
-      height: "28px",
-      background: "linear-gradient(135deg, #22c55e, #16a34a)",
-      borderRadius: "50px",
-      position: "relative",
-      cursor: "pointer",
-      boxShadow: "inset 0 2px 6px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15)",
-      transition: "0.3s ease"
-    }}
-  >
-    <div
-      style={{
-        width: "24px",
-        height: "24px",
-        background: "#fff",
-        borderRadius: "50%",
-        position: "absolute",
-        top: "2px",
-        right: "2px",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
-        transition: "0.3s ease"
-      }}
-    ></div>
-  </div>
-
-  <span style={{ fontSize: "13px", fontWeight: "600", color: "#16a34a" }}>
-    ON
-  </span>
-</div>  
+                    <button
+                      className="token-remove-btn"
+                      onClick={() => onRemoveToken(token.address)}
+                      title="Remove token"
+                    >
+                      ×
+                    </button>
                   </div>
                 </div>
               );

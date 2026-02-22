@@ -8,7 +8,7 @@ const AUTH_KEY = 'fda_auth';
 
 const HomePage: React.FC = () => {
   return (
-    <div className="auth-page-login">
+    <div className="auth-page">
       <div className="auth-container">
         <header className="auth-header">
           <div className="auth-logo-section">

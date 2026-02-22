@@ -317,8 +317,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
       ) : (
         <div className="empty-state">
           <p className="empty-state-icon">💳</p>
-          <p className="empty-state-title" style={{color:'white'}}>No payment methods yet</p>
-          <p className="empty-state-description" style={{color:'white'}} >
+          <p className="empty-state-title">No payment methods yet</p>
+          <p className="empty-state-description">
             Add a payment method above to use it in your P2P trading offers
           </p>
         </div>

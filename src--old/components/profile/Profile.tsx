@@ -214,9 +214,9 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
         <div className="warning-box">
           <div className="warning-box-content">
             <span className="warning-icon">⚠️</span>
-            <p className="text-sm font-semibold warn-text">Login Required</p>
+            <p className="text-sm font-semibold text-slate-50">Login Required</p>
           </div>
-          <p className="text-xs waring-para">
+          <p className="text-xs text-slate-200">
             Please login to view your profile.
           </p>
         </div>
@@ -254,8 +254,7 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
       )}
 
       {profile && (
-        <div className='profileView-cont'>
-          <div className="space-y-6">
+        <div className="space-y-6">
           {/* Profile Information */}
           <div className="card-dark">
             <div className="flex justify-between items-center mb-4">
@@ -411,7 +410,6 @@ export const Profile: React.FC<ProfileProps> = ({ auth, onUpdateAuth, showErrorM
               </button>
             </div>
           </div>
-        </div>
         </div>
       )}
     </div>

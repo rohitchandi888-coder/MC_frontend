@@ -103,7 +103,7 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
                             onClick={() => copyToClipboard(wallet.address, wallet.address)}
                             title="Copy address"
                           >
-                            {copiedAddress === wallet.address ? '✓' : '⧉'}
+                            {copiedAddress === wallet.address ? '✓' : '📋'}
                           </button>
                         </div>
                         <p className="text-xs text-slate-300 mt-2">
