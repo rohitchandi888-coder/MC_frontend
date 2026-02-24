@@ -995,11 +995,27 @@ export const Dashboard: React.FC = () => {
       if (auth) {
         saveUserWallet(encrypted, walletAddress, walletLabel.trim() || undefined, selectedNetwork);
         
+        // Auto-register wallet with MC Wallet
+        try {
+          await registerWalletAddress(walletAddress, walletLabel.trim() || undefined);
+          console.log('[Wallet Creation] ✅ Wallet auto-registered with MC Wallet');
+        } catch (regErr: any) {
+          console.error('[Wallet Creation] Failed to auto-register wallet:', regErr);
+          // Don't fail wallet creation if registration fails
+        }
+        
         // Save encrypted phrase to database
         try {
           console.log('[Wallet Creation] Encrypting phrase for database storage...');
           const encryptedPhrase = await encryptPhrase(mnemonic12, extraWord.trim(), walletPassword);
           console.log('[Wallet Creation] Phrase encrypted, saving to database...');
+          
+          // Create hash of phrase for uniqueness checking
+          const phraseCombination = `${mnemonic12.trim().toLowerCase()}:${extraWord.trim().toLowerCase()}`;
+          const phraseHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phraseCombination));
+          const phraseHashHex = Array.from(new Uint8Array(phraseHash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
           
           const savePhraseUrl = getApiUrl('wallets/save-phrase');
           console.log('[Wallet Creation] Saving phrase to:', savePhraseUrl);
@@ -1013,6 +1029,7 @@ export const Dashboard: React.FC = () => {
             body: JSON.stringify({
               walletAddress,
               encryptedPhrase,
+              phraseHash: phraseHashHex,
               network: selectedNetwork,
               label: walletLabel.trim() || undefined,
             }),
@@ -1064,37 +1081,114 @@ export const Dashboard: React.FC = () => {
       showErrorModal('⚠️ Import requires exactly 12 BIP-39 words.');
       return;
     }
+    
+    // 13th word is ALWAYS required for all users
     if (!importExtraWord.trim()) {
-      showErrorModal('⚠️ Enter your custom 13th word to proceed.');
+      showErrorModal('⚠️ Enter your custom 13th word to proceed. The 13th word is always required.');
       return;
     }
+    
     if (!walletPassword.trim()) {
       showErrorModal('⚠️ Please enter a wallet password.');
       return;
     }
 
+    // Check if this phrase combination was used by another user (if registered)
+    if (auth) {
+      try {
+        const checkRes = await fetch(getApiUrl('wallets/check-phrase'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${auth.token}`,
+          },
+          body: JSON.stringify({
+            mnemonic12: importSeed.trim(),
+            extraWord: importExtraWord.trim(),
+            userId: auth.user.id,
+          }),
+        });
+        
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.exists) {
+            showErrorModal(`⚠️ ${checkData.message || 'This wallet phrase (12+13 words) is already registered by another user in MC Wallet. You cannot import it.'}`);
+            return;
+          }
+        }
+      } catch (checkErr) {
+        console.error('[Import Wallet] Error checking phrase uniqueness:', checkErr);
+        // Continue with import even if check fails
+      }
+    }
+
     try {
-      const wallet = walletFromMnemonicAndExtraWord(importSeed.trim(), importExtraWord.trim(), selectedNetwork);
+      const extraWordToUse = importExtraWord.trim();
+      const wallet = walletFromMnemonicAndExtraWord(importSeed.trim(), extraWordToUse, selectedNetwork);
       const walletAddress = wallet.address || (wallet as any).address;
       const walletPrivateKey = wallet.privateKey;
       
       const encrypted = await encryptPrivateKey(
         walletPrivateKey,
         walletPassword,
-        importExtraWord.trim(),
+        extraWordToUse,
         walletAddress,
       );
+      
       if (auth) {
         saveUserWallet(encrypted, walletAddress, importWalletLabel.trim() || undefined, selectedNetwork);
+        
+        // Auto-register wallet with MC Wallet
+        try {
+          await registerWalletAddress(walletAddress, importWalletLabel.trim() || undefined);
+          console.log('[Import Wallet] ✅ Wallet auto-registered with MC Wallet');
+        } catch (regErr: any) {
+          console.error('[Import Wallet] Failed to auto-register wallet:', regErr);
+          // Don't fail import if registration fails
+        }
+        
+        // Save encrypted phrase to database
+        try {
+          const encryptedPhrase = await encryptPhrase(importSeed.trim(), extraWordToUse, walletPassword);
+          
+          // Create hash of phrase for uniqueness checking
+          const phraseCombination = `${importSeed.trim().toLowerCase()}:${extraWordToUse.trim().toLowerCase()}`;
+          const phraseHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phraseCombination));
+          const phraseHashHex = Array.from(new Uint8Array(phraseHash))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          
+          await fetch(getApiUrl('wallets/save-phrase'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${auth.token}`,
+            },
+            body: JSON.stringify({
+              walletAddress,
+              encryptedPhrase,
+              phraseHash: phraseHashHex,
+              network: selectedNetwork,
+              label: importWalletLabel.trim() || undefined,
+            }),
+          });
+          console.log('[Import Wallet] ✅ Phrase saved to database');
+        } catch (phraseErr) {
+          console.error('[Import Wallet] Failed to save phrase:', phraseErr);
+        }
       } else {
         saveEncryptedWallet(encrypted, walletAddress, importWalletLabel.trim() || undefined, selectedNetwork);
       }
+      
       refreshWallets();
       setImportSeed('');
       setImportExtraWord('');
       setWalletPassword('');
       setImportWalletLabel('');
-      showSuccessModal(`✅ ${selectedNetwork} wallet imported and stored in your browser (encrypted).`);
+      
+      const regMessage = auth ? ' Wallet registered with MC Wallet.' : '';
+      const phraseMessage = auth ? ' Phrase saved to database.' : '';
+      showSuccessModal(`✅ ${selectedNetwork} wallet imported and stored in your browser (encrypted).${regMessage}${phraseMessage}`);
     } catch (err: any) {
       console.error('Import wallet error:', err);
       showErrorModal(`⚠️ Invalid seed phrase or extra word: ${err.message || 'Please check your 12+1 words.'}`);
@@ -2664,6 +2758,7 @@ export const Dashboard: React.FC = () => {
                 walletPassword={walletPassword}
                 importWalletLabel={importWalletLabel}
                 selectedNetwork={selectedNetwork}
+                isRegistered={!!auth}
                 onNetworkChange={setSelectedNetwork}
                 onSeedChange={setImportSeed}
                 onExtraWordChange={setImportExtraWord}

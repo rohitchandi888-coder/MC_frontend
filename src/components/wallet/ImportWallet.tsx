@@ -8,6 +8,7 @@ interface ImportWalletProps {
   walletPassword: string;
   importWalletLabel: string;
   selectedNetwork: WalletNetwork;
+  isRegistered: boolean; // Whether user is registered with MC Wallet
   onNetworkChange: (network: WalletNetwork) => void;
   onSeedChange: (seed: string) => void;
   onExtraWordChange: (word: string) => void;
@@ -22,6 +23,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
   walletPassword,
   importWalletLabel,
   selectedNetwork,
+  isRegistered,
   onNetworkChange,
   onSeedChange,
   onExtraWordChange,
@@ -36,6 +38,14 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
       <div>
         <p className="text-sm text-slate-300 mb-4" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
           First, choose the network for your wallet, then paste your original 12-word phrase and 13th word to import an existing wallet.
+          <span className="block mt-2 text-xs text-yellow-400">
+            ⚠️ The 13th word is always required for importing wallets.
+          </span>
+          {!isRegistered && (
+            <span className="block mt-2 text-xs text-slate-400">
+              ℹ️ Wallet will be registered automatically with MC Wallet after import.
+            </span>
+          )}
         </p>
         
         {/* Network Selection */}
@@ -71,7 +81,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
             <input
               type={showExtraWord ? "text" : "password"}
               className="form-input"
-              placeholder="Custom 13th word"
+              placeholder="Custom 13th word (required)"
               value={importExtraWord}
               onChange={(e) => onExtraWordChange(e.target.value)}
             />
