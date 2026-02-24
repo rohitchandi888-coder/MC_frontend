@@ -359,21 +359,57 @@ export const Dashboard: React.FC = () => {
     setMessage(null);
   };
 
-  const fetchInternalBalance = async () => {
-    if (!auth) return;
+  const fetchInternalBalance = async (walletAddress?: string) => {
+    if (!auth) {
+      console.warn('[fetchInternalBalance] No auth available');
+      return;
+    }
+    
+    // Use provided wallet address or get from storedMeta
+    const address = walletAddress || storedMeta?.address;
+    if (!address) {
+      console.warn('[fetchInternalBalance] No wallet address available. storedMeta:', storedMeta);
+      // Set balance to null if no wallet is selected
+      setInternalFdaBalance(null);
+      setInternalFdaLocked(null);
+      setInternalFdaHolding(null);
+      setInternalFdaUsable(null);
+      return;
+    }
+    
     try {
-      const res = await fetch(getApiUrl('internal/balance'), {
+      const url = getApiUrl(`internal/balance?wallet_address=${encodeURIComponent(address)}`);
+      console.log('[fetchInternalBalance] Fetching balance for wallet:', address);
+      console.log('[fetchInternalBalance] URL:', url);
+      
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setInternalFdaBalance(data.available !== undefined ? data.available : data.balance);
-        setInternalFdaLocked(data.locked !== undefined ? data.locked : 0);
-        setInternalFdaHolding(data.holding !== undefined ? data.holding : 0);
-        setInternalFdaUsable(data.usable !== undefined ? data.usable : (data.available || data.balance));
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText };
+        }
+        console.error('[fetchInternalBalance] Error response:', res.status, errorData);
+        
+        if (res.status === 400) {
+          console.error('[fetchInternalBalance] Bad Request - wallet_address might be missing or invalid');
+        }
+        return;
       }
+      
+      const data = await res.json();
+      console.log('[fetchInternalBalance] Balance data received:', data);
+      setInternalFdaBalance(data.available !== undefined ? data.available : data.balance);
+      setInternalFdaLocked(data.locked !== undefined ? data.locked : 0);
+      setInternalFdaHolding(data.holding !== undefined ? data.holding : 0);
+      setInternalFdaUsable(data.usable !== undefined ? data.usable : (data.available || data.balance));
     } catch (err) {
-      console.error('Failed to fetch internal balance:', err);
+      console.error('[fetchInternalBalance] Failed to fetch internal balance:', err);
     }
   };
 
@@ -725,16 +761,16 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (storedMeta?.address) {
-      fetchBalances(storedMeta.address);
-      if (auth) {
-        fetchInternalBalance();
-        // Register wallet address if not already registered
-        registerWalletAddress(storedMeta.address, storedMeta.label);
-        // Fetch P2P fee rate on login/load
-        fetchP2PFeeRate();
+      if (storedMeta?.address) {
+        fetchBalances(storedMeta.address);
+        if (auth) {
+          fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+          // Register wallet address if not already registered
+          registerWalletAddress(storedMeta.address, storedMeta.label);
+          // Fetch P2P fee rate on login/load
+          fetchP2PFeeRate();
+        }
       }
-    }
   }, [storedMeta?.address, auth]);
 
   useEffect(() => {
@@ -877,13 +913,17 @@ export const Dashboard: React.FC = () => {
     if (activeTab === 'p2p' && auth) {
       // Only load trades and balance for P2P Trading tab (for creating offers)
       loadMyTrades();
-      fetchInternalBalance();
+      if (storedMeta?.address) {
+        fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+      }
     }
     if (activeTab === 'trade-listing' && auth) {
       // Load offers, trades, and balance for Trade Listing tab
       loadOffers();
       loadMyTrades();
-      fetchInternalBalance();
+      if (storedMeta?.address) {
+        fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+      }
     }
     if ((activeTab === 'admin' || activeTab === 'disputes') && auth && auth.user.isAdmin) {
       // Load admin data (settings, trades, disputes) for Admin Panel and Disputes
@@ -1181,6 +1221,11 @@ export const Dashboard: React.FC = () => {
       setAddingFdaBalance(true);
       setMessage(null); // Clear previous messages
       
+      if (!storedMeta?.address) {
+        showErrorModal('⚠️ No wallet selected. Please select a wallet first.');
+        return;
+      }
+      
       const res = await fetch(getApiUrl('internal/add-balance'), {
         method: 'POST',
         headers: {
@@ -1189,6 +1234,7 @@ export const Dashboard: React.FC = () => {
         },
         body: JSON.stringify({
           amount: amountNum,
+          wallet_address: storedMeta.address,
         }),
       });
       
@@ -1215,7 +1261,9 @@ export const Dashboard: React.FC = () => {
       if (data.success) {
         showErrorModal(`✅ Added ${amountNum} FDA to your internal balance! New balance: ${data.balance.toFixed(2)} FDA`);
         setAddFdaAmount('');
-        await fetchInternalBalance(); // Refresh balance
+        if (storedMeta?.address) {
+          await fetchInternalBalance(storedMeta.address); // Refresh balance
+        }
       } else {
         showErrorModal(`❌ ${data.message || 'Failed to add FDA tokens'}`);
       }
@@ -1330,6 +1378,12 @@ export const Dashboard: React.FC = () => {
         amount: Number(offerAmount),
       });
       console.log('[FRONTEND] ========================================');
+      if (!storedMeta?.address) {
+        showErrorModal('⚠️ No wallet selected. Please select a wallet first.');
+        setCreatingOffer(false);
+        return;
+      }
+      
       const res = await fetch(getApiUrl('offers'), {
         method: 'POST',
         headers: {
@@ -1345,6 +1399,7 @@ export const Dashboard: React.FC = () => {
           minLimit: offerMinLimit ? Number(offerMinLimit) : null,
           maxLimit: offerMaxLimit ? Number(offerMaxLimit) : null,
           paymentMethods: offerPaymentMethods || null,
+          wallet_address: storedMeta.address, // Include wallet address for balance checks
         }),
       });
       
@@ -1374,7 +1429,9 @@ export const Dashboard: React.FC = () => {
       setOfferMaxLimit('');
       setOfferPaymentMethods('');
       await loadOffers();
-      await fetchInternalBalance(); // Refresh internal FDA balance
+      if (storedMeta?.address) {
+        await fetchInternalBalance(storedMeta.address); // Refresh internal FDA balance
+      }
     } catch (err) {
       console.error('Failed to create offer:', err);
       showErrorModal('⚠️ Failed to create offer. Please try again.');
@@ -1613,7 +1670,9 @@ export const Dashboard: React.FC = () => {
         closeReleaseConfirmModal();
         showErrorModal('✅ Tokens released to buyer successfully!');
         await loadMyTrades();
-        await fetchInternalBalance();
+        if (storedMeta?.address) {
+          await fetchInternalBalance(storedMeta.address);
+        }
       } else {
         const data = await res.json();
         showErrorModal(`❌ ${data.error || 'Failed to release tokens'}`);
@@ -1678,7 +1737,9 @@ export const Dashboard: React.FC = () => {
       if (res.ok) {
         closeCancelOfferModal();
         await loadOffers();
-        await fetchInternalBalance(); // Refresh balance since locked amount will be returned
+        if (storedMeta?.address) {
+          await fetchInternalBalance(storedMeta.address); // Refresh balance since locked amount will be returned
+        }
         showErrorModal('✅ Offer cancelled successfully. Your locked FDA balance has been returned.');
       } else {
         const data = await res.json();
@@ -1876,6 +1937,11 @@ export const Dashboard: React.FC = () => {
       
       try {
         // Processing message - no need to show modal for this
+        if (!storedMeta?.address) {
+          showErrorModal('⚠️ No wallet selected. Please select a wallet first.');
+          return;
+        }
+        
         const res = await fetch(getApiUrl('internal/transfer'), {
           method: 'POST',
           headers: {
@@ -1883,6 +1949,7 @@ export const Dashboard: React.FC = () => {
             Authorization: `Bearer ${auth.token}`,
           },
           body: JSON.stringify({
+            fromAddress: storedMeta.address,
             toAddress: sendTo.trim(),
             amount: Number(sendAmount),
             note: `Internal transfer to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'}`,
@@ -1896,7 +1963,9 @@ export const Dashboard: React.FC = () => {
         }
         
         showErrorModal(`✅ Internal transfer completed! ${sendAmount} tokens sent to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'} (Zero fee, instant)`);
-        await fetchInternalBalance();
+        if (storedMeta?.address) {
+          await fetchInternalBalance(storedMeta.address);
+        }
         setSendAmount('');
         return;
       } catch (err) {
@@ -2478,7 +2547,9 @@ export const Dashboard: React.FC = () => {
                   onClick={() => {
                     const addr = checkAddress || storedMeta?.address;
                     if (addr) fetchBalances(addr);
-                    if (auth) fetchInternalBalance();
+                    if (auth && addr) {
+                      fetchInternalBalance(addr);
+                    }
                   }}
                   disabled={balanceLoading}
                 >
