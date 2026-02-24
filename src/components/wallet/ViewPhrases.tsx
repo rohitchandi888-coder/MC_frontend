@@ -86,6 +86,14 @@ export const ViewPhrases: React.FC<ViewPhrasesProps> = ({ auth }) => {
     setError(null);
     try {
       console.log('[ViewPhrases] Decrypting phrase for wallet:', walletAddress);
+      console.log('[ViewPhrases] Encrypted phrase data:', {
+        hasCipherText: !!phrase.encryptedPhrase.cipherText,
+        hasIv: !!phrase.encryptedPhrase.iv,
+        hasSalt: !!phrase.encryptedPhrase.salt,
+        iterations: phrase.encryptedPhrase.iterations,
+        version: phrase.encryptedPhrase.version,
+      });
+      
       const decrypted = await decryptPhrase(
         phrase.encryptedPhrase,
         password
@@ -102,7 +110,17 @@ export const ViewPhrases: React.FC<ViewPhrasesProps> = ({ auth }) => {
       }));
     } catch (err: any) {
       console.error('[ViewPhrases] Decrypt error:', err);
-      setError('Failed to decrypt phrase. Please check your password.');
+      console.error('[ViewPhrases] Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      });
+      
+      if (err.name === 'OperationError' || err.message?.includes('decrypt')) {
+        setError('Failed to decrypt phrase. The password may be incorrect. Please verify you are using the correct wallet password that was used when creating this wallet.');
+      } else {
+        setError(`Failed to decrypt phrase: ${err.message || 'Unknown error'}. Please check your password.`);
+      }
     }
   };
 

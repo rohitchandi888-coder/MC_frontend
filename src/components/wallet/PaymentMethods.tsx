@@ -19,9 +19,13 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
   const [saving, setSaving] = useState(false);
   const [newUpiId, setNewUpiId] = useState('');
   const [newQrCode, setNewQrCode] = useState('');
+  const [newQrFile, setNewQrFile] = useState<File | null>(null);
+  const [newQrPreview, setNewQrPreview] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUpiId, setEditUpiId] = useState('');
   const [editQrCode, setEditQrCode] = useState('');
+  const [editQrFile, setEditQrFile] = useState<File | null>(null);
+  const [editQrPreview, setEditQrPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (auth) {
@@ -47,6 +51,46 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
     }
   };
 
+  const handleQrFileChange = (file: File | null, isEdit: boolean = false) => {
+    if (!file) {
+      if (isEdit) {
+        setEditQrFile(null);
+        setEditQrPreview(null);
+      } else {
+        setNewQrFile(null);
+        setNewQrPreview(null);
+      }
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      if (isEdit) {
+        setEditQrFile(file);
+        setEditQrPreview(base64);
+        setEditQrCode(base64);
+      } else {
+        setNewQrFile(file);
+        setNewQrPreview(base64);
+        setNewQrCode(base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAdd = async () => {
     if (!auth || !newUpiId.trim()) {
       alert('Please enter UPI ID');
@@ -62,12 +106,14 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
         },
         body: JSON.stringify({
           upi_id: newUpiId.trim(),
-          qr_code: newQrCode.trim() || null,
+          qr_code: newQrCode || null,
         }),
       });
       if (res.ok) {
         setNewUpiId('');
         setNewQrCode('');
+        setNewQrFile(null);
+        setNewQrPreview(null);
         await loadPaymentMethods();
       } else {
         const data = await res.json();
@@ -95,13 +141,15 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
         },
         body: JSON.stringify({
           upi_id: editUpiId.trim(),
-          qr_code: editQrCode.trim() || null,
+          qr_code: editQrCode || null,
         }),
       });
       if (res.ok) {
         setEditingId(null);
         setEditUpiId('');
         setEditQrCode('');
+        setEditQrFile(null);
+        setEditQrPreview(null);
         await loadPaymentMethods();
       } else {
         const data = await res.json();
@@ -158,12 +206,16 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
     setEditingId(method.id!);
     setEditUpiId(method.upi_id);
     setEditQrCode(method.qr_code || '');
+    setEditQrFile(null);
+    setEditQrPreview(method.qr_code && (method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http')) ? method.qr_code : null);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditUpiId('');
     setEditQrCode('');
+    setEditQrFile(null);
+    setEditQrPreview(null);
   };
 
   if (!auth) {
@@ -199,14 +251,29 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
             />
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">QR Code (Base64 or URL)</label>
-            <textarea
-              className="form-input-dark w-full"
-              rows={3}
-              placeholder="Paste QR code image as base64 or enter image URL"
-              value={newQrCode}
-              onChange={(e) => setNewQrCode(e.target.value)}
+            <label className="text-xs text-slate-400 mb-1 block">QR Code Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              className="form-input-dark w-full text-xs"
+              onChange={(e) => handleQrFileChange(e.target.files?.[0] || null, false)}
             />
+            {newQrPreview && (
+              <div className="mt-2">
+                <img
+                  src={newQrPreview}
+                  alt="QR Code Preview"
+                  className="max-w-32 max-h-32 border border-slate-600 rounded"
+                />
+                <button
+                  type="button"
+                  className="text-xs text-red-400 mt-1"
+                  onClick={() => handleQrFileChange(null, false)}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
           <button
             className="btn btn-primary w-full"
@@ -237,13 +304,43 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">QR Code</label>
-                    <textarea
-                      className="form-input-dark w-full"
-                      rows={3}
-                      value={editQrCode}
-                      onChange={(e) => setEditQrCode(e.target.value)}
+                    <label className="text-xs text-slate-400 mb-1 block">QR Code Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="form-input-dark w-full text-xs"
+                      onChange={(e) => handleQrFileChange(e.target.files?.[0] || null, true)}
                     />
+                    {editQrPreview && (
+                      <div className="mt-2">
+                        <img
+                          src={editQrPreview}
+                          alt="QR Code Preview"
+                          className="max-w-32 max-h-32 border border-slate-600 rounded"
+                        />
+                        <button
+                          type="button"
+                          className="text-xs text-red-400 mt-1"
+                          onClick={() => handleQrFileChange(null, true)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    {!editQrPreview && method.qr_code && (
+                      <div className="mt-2">
+                        <p className="text-xs text-slate-400 mb-1">Current QR Code:</p>
+                        {method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http') ? (
+                          <img
+                            src={method.qr_code}
+                            alt="QR Code"
+                            className="max-w-32 max-h-32 border border-slate-600 rounded"
+                          />
+                        ) : (
+                          <p className="text-xs text-slate-400">QR Code exists</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button

@@ -1,4 +1,5 @@
 import React from 'react';
+import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
 
 interface P2PTradingProps {
@@ -37,12 +38,12 @@ interface P2PTradingProps {
   openDisputeModal: (trade: any) => void;
 }
 
-const PAYMENT_OPTIONS_INR = [
-  { id: 'gpay', label: 'GPay Scanner', value: 'GPay Scanner' },
-  { id: 'phonepe', label: 'PhonePe Scanner', value: 'PhonePe Scanner' },
-  { id: 'paytm', label: 'PayTM Scanner', value: 'PayTM Scanner' },
-  { id: 'bank', label: 'Bank Transfer', value: 'Bank Transfer' },
-];
+interface PaymentMethod {
+  id: number;
+  upi_id: string;
+  qr_code: string | null;
+  is_active: boolean;
+}
 
 export const P2PTrading: React.FC<P2PTradingProps> = ({
   auth,
@@ -79,40 +80,75 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   openReleaseConfirmModal,
   openDisputeModal,
 }) => {
-  const [selectedPaymentOptions, setSelectedPaymentOptions] = React.useState<string[]>([]);
+  const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = React.useState(false);
+  const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = React.useState<number[]>([]);
 
-  // Initialize payment options from existing payment methods string when currency is INR
+  // Load payment methods from database
   React.useEffect(() => {
-    if (offerFiatCurrency === 'INR' && offerPaymentMethods) {
+    if (auth) {
+      loadPaymentMethods();
+    }
+  }, [auth]);
+
+  const loadPaymentMethods = async () => {
+    if (!auth) return;
+    setLoadingPaymentMethods(true);
+    try {
+      const res = await fetch(getApiUrl('payment-methods'), {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentMethods(data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load payment methods:', err);
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
+
+  // Initialize selected payment methods from existing payment methods string
+  React.useEffect(() => {
+    if (offerFiatCurrency === 'INR' && offerPaymentMethods && paymentMethods.length > 0) {
+      // Try to match existing payment methods string with database payment methods
       const methods = offerPaymentMethods.split(',').map(m => m.trim());
-      const validOptions = methods.filter(m => 
-        PAYMENT_OPTIONS_INR.some(opt => opt.value === m)
-      );
-      if (validOptions.length > 0) {
-        setSelectedPaymentOptions(validOptions);
+      const matchedIds: number[] = [];
+      paymentMethods.forEach((pm) => {
+        if (methods.some(m => m === pm.upi_id || m.includes(pm.upi_id))) {
+          matchedIds.push(pm.id);
+        }
+      });
+      if (matchedIds.length > 0) {
+        setSelectedPaymentMethodIds(matchedIds);
       }
     } else if (offerFiatCurrency !== 'INR') {
-      setSelectedPaymentOptions([]);
+      setSelectedPaymentMethodIds([]);
+      setOfferPaymentMethods('');
     }
-  }, [offerFiatCurrency]); // Only run when currency changes
+  }, [offerFiatCurrency, paymentMethods]); // Only run when currency or payment methods change
 
-  // Update payment methods string when options change
+  // Update payment methods string when selected payment methods change
   React.useEffect(() => {
     if (offerFiatCurrency === 'INR') {
-      if (selectedPaymentOptions.length > 0) {
-        setOfferPaymentMethods(selectedPaymentOptions.join(', '));
+      if (selectedPaymentMethodIds.length > 0) {
+        const selectedMethods = paymentMethods
+          .filter(pm => selectedPaymentMethodIds.includes(pm.id) && pm.is_active)
+          .map(pm => pm.upi_id);
+        setOfferPaymentMethods(selectedMethods.join(', '));
       } else {
         setOfferPaymentMethods('');
       }
     }
-  }, [selectedPaymentOptions, offerFiatCurrency, setOfferPaymentMethods]);
+  }, [selectedPaymentMethodIds, offerFiatCurrency, paymentMethods, setOfferPaymentMethods]);
 
-  const handlePaymentOptionToggle = (value: string) => {
-    setSelectedPaymentOptions((prev) => {
-      if (prev.includes(value)) {
-        return prev.filter((opt) => opt !== value);
+  const handlePaymentMethodToggle = (id: number) => {
+    setSelectedPaymentMethodIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((methodId) => methodId !== id);
       } else {
-        return [...prev, value];
+        return [...prev, id];
       }
     });
   };
@@ -302,22 +338,46 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               <p className="text-xs  mb-2 p2p-subheading">Payment Methods</p>
               {offerFiatCurrency === 'INR' ? (
                 <div className="space-y-2">
-                  {PAYMENT_OPTIONS_INR.map((option) => (
-                    <label
-                      key={option.id}
-                      className="flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-slate-800 transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedPaymentOptions.includes(option.value)}
-                        onChange={() => handlePaymentOptionToggle(option.value)}
-                        className="w-4 h-4 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2"
-                      />
-                      <span className="text-xs text-slate-300">{option.label}</span>
-                    </label>
-                  ))}
-                  {selectedPaymentOptions.length === 0 && (
-                    <p className="text-xs  mt-2" style={{color:'#93b65a'}}>⚠️ Please select at least one payment method</p>
+                  {loadingPaymentMethods ? (
+                    <p className="text-xs text-slate-400">Loading payment methods...</p>
+                  ) : paymentMethods.filter(pm => pm.is_active).length === 0 ? (
+                    <div className="warning-box p-3">
+                      <p className="text-xs text-slate-300 mb-2">⚠️ No active payment methods found</p>
+                      <p className="text-xs text-slate-400">
+                        Please add payment methods in the "Payment Methods" section first.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {paymentMethods
+                        .filter(pm => pm.is_active)
+                        .map((method) => (
+                          <label
+                            key={method.id}
+                            className="flex items-center gap-3 p-3 rounded cursor-pointer hover:bg-slate-800 transition-colors border border-slate-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedPaymentMethodIds.includes(method.id)}
+                              onChange={() => handlePaymentMethodToggle(method.id)}
+                              className="w-4 h-4 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2"
+                            />
+                            <div className="flex-1">
+                              <span className="text-xs font-semibold text-slate-200 block">{method.upi_id}</span>
+                              {method.qr_code && (method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http')) && (
+                                <img
+                                  src={method.qr_code}
+                                  alt="QR Code"
+                                  className="max-w-20 max-h-20 border border-slate-600 rounded mt-1"
+                                />
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      {selectedPaymentMethodIds.length === 0 && (
+                        <p className="text-xs mt-2" style={{color:'#93b65a'}}>⚠️ Please select at least one payment method</p>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (

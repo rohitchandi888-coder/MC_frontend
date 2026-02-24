@@ -204,9 +204,18 @@ export async function decryptPhrase(
 ): Promise<{ mnemonic12: string; extraWord: string }> {
   const subtle = getSubtleCrypto();
 
+  // Validate encrypted data
+  if (!encrypted.cipherText || !encrypted.iv || !encrypted.salt) {
+    throw new Error('Invalid encrypted data: missing required fields');
+  }
+
   const salt = base64ToUint8(encrypted.salt);
   const iv = base64ToUint8(encrypted.iv);
   const cipherBytes = base64ToUint8(encrypted.cipherText);
+
+  if (salt.length === 0 || iv.length === 0 || cipherBytes.length === 0) {
+    throw new Error('Invalid encrypted data: empty fields');
+  }
 
   // Use only password (not password + extraWord) for phrase decryption
   const baseMaterial = await subtle.importKey(
@@ -221,7 +230,7 @@ export async function decryptPhrase(
     {
       name: 'PBKDF2',
       salt: salt as BufferSource,
-      iterations: encrypted.iterations,
+      iterations: encrypted.iterations || 150_000,
       hash: 'SHA-256',
     },
     baseMaterial,
@@ -233,18 +242,30 @@ export async function decryptPhrase(
     ['encrypt', 'decrypt'],
   );
 
-  const plainBuf = await subtle.decrypt(
-    {
-      name: 'AES-GCM',
-      iv: iv as BufferSource,
-    },
-    key,
-    cipherBytes as BufferSource,
-  );
+  try {
+    const plainBuf = await subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv as BufferSource,
+      },
+      key,
+      cipherBytes as BufferSource,
+    );
 
-  const plainStr = new TextDecoder().decode(plainBuf);
-  const [mnemonic12, decryptedExtraWord] = plainStr.split(':');
-  return { mnemonic12, extraWord: decryptedExtraWord };
+    const plainStr = new TextDecoder().decode(plainBuf);
+    const parts = plainStr.split(':');
+    if (parts.length !== 2) {
+      throw new Error('Invalid decrypted data format');
+    }
+    const [mnemonic12, decryptedExtraWord] = parts;
+    return { mnemonic12, extraWord: decryptedExtraWord };
+  } catch (decryptErr: any) {
+    // Provide more specific error message
+    if (decryptErr.name === 'OperationError') {
+      throw new Error('Decryption failed. The password may be incorrect. Please verify you are using the correct wallet password.');
+    }
+    throw decryptErr;
+  }
 }
 
 // Helper for deriving a wallet from a mnemonic (extraWord is used only for encryption in this MVP).
