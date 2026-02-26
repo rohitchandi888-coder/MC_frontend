@@ -1177,6 +1177,14 @@ input[style*="background: #0f172a"]::placeholder {
 
 }
 
+.btn:hover {
+   background-color: #1d4ed8; /* thoda darker shade */
+  color: #6361c9;
+  transform: translateY(-2px); /* thoda upar uthne ka effect */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+
 
 
 .btn-primary {
@@ -6017,9 +6025,9 @@ ul:not([style*="padding"]) li {
 
 img {
 
-  max-width: 100%;
+  max-width: 100px;
 
-  height: auto;
+  height: 100px !important;
 
 }
 

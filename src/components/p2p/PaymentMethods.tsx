@@ -22,6 +22,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editUpiId, setEditUpiId] = useState('');
   const [editQrCode, setEditQrCode] = useState('');
+    const [isOn, setIsOn] = useState(false);
 
   useEffect(() => {
     if (auth) {
@@ -225,6 +226,41 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
         <div className="space-y-4">
           {paymentMethods.map((method) => (
             <div key={method.id} className="card-dark">
+
+
+                 <div
+                      onClick={() => setIsOn(!isOn)}
+                      style={{
+                        width: "52px",
+                        height: "28px",
+                        background: isOn
+                          ? "linear-gradient(135deg, #22c55e, #16a34a)"
+                          : "#cbd5e1",
+                        borderRadius: "50px",
+                        position: "relative",
+                        cursor: "pointer",
+                        transition: "0.3s"
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          background: "#fff",
+                          borderRadius: "50%",
+                          position: "absolute",
+                          top: "2px",
+                          left: isOn ? "26px" : "2px",
+                          transition: "0.3s"
+                        }}
+                      />
+                    </div>
+
+                    <span style={{ fontSize: "13px", fontWeight: "600" }}>
+                      {isOn ? "ON" : "OFF"}
+                    </span>
+
+
               {editingId === method.id ? (
                 <div className="space-y-3">
                   <div>

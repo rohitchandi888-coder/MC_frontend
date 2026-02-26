@@ -316,10 +316,15 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   type="number"
                   step="any"
                   className="form-input-dark w-full py-3"
-                  placeholder="Optional"
+                  placeholder="Auto-calculated"
                   value={offerMinLimit}
                   onChange={(e) => setOfferMinLimit(e.target.value)}
+                  readOnly={!!(offerAmount && offerPrice)}
+                  style={offerAmount && offerPrice ? { backgroundColor: '#1e293b', cursor: 'not-allowed' } : {}}
                 />
+                {offerAmount && offerPrice && (
+                  <p className="text-xs text-slate-400 mt-1">Auto: 1 FDA × {offerPrice} = {offerMinLimit}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs  mb-2 font-semibold p2p-subheading">Max Limit ({offerFiatCurrency})</p>
@@ -327,10 +332,15 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   type="number"
                   step="any"
                   className="form-input-dark w-full py-3"
-                  placeholder="Optional"
+                  placeholder="Auto-calculated"
                   value={offerMaxLimit}
                   onChange={(e) => setOfferMaxLimit(e.target.value)}
+                  readOnly={!!(offerAmount && offerPrice)}
+                  style={offerAmount && offerPrice ? { backgroundColor: '#1e293b', cursor: 'not-allowed' } : {}}
                 />
+                {offerAmount && offerPrice && (
+                  <p className="text-xs text-slate-400 mt-1">Auto: {offerAmount} FDA × {offerPrice} = {offerMaxLimit}</p>
+                )}
               </div>
             </div>
 
@@ -348,34 +358,49 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       </p>
                     </div>
                   ) : (
-                    <>
+                      <>
                       {paymentMethods
                         .filter(pm => pm.is_active)
                         .map((method) => (
                           <label
                             key={method.id}
-                            className="flex items-center gap-3 p-3 rounded cursor-pointer hover:bg-slate-800 transition-colors border border-slate-700"
+                            className=" flex items-start gap-3 p-3 rounded cursor-pointer hover:bg-slate-800 transition-colors border border-slate-700"
                           >
                             <input
                               type="checkbox"
                               checked={selectedPaymentMethodIds.includes(method.id)}
                               onChange={() => handlePaymentMethodToggle(method.id)}
-                              className="w-4 h-4 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2"
+                              className="w-4 h-4 mt-1 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2"
                             />
                             <div className="flex-1">
-                              <span className="text-xs font-semibold text-slate-200 block">{method.upi_id}</span>
+                              {/* <span className="text-xs  text-slate-200 block p2p-subheading">{method.upi_id}</span> */}
                               {method.qr_code && (method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http')) && (
                                 <img
                                   src={method.qr_code}
                                   alt="QR Code"
-                                  className="max-w-20 max-h-20 border border-slate-600 rounded mt-1"
+                                  className="
+                                      w-40 h-40              
+                                      sm:w-44 sm:h-44        
+                                      md:w-48 md:h-48         
+                                      object-contain 
+                                      border-2 border-slate-500 
+                                      rounded-lg 
+                                      mt-2 
+                                      shadow-md 
+                                      hover:shadow-lg 
+                                      transition-shadow
+                                      cursor-zoom-in"
                                 />
                               )}
+
+                              <span className="text-xs  text-slate-200 block p2p-subheading">{method.upi_id}</span>
                             </div>
+
+                            
                           </label>
                         ))}
                       {selectedPaymentMethodIds.length === 0 && (
-                        <p className="text-xs mt-2" style={{color:'#93b65a'}}>⚠️ Please select at least one payment method</p>
+                        <p className="text-xs mt-2" style={{ color: '#93b65a' }}>⚠️ Please select at least one payment method</p>
                       )}
                     </>
                   )}
@@ -409,9 +434,22 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             )}
 
             <button
-              className={`btn btn-yellow w-full ${(creatingOffer || !offerAmount || !offerPrice) ? 'opacity-60 cursor-not-allowed' : ''}`}
+              className={`btn btn-yellow w-full ${
+                (creatingOffer || 
+                 !offerAmount || 
+                 !offerPrice || 
+                 (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
+                 (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
+                ) ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
               onClick={createOffer}
-              disabled={creatingOffer || !offerAmount || !offerPrice}
+              disabled={
+                creatingOffer || 
+                !offerAmount || 
+                !offerPrice || 
+                (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
+                (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
+              }
             >
               {creatingOffer ? 'Creating...' : offerType === 'BUY' ? '📥 Create Buy Offer' : '📤 Create Sell Offer'}
             </button>

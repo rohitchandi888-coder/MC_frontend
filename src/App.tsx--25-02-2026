@@ -89,12 +89,16 @@ const LoginPage: React.FC = () => {
     setMessage(null);
     try {
       const loginUrl = getApiUrl('auth/login');
+      console.log('🔍 Login attempt - URL:', loginUrl);
+      console.log('🔍 Login attempt - Config:', window.APP_CONFIG?.API_URL);
       
       const res = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+      
+      console.log('🔍 Login response status:', res.status, res.statusText);
       
       // Check if response is JSON
       const contentType = res.headers.get('content-type');
@@ -112,6 +116,26 @@ const LoginPage: React.FC = () => {
         setLoading(false);
         return;
       }
+      
+      // Log full FDA data if available
+      if (data.fdaUserData) {
+        console.log('========================================');
+        console.log('📥 FDA Remote Login Response Data:');
+        console.log('========================================');
+        console.log('Full Response:', data);
+        console.log('FDA User Data:', data.fdaUserData);
+        console.log('All FDA Fields:', Object.keys(data.fdaUserData));
+        console.log('User Object:', data.user);
+        console.log('========================================\n');
+      }
+      
+      // Debug: Check admin status
+      console.log('🔍 Login Response Debug:');
+      console.log('  User object:', data.user);
+      console.log('  isAdmin value:', data.user?.isAdmin);
+      console.log('  isAdmin type:', typeof data.user?.isAdmin);
+      console.log('  Full auth data:', JSON.stringify(data, null, 2));
+      console.log('');
       
       localStorage.setItem(AUTH_KEY, JSON.stringify(data));
       navigate('/app');

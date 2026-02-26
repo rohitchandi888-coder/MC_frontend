@@ -35,6 +35,7 @@ import {
   type CustomToken,
   type WalletMeta,
   type StoredWallet,
+  setWalletAddres,
 } from './walletStorage';
 import { getApiUrl } from './config';
 
@@ -95,14 +96,6 @@ export const Dashboard: React.FC = () => {
     try {
       const raw = localStorage.getItem(AUTH_KEY);
       const parsed = raw ? (JSON.parse(raw) as AuthState) : null;
-      if (parsed) {
-        console.log('🔍 Loaded auth from localStorage:', {
-          userId: parsed.user.id,
-          email: parsed.user.email,
-          isAdmin: parsed.user.isAdmin,
-          isAdminType: typeof parsed.user.isAdmin
-        });
-      }
       return parsed;
     } catch {
       return null;
@@ -223,8 +216,20 @@ export const Dashboard: React.FC = () => {
     const raw = localStorage.getItem(userWalletsKey);
     if (!raw) return [];
     try {
-      const wallets = JSON.parse(raw) as StoredWallet[];
-      return wallets.map(w => w.meta);
+      // const wallets = JSON.parse(raw) as StoredWallet[];
+      // return wallets.map(w => w.meta);
+    const wallets = JSON.parse(raw);
+    return wallets.map((w: any) =>
+      w.meta
+        ? w.meta
+        : {
+            id: w.id?.toString(),
+            address: w.address,
+            label: w.label,
+            network: w.network || "BNB Chain",
+            createdAt: w.createdAt || new Date().toISOString(),
+          }
+    );
     } catch {
       return [];
     }
@@ -276,6 +281,13 @@ export const Dashboard: React.FC = () => {
       setAllWallets([]);
     }
   }, [auth]);
+    useEffect(() => {
+      if (auth) {
+        setWalletAddres().then(() => {
+          refreshWallets();
+        });
+      }
+    }, [auth]);
 
   // Set default selected wallet for unlock when wallets change
   useEffect(() => {
@@ -379,8 +391,6 @@ export const Dashboard: React.FC = () => {
     
     try {
       const url = getApiUrl(`internal/balance?wallet_address=${encodeURIComponent(address)}`);
-      console.log('[fetchInternalBalance] Fetching balance for wallet:', address);
-      console.log('[fetchInternalBalance] URL:', url);
       
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
@@ -395,15 +405,10 @@ export const Dashboard: React.FC = () => {
           errorData = { error: errorText };
         }
         console.error('[fetchInternalBalance] Error response:', res.status, errorData);
-        
-        if (res.status === 400) {
-          console.error('[fetchInternalBalance] Bad Request - wallet_address might be missing or invalid');
-        }
         return;
       }
       
       const data = await res.json();
-      console.log('[fetchInternalBalance] Balance data received:', data);
       setInternalFdaBalance(data.available !== undefined ? data.available : data.balance);
       setInternalFdaLocked(data.locked !== undefined ? data.locked : 0);
       setInternalFdaHolding(data.holding !== undefined ? data.holding : 0);
@@ -629,7 +634,6 @@ export const Dashboard: React.FC = () => {
   const fetchRegisteredFdaWallets = async () => {
     if (!auth) return;
     try {
-      console.log('[Dashboard] Fetching registered wallets...');
       const res = await fetch(getApiUrl('wallets'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
@@ -640,7 +644,6 @@ export const Dashboard: React.FC = () => {
       }
       
       const data = await res.json();
-      console.log('[Dashboard] Fetched wallets:', Array.isArray(data) ? data.length : 'not array', data);
       
       // Ensure data is an array
       if (Array.isArray(data)) {
@@ -793,7 +796,6 @@ export const Dashboard: React.FC = () => {
         // Handle 0 as valid value (don't use || which treats 0 as falsy)
         const feeRate = data.feeRate !== undefined ? data.feeRate : (data.feeRatePercent !== undefined ? data.feeRatePercent : 0);
         setP2pFeeRate(feeRate);
-        console.log('✅ Fetched P2P fee rate:', feeRate + '%');
       } else {
         console.error('Failed to fetch fee rate:', res.status);
       }
@@ -812,7 +814,6 @@ export const Dashboard: React.FC = () => {
     }
     
     try {
-      console.log('🔄 Starting profile refresh...');
       const res = await fetch(getApiUrl('auth/profile'), {
         headers: {
           Authorization: `Bearer ${currentAuth.token}`,
@@ -821,12 +822,6 @@ export const Dashboard: React.FC = () => {
 
       if (res.ok) {
         const profileData = await res.json();
-        console.log('🔄 Refreshing user profile. Current isAdmin:', currentAuth.user.isAdmin, 'New isAdmin:', !!profileData.is_admin);
-        console.log('📊 Profile data received:', {
-          is_admin: profileData.is_admin,
-          is_admin_type: typeof profileData.is_admin,
-          email: profileData.email
-        });
         // Update auth state with latest profile data
         const updatedAuth = {
           ...currentAuth,
@@ -841,14 +836,6 @@ export const Dashboard: React.FC = () => {
         setAuth(updatedAuth);
         // Update localStorage
         localStorage.setItem(AUTH_KEY, JSON.stringify(updatedAuth));
-        console.log('✅ User profile refreshed. isAdmin:', updatedAuth.user.isAdmin);
-        console.log('✅ Auth state updated:', {
-          userId: updatedAuth.user.id,
-          email: updatedAuth.user.email,
-          isAdmin: updatedAuth.user.isAdmin,
-          isAdminType: typeof updatedAuth.user.isAdmin
-        });
-        console.log('✅ Sidebar should now show admin menu:', updatedAuth.user.isAdmin === true);
       } else {
         const errorText = await res.text();
         console.error('❌ Failed to refresh profile. Status:', res.status, 'Response:', errorText);
@@ -875,11 +862,32 @@ export const Dashboard: React.FC = () => {
   // Also refresh profile on initial mount to ensure admin status is up to date
   useEffect(() => {
     if (auth && auth.token) {
-      console.log('🔄 Initial mount - refreshing profile to check admin status...');
       refreshUserProfile();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - refreshUserProfile uses current auth from closure
+
+  // Auto-calculate Min Limit and Max Limit based on Amount and Price
+  useEffect(() => {
+    if (offerAmount && offerPrice) {
+      const amount = Number(offerAmount);
+      const price = Number(offerPrice);
+      
+      if (amount > 0 && price > 0) {
+        // Min Limit = Price per FDA (minimum 1 FDA)
+        const minLimit = price.toFixed(2);
+        // Max Limit = Amount * Price (total value)
+        const maxLimit = (amount * price).toFixed(2);
+        
+        setOfferMinLimit(minLimit);
+        setOfferMaxLimit(maxLimit);
+      }
+    } else {
+      // Clear limits if amount or price is empty
+      setOfferMinLimit('');
+      setOfferMaxLimit('');
+    }
+  }, [offerAmount, offerPrice]);
 
   // Check if recipient is MC wallet
   useEffect(() => {
@@ -1390,6 +1398,35 @@ export const Dashboard: React.FC = () => {
     if (!offerPrice || Number(offerPrice) <= 0) {
       showErrorModal('Please enter a valid price.');
       return;
+    }
+    
+    // Check for active payment methods if currency is INR
+    if (offerFiatCurrency === 'INR') {
+      try {
+        const paymentMethodsRes = await fetch(getApiUrl('payment-methods'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        if (paymentMethodsRes.ok) {
+          const paymentMethodsData = await paymentMethodsRes.json();
+          const activePaymentMethods = (paymentMethodsData || []).filter((pm: any) => pm.is_active);
+          if (activePaymentMethods.length === 0) {
+            showErrorModal('⚠️ No active payment methods found. Please add at least one active payment method in the "Payment Methods" section before creating an offer.');
+            return;
+          }
+          // Also check if at least one payment method is selected
+          if (!offerPaymentMethods || offerPaymentMethods.trim() === '') {
+            showErrorModal('⚠️ Please select at least one payment method before creating an offer.');
+            return;
+          }
+        } else {
+          showErrorModal('⚠️ Failed to verify payment methods. Please try again.');
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking payment methods:', err);
+        showErrorModal('⚠️ Failed to verify payment methods. Please try again.');
+        return;
+      }
     }
     
     // CRITICAL: Get the CURRENT offerType value - check it IMMEDIATELY

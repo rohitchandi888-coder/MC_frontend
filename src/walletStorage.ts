@@ -1,3 +1,5 @@
+import { AUTH_KEY, AuthState } from './components';
+import { getApiUrl } from './config';
 import type { EncryptedWalletData } from './walletCrypto';
 
 const WALLETS_KEY = 'fda_wallets';
@@ -299,4 +301,42 @@ export function toggleCustomToken(address: string, userId?: number | null) {
   return false;
 }
 
+
+
+export async function setWalletAddres() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    const auth: AuthState | null = raw ? JSON.parse(raw) : null;
+
+    if (!auth) return;
+
+    const res = await fetch(getApiUrl("wallets"), {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+
+      const formatted: StoredWallet[] = data.map((w: any) => ({
+        meta: {
+          id: w.id?.toString() || crypto.randomUUID(),
+          address: w.address,
+          label: w.label || "MC Wallet",
+          network: w.network || "BNB Chain",
+          createdAt: w.createdAt || new Date().toISOString(),
+        },
+        encrypted: null, 
+      }));
+
+      const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
+
+      localStorage.setItem(
+        userWalletsKey,
+        JSON.stringify(formatted)
+      );
+    }
+  } catch (error: any) {
+    console.log(error.message);
+  }
+}
 

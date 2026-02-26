@@ -161,7 +161,7 @@ export const ViewPhrases: React.FC<ViewPhrasesProps> = ({ auth }) => {
 
       {error && (
         <div className="warning-box mb-4" style={{ padding: '1rem' }}>
-          <p className="text-sm text-red-400">⚠️ {error}</p>
+          <p className="text-sm" style={{ color:'#acaa44' }}>⚠️ {error}</p>
         </div>
       )}
 
