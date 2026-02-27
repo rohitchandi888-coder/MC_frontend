@@ -418,24 +418,46 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const registerWalletAddress = async (address: string, label?: string) => {
-    if (!auth) return;
+  const registerWalletAddress = async (address: string, label?: string, encryptedData?: any, network?: string) => {
+    if (!auth) {
+      console.error('[registerWalletAddress] ❌ No auth available');
+      return false;
+    }
     try {
+      console.log('[registerWalletAddress] 📤 Sending registration request:', {
+        address,
+        label,
+        hasEncryptedData: !!encryptedData,
+        network,
+        encryptedDataType: encryptedData ? typeof encryptedData : 'none',
+        encryptedDataKeys: encryptedData && typeof encryptedData === 'object' ? Object.keys(encryptedData) : [],
+      });
       const res = await fetch(getApiUrl('wallets/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ address, label }),
+        body: JSON.stringify({ address, label, encryptedData, network }),
       });
+      
       if (res.ok) {
+        const data = await res.json();
+        console.log('[registerWalletAddress] ✅ Registration successful:', {
+          walletId: data.wallet?.id,
+          hasEncryptedData: !!data.wallet?.encrypted_data,
+          encryptedDataLength: data.wallet?.encrypted_data ? (typeof data.wallet.encrypted_data === 'string' ? data.wallet.encrypted_data.length : 'object') : 0,
+        });
         return true;
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[registerWalletAddress] ❌ Registration failed:', res.status, errorData);
+        throw new Error(errorData.error || `Registration failed with status ${res.status}`);
       }
-    } catch (err) {
-      console.error('Failed to register wallet:', err);
+    } catch (err: any) {
+      console.error('[registerWalletAddress] ❌ Exception during registration:', err);
+      throw err; // Re-throw to let caller handle
     }
-    return false;
   };
 
   const checkIfFdaWallet = async (address: string) => {
@@ -648,6 +670,10 @@ export const Dashboard: React.FC = () => {
       // Ensure data is an array
       if (Array.isArray(data)) {
         setRegisteredFdaWallets(data);
+        // Restore encrypted wallets from database to local storage
+        await restoreEncryptedWalletsFromDatabase(data);
+        // After fetching registered wallets, try to restore wallets from database
+        await restoreWalletsFromDatabase(data);
       } else {
         console.error('[Dashboard] Wallets data is not an array:', data);
         setRegisteredFdaWallets([]);
@@ -655,6 +681,130 @@ export const Dashboard: React.FC = () => {
     } catch (err) {
       console.error('[Dashboard] Failed to fetch registered wallets:', err);
       setRegisteredFdaWallets([]);
+    }
+  };
+
+  // Restore encrypted wallets from database to local storage
+  const restoreEncryptedWalletsFromDatabase = async (registeredWallets: any[]) => {
+    if (!auth) return;
+    
+    const localWallets = getUserWallets();
+    const localAddresses = new Set(localWallets.map(w => w.address.toLowerCase()));
+    
+    // Find wallets with encrypted_data in database but not in local storage
+    const walletsToRestore = registeredWallets.filter((wallet: any) => {
+      // Parse encrypted_data if it's a JSON string
+      let encryptedData = wallet.encrypted_data;
+      if (encryptedData && typeof encryptedData === 'string') {
+        try {
+          encryptedData = JSON.parse(encryptedData);
+        } catch {
+          // If parsing fails, it might be a plain string or invalid JSON
+          encryptedData = null;
+        }
+      }
+      const hasEncryptedData = encryptedData && encryptedData !== 'null' && encryptedData !== null;
+      const hasLocalData = localAddresses.has(wallet.address?.toLowerCase() || '');
+      return hasEncryptedData && !hasLocalData;
+    });
+    
+    if (walletsToRestore.length > 0) {
+      const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
+      const raw = localStorage.getItem(userWalletsKey);
+      let userWallets = raw ? JSON.parse(raw) : [];
+      
+      for (const wallet of walletsToRestore) {
+        try {
+          const encryptedData = typeof wallet.encrypted_data === 'string' 
+            ? JSON.parse(wallet.encrypted_data) 
+            : wallet.encrypted_data;
+          
+          if (encryptedData && encryptedData.address) {
+            // Use database ID as wallet ID to ensure consistency
+            const walletId = wallet.id?.toString() || `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const walletMeta = {
+              id: walletId,
+              address: wallet.address,
+              label: wallet.label || `Wallet ${walletId.slice(-6)}`,
+              network: wallet.network || 'BNB Chain',
+              createdAt: wallet.created_at || new Date().toISOString(),
+            };
+            
+            const storedWallet = {
+              meta: walletMeta,
+              encrypted: encryptedData,
+            };
+            
+            // Check if wallet already exists in userWallets (by address or ID)
+            const existingIndex = userWallets.findIndex((w: any) => 
+              w.meta.address?.toLowerCase() === wallet.address?.toLowerCase() ||
+              w.meta.id === walletId
+            );
+            
+            if (existingIndex >= 0) {
+              // Update existing wallet (preserve database ID)
+              userWallets[existingIndex] = storedWallet;
+            } else {
+              // Add new wallet
+              userWallets.push(storedWallet);
+            }
+          }
+        } catch (err) {
+          console.error('[Restore Encrypted Wallets] Error restoring wallet:', wallet.address, err);
+        }
+      }
+      
+      // Save updated wallets to localStorage
+      localStorage.setItem(userWalletsKey, JSON.stringify(userWallets));
+      refreshWallets();
+      
+      if (walletsToRestore.length > 0) {
+        console.log(`[Restore Encrypted Wallets] ✅ Restored ${walletsToRestore.length} wallet(s) from database`);
+      }
+    }
+  };
+
+  // Restore wallets from database phrases after login
+  const restoreWalletsFromDatabase = async (registeredWallets: any[]) => {
+    if (!auth) return;
+    
+    try {
+      // Fetch saved phrases from database
+      const phrasesRes = await fetch(getApiUrl('wallets/phrases'), {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      
+      if (!phrasesRes.ok) {
+        return; // No phrases or error, skip restoration
+      }
+      
+      const phrasesData = await phrasesRes.json();
+      const savedPhrases = phrasesData.phrases || [];
+      
+      if (savedPhrases.length === 0) {
+        return; // No saved phrases
+      }
+      
+      // Get current local wallets
+      const localWallets = getUserWallets();
+      const localAddresses = new Set(localWallets.map(w => w.address.toLowerCase()));
+      
+      // Find registered wallets that have saved phrases but no local encrypted data
+      const walletsToRestore = registeredWallets.filter((regWallet: any) => {
+        const hasPhrase = savedPhrases.some(
+          (phrase: any) => phrase.wallet_address?.toLowerCase() === regWallet.address?.toLowerCase()
+        );
+        const hasLocalData = localAddresses.has(regWallet.address?.toLowerCase() || '');
+        return hasPhrase && !hasLocalData;
+      });
+      
+      if (walletsToRestore.length > 0) {
+        // Show notification that wallets can be restored
+        // The actual restoration will happen when user tries to unlock with password
+        console.log(`[Wallet Restoration] Found ${walletsToRestore.length} wallet(s) that can be restored from database`);
+      }
+    } catch (err) {
+      console.error('[Wallet Restoration] Failed to check for restorable wallets:', err);
     }
   };
 
@@ -853,9 +1003,12 @@ export const Dashboard: React.FC = () => {
       setCustomTokens(loadCustomTokens(auth.user.id));
       // Refresh user profile to get latest admin status on mount
       refreshUserProfile();
+      // Fetch registered wallets (which will also trigger restoration check)
+      fetchRegisteredFdaWallets();
     } else {
       // Clear tokens when logged out
       setCustomTokens([]);
+      setRegisteredFdaWallets([]);
     }
   }, [auth?.token]); // Only run when token changes, not on every auth change
 
@@ -1003,12 +1156,29 @@ export const Dashboard: React.FC = () => {
       if (auth) {
         saveUserWallet(encrypted, walletAddress, walletLabel.trim() || undefined, selectedNetwork);
         
-        // Auto-register wallet with MC Wallet
+        // Auto-register wallet with MC Wallet (with encrypted data)
         try {
-          await registerWalletAddress(walletAddress, walletLabel.trim() || undefined);
-          console.log('[Wallet Creation] ✅ Wallet auto-registered with MC Wallet');
+          console.log('[Wallet Creation] 📤 Registering wallet with encrypted data...', {
+            address: walletAddress,
+            hasEncrypted: !!encrypted,
+            encryptedKeys: encrypted ? Object.keys(encrypted) : [],
+          });
+          const registered = await registerWalletAddress(
+            walletAddress, 
+            walletLabel.trim() || undefined,
+            encrypted, // Save encrypted wallet data to database
+            selectedNetwork
+          );
+          if (registered) {
+            console.log('[Wallet Creation] ✅ Wallet auto-registered with MC Wallet (encrypted data saved)');
+            // Refresh registered wallets to get the updated data
+            await fetchRegisteredFdaWallets();
+          } else {
+            console.error('[Wallet Creation] ⚠️ Wallet registration returned false');
+          }
         } catch (regErr: any) {
-          console.error('[Wallet Creation] Failed to auto-register wallet:', regErr);
+          console.error('[Wallet Creation] ❌ Failed to auto-register wallet:', regErr);
+          showErrorModal(`⚠️ Wallet created but failed to register: ${regErr.message || 'Please try registering manually.'}`);
           // Don't fail wallet creation if registration fails
         }
         
@@ -1146,10 +1316,15 @@ export const Dashboard: React.FC = () => {
       if (auth) {
         saveUserWallet(encrypted, walletAddress, importWalletLabel.trim() || undefined, selectedNetwork);
         
-        // Auto-register wallet with MC Wallet
+        // Auto-register wallet with MC Wallet (with encrypted data)
         try {
-          await registerWalletAddress(walletAddress, importWalletLabel.trim() || undefined);
-          console.log('[Import Wallet] ✅ Wallet auto-registered with MC Wallet');
+          await registerWalletAddress(
+            walletAddress, 
+            importWalletLabel.trim() || undefined,
+            encrypted, // Save encrypted wallet data to database
+            selectedNetwork
+          );
+          console.log('[Import Wallet] ✅ Wallet auto-registered with MC Wallet (encrypted data saved)');
         } catch (regErr: any) {
           console.error('[Import Wallet] Failed to auto-register wallet:', regErr);
           // Don't fail import if registration fails
@@ -1217,14 +1392,340 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    // Check if wallet exists in the list
-    const selectedWallet = allWallets.find(w => w.id === selectedUnlockWalletId);
-    if (!selectedWallet && allWallets.length > 0) {
+    // Check if wallet exists in the list (from localStorage)
+    let selectedWallet = allWallets.find(w => w.id === selectedUnlockWalletId);
+    
+    // If not found in localStorage, check if it's a registered wallet from database
+    // The selectedUnlockWalletId might be the wallet address for registered wallets
+    if (!selectedWallet) {
+      const registeredWallet = registeredFdaWallets.find(
+        (w: any) => w.address?.toLowerCase() === selectedUnlockWalletId?.toLowerCase() ||
+        w.id?.toString() === selectedUnlockWalletId?.toString() ||
+        w.address?.toLowerCase() === selectedUnlockWalletId?.toLowerCase()
+      );
+      if (registeredWallet) {
+        // Convert registered wallet to WalletMeta format for consistency
+        selectedWallet = {
+          id: registeredWallet.address || registeredWallet.id?.toString() || '',
+          address: registeredWallet.address || '',
+          label: registeredWallet.label || `Registered Wallet`,
+          network: registeredWallet.network || 'BNB Chain',
+          createdAt: registeredWallet.created_at || new Date().toISOString(),
+        };
+      }
+    }
+    
+    if (!selectedWallet && (allWallets.length > 0 || registeredFdaWallets.length > 0)) {
       showErrorModal('⚠️ Please select a wallet to unlock.');
       return;
     }
+    
+    // If it's a registered wallet, also try to find encrypted data by address
+    const walletAddress = selectedWallet?.address?.toLowerCase();
+    
+    // Check if this wallet is registered in the database FIRST
+    const isRegisteredWallet = registeredFdaWallets.some(
+      (w: any) => w.address?.toLowerCase() === selectedWallet?.address?.toLowerCase()
+    );
+    
+    // PRIORITY: If registered wallet, ALWAYS try to restore from database FIRST (before checking local storage)
+    if (selectedWallet && isRegisteredWallet) {
+      if (!unlockPassword || !unlockExtraWord) {
+        showErrorModal(
+          '⚠️ This wallet is registered in MC Wallet. Please enter your password and 13th word to restore it from the database.'
+        );
+        return;
+      }
+      
+      // First, check if encrypted_data exists in registered wallets (faster, no API call needed)
+      let registeredWallet = registeredFdaWallets.find(
+        (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
+      );
+      
+      console.log('[Unlock Wallet] 🔍 Checking registered wallet:', {
+        walletAddress: selectedWallet.address,
+        foundRegistered: !!registeredWallet,
+        hasEncryptedData: !!registeredWallet?.encrypted_data,
+        encryptedDataType: registeredWallet?.encrypted_data ? typeof registeredWallet.encrypted_data : 'none',
+        registeredWalletsCount: registeredFdaWallets.length,
+      });
+      
+      // If wallet is registered but has no encrypted_data, try to refresh from database
+      if (registeredWallet && !registeredWallet.encrypted_data) {
+        console.log('[Unlock Wallet] ⚠️ Wallet registered but no encrypted_data found, refreshing from database...');
+        await fetchRegisteredFdaWallets();
+        // Re-find the wallet after refresh
+        registeredWallet = registeredFdaWallets.find(
+          (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
+        );
+        console.log('[Unlock Wallet] 🔄 After refresh:', {
+          foundRegistered: !!registeredWallet,
+          hasEncryptedData: !!registeredWallet?.encrypted_data,
+        });
+      }
+      
+      // If still no encrypted_data, try to get it from local storage and re-register
+      if (registeredWallet && !registeredWallet.encrypted_data) {
+        console.log('[Unlock Wallet] ⚠️ Still no encrypted_data, checking local storage...');
+        const localWallets = getUserWallets();
+        const localWallet = localWallets.find(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
+        
+        if (localWallet && localWallet.encrypted) {
+          console.log('[Unlock Wallet] ✅ Found encrypted data in local storage, re-registering wallet...');
+          try {
+            await registerWalletAddress(
+              selectedWallet.address,
+              selectedWallet.label || registeredWallet.label,
+              localWallet.encrypted, // Use encrypted data from local storage
+              selectedWallet.network || registeredWallet.network || 'BNB Chain'
+            );
+            // Refresh registered wallets to get updated data
+            await fetchRegisteredFdaWallets();
+            // Re-find the wallet after re-registration
+            registeredWallet = registeredFdaWallets.find(
+              (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
+            );
+            console.log('[Unlock Wallet] 🔄 After re-registration:', {
+              foundRegistered: !!registeredWallet,
+              hasEncryptedData: !!registeredWallet?.encrypted_data,
+            });
+          } catch (reRegErr: any) {
+            console.error('[Unlock Wallet] ❌ Failed to re-register wallet with encrypted_data:', reRegErr);
+          }
+        } else {
+          console.log('[Unlock Wallet] ⚠️ No encrypted data found in local storage either');
+        }
+      }
+      
+      if (registeredWallet?.encrypted_data) {
+        // Try to use encrypted_data directly (no need for phrase)
+        try {
+          // Parse encrypted_data if it's a JSON string
+          let encryptedData = registeredWallet.encrypted_data;
+          if (encryptedData && typeof encryptedData === 'string') {
+            try {
+              encryptedData = JSON.parse(encryptedData);
+            } catch (parseErr) {
+              console.error('[Unlock Wallet] Failed to parse encrypted_data:', parseErr);
+              encryptedData = null;
+            }
+          }
+          
+          if (encryptedData && encryptedData.address) {
+            // Decrypt and unlock directly
+            const { decryptPrivateKey } = await import('./walletCrypto');
+            const { privateKey } = await decryptPrivateKey(
+              encryptedData,
+              unlockPassword,
+              unlockExtraWord.trim(),
+            );
+            unlockedPrivateKeyRef.current = privateKey;
+            
+            // Also restore to local storage if not already there
+            const localWallets = getUserWallets();
+            const hasLocal = localWallets.some(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
+            if (!hasLocal) {
+              const { saveEncryptedWallet } = await import('./walletStorage');
+              const walletId = saveEncryptedWallet(
+                encryptedData,
+                selectedWallet.address,
+                selectedWallet.label || registeredWallet.label,
+                (selectedWallet.network || registeredWallet.network || 'BNB Chain') as any
+              );
+              refreshWallets();
+              setSelectedUnlockWalletId(walletId);
+            }
+            
+            showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
+            setUnlockPassword('');
+            setUnlockExtraWord('');
+            return; // Success! Exit early
+          }
+        } catch (decryptErr: any) {
+          console.error('[Unlock Wallet] Failed to decrypt encrypted_data:', decryptErr);
+          // Fall through to try phrase method
+        }
+      }
+      
+      // If encrypted_data doesn't work, try to restore from phrase
+      try {
+        const phrasesRes = await fetch(getApiUrl('wallets/phrases'), {
+          headers: { Authorization: `Bearer ${auth?.token}` },
+        });
+        
+        if (phrasesRes.ok) {
+          const phrasesData = await phrasesRes.json();
+          const savedPhrases = phrasesData.phrases || [];
+          const savedPhrase = savedPhrases.find(
+            (p: any) => p.wallet_address?.toLowerCase() === selectedWallet.address?.toLowerCase()
+          );
+          
+          if (savedPhrase) {
+            // Try to decrypt the phrase and restore wallet
+            try {
+              const { decryptPhrase } = await import('./walletCrypto');
+              // Parse encrypted phrase from database
+              let encryptedPhraseData;
+              try {
+                encryptedPhraseData = typeof savedPhrase.encrypted_phrase === 'string' 
+                  ? JSON.parse(savedPhrase.encrypted_phrase) 
+                  : savedPhrase.encrypted_phrase;
+              } catch {
+                encryptedPhraseData = savedPhrase.encrypted_phrase;
+              }
+              
+              const decrypted = await decryptPhrase(encryptedPhraseData, unlockPassword);
+              const { mnemonic12, extraWord } = decrypted;
+              
+              if (extraWord.trim() === unlockExtraWord.trim()) {
+                // Phrase matches! Restore the wallet locally
+                const { walletFromMnemonicAndExtraWord, encryptPrivateKey } = await import('./walletCrypto');
+                const { saveEncryptedWallet } = await import('./walletStorage');
+                
+                const wallet = walletFromMnemonicAndExtraWord(mnemonic12, extraWord, selectedWallet.network || 'BNB Chain');
+                const walletAddressFromPhrase = wallet.address || (wallet as any).address;
+                
+                if (walletAddressFromPhrase.toLowerCase() === selectedWallet.address.toLowerCase()) {
+                  // Address matches! Restore wallet
+                  const walletPrivateKey = wallet.privateKey;
+                  const encrypted = await encryptPrivateKey(
+                    walletPrivateKey,
+                    unlockPassword,
+                    extraWord,
+                    walletAddressFromPhrase,
+                  );
+                  
+                  const walletId = saveEncryptedWallet(
+                    encrypted,
+                    walletAddressFromPhrase,
+                    selectedWallet.label || savedPhrase.label,
+                    (selectedWallet.network || savedPhrase.network || 'BNB Chain') as any
+                  );
+                  
+                  // Refresh wallets and set as active
+                  refreshWallets();
+                  setSelectedUnlockWalletId(walletId);
+                  
+                  // IMPORTANT: Save encrypted_data to database for future unlocks
+                  try {
+                    console.log('[Unlock Wallet] 💾 Saving encrypted_data to database after phrase unlock...');
+                    await registerWalletAddress(
+                      walletAddressFromPhrase,
+                      selectedWallet.label || savedPhrase.label,
+                      encrypted, // Save the encrypted wallet data
+                      (selectedWallet.network || savedPhrase.network || 'BNB Chain')
+                    );
+                    console.log('[Unlock Wallet] ✅ encrypted_data saved to database');
+                    // Refresh registered wallets to get updated data
+                    await fetchRegisteredFdaWallets();
+                  } catch (saveErr: any) {
+                    console.error('[Unlock Wallet] ⚠️ Failed to save encrypted_data to database:', saveErr);
+                    // Don't fail unlock if save fails, but log it
+                  }
+                  
+                  // Now unlock the restored wallet
+                  const restoredEncrypted = loadEncryptedWallet(walletId);
+                  if (restoredEncrypted) {
+                    const { decryptPrivateKey } = await import('./walletCrypto');
+                    const { privateKey } = await decryptPrivateKey(
+                      restoredEncrypted,
+                      unlockPassword,
+                      unlockExtraWord.trim(),
+                    );
+                    unlockedPrivateKeyRef.current = privateKey;
+                    showSuccessModal(`✅ Wallet restored from database and unlocked! Address: ${walletAddressFromPhrase}`);
+                    setUnlockPassword('');
+                    setUnlockExtraWord('');
+                    return; // Success! Exit early
+                  }
+                } else {
+                  showErrorModal('⚠️ Wallet address mismatch. The phrase does not match the selected wallet address.');
+                  return;
+                }
+              } else {
+                showErrorModal('⚠️ 13th word does not match. Please check your 13th word.');
+                return;
+              }
+            } catch (decryptErr: any) {
+              // Decryption failed
+              console.error('[Wallet Restoration] Failed to decrypt phrase:', decryptErr);
+              const errorMsg = decryptErr.message?.includes('password') || decryptErr.message?.includes('decrypt')
+                ? 'Incorrect password. Please check your password and try again.'
+                : 'Failed to decrypt wallet phrase. Please check your password and 13th word.';
+              showErrorModal(`⚠️ ${errorMsg}`);
+              return;
+            }
+          } else {
+            // No saved phrase found, but check if encrypted_data exists in registered wallets
+            const registeredWallet = registeredFdaWallets.find(
+              (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
+            );
+            
+            if (registeredWallet?.encrypted_data) {
+              // Try to use encrypted_data directly (no need for phrase)
+              try {
+                const encryptedData = typeof registeredWallet.encrypted_data === 'string'
+                  ? JSON.parse(registeredWallet.encrypted_data)
+                  : registeredWallet.encrypted_data;
+                
+                if (encryptedData && encryptedData.address) {
+                  // Decrypt and unlock directly
+                  const { decryptPrivateKey } = await import('./walletCrypto');
+                  const { privateKey } = await decryptPrivateKey(
+                    encryptedData,
+                    unlockPassword,
+                    unlockExtraWord.trim(),
+                  );
+                  unlockedPrivateKeyRef.current = privateKey;
+                  
+                  // Also restore to local storage if not already there
+                  const localWallets = getUserWallets();
+                  const hasLocal = localWallets.some(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
+                  if (!hasLocal) {
+                    const { saveEncryptedWallet } = await import('./walletStorage');
+                    saveEncryptedWallet(
+                      encryptedData,
+                      selectedWallet.address,
+                      selectedWallet.label,
+                      (selectedWallet.network || registeredWallet.network || 'BNB Chain') as any
+                    );
+                    refreshWallets();
+                  }
+                  
+                  showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
+                  setUnlockPassword('');
+                  setUnlockExtraWord('');
+                  return;
+                }
+              } catch (decryptErr: any) {
+                console.error('[Unlock Wallet] Failed to decrypt encrypted_data:', decryptErr);
+                const errorMsg = decryptErr.message?.includes('password') || decryptErr.message?.includes('decrypt')
+                  ? 'Incorrect password. Please check your password and try again.'
+                  : 'Failed to decrypt wallet. Please check your password and 13th word.';
+                showErrorModal(`⚠️ ${errorMsg}`);
+                return;
+              }
+            } else {
+              // No saved phrase and no encrypted_data found in database
+              showErrorModal(
+                '⚠️ No saved wallet data found in database for this wallet.\n\n' +
+                'Please go to "Import wallet" in the sidebar and enter your 12-word phrase + 13th word to import this wallet.'
+              );
+              setTimeout(() => {
+                setActiveTab('import');
+              }, 2000);
+              return;
+            }
+          }
+        }
+      } catch (restoreErr: any) {
+        console.error('[Wallet Restoration] Error:', restoreErr);
+        showErrorModal('⚠️ Failed to restore wallet from database. Please try importing the wallet manually.');
+        return;
+      }
+    }
 
-    // Load encrypted wallet from user-specific storage
+    // Load encrypted wallet from user-specific storage (only if not registered or restoration failed)
     let encrypted: EncryptedWalletData | null = null;
     if (auth && selectedUnlockWalletId) {
       const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
@@ -1232,7 +1733,12 @@ export const Dashboard: React.FC = () => {
       if (raw) {
         try {
           const userWallets = JSON.parse(raw) as StoredWallet[];
-          const wallet = userWallets.find(w => w.meta.id === selectedUnlockWalletId);
+          // Try to find by ID first
+          let wallet = userWallets.find(w => w.meta.id === selectedUnlockWalletId);
+          // If not found and we have an address, try to find by address
+          if (!wallet && walletAddress) {
+            wallet = userWallets.find(w => w.meta.address?.toLowerCase() === walletAddress);
+          }
           if (wallet && wallet.encrypted) {
             encrypted = wallet.encrypted;
           }
@@ -1245,11 +1751,29 @@ export const Dashboard: React.FC = () => {
     // Fallback to global storage if not found in user storage
     if (!encrypted) {
       encrypted = loadEncryptedWallet(selectedUnlockWalletId || undefined);
+      // If still not found and we have an address, try loading by address
+      if (!encrypted && walletAddress) {
+        // Try to find wallet by address in all wallets
+        const walletByAddress = allWallets.find(w => w.address.toLowerCase() === walletAddress);
+        if (walletByAddress) {
+          encrypted = loadEncryptedWallet(walletByAddress.id);
+        }
+      }
     }
     
     if (!encrypted) {
-      if (selectedWallet) {
+      // If we reach here and wallet is registered, restoration from database already failed above
+      // Only show error for non-registered wallets or if restoration failed
+      if (selectedWallet && !isRegisteredWallet) {
         showErrorModal('⚠️ This wallet does not have encrypted data stored. Please create or import a wallet with a password first.');
+      } else if (selectedWallet && isRegisteredWallet) {
+        // This shouldn't happen if restoration worked, but just in case
+        showErrorModal(
+          '⚠️ Failed to restore wallet from database. Please try importing the wallet manually using "Import wallet" in the sidebar.'
+        );
+        setTimeout(() => {
+          setActiveTab('import');
+        }, 2000);
       } else {
         const hasRegisteredWallets = registeredFdaWallets.length > 0;
         if (hasRegisteredWallets) {
@@ -1261,6 +1785,7 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    // If we reach here, we have encrypted data and can unlock
     try {
       const { privateKey } = await decryptPrivateKey(
         encrypted,
@@ -2516,10 +3041,68 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteWallet = (walletId: string) => {
+  const handleDeleteWallet = async (walletId: string) => {
+    // Find wallet to get address for FDA balance check
+    const walletToDelete = allWallets.find(w => w.id === walletId);
+    const walletAddress = walletToDelete?.address;
+    
+    // Find database wallet ID from registered wallets (by address match)
+    const dbWallet = registeredFdaWallets.find((w: any) => 
+      w.address?.toLowerCase() === walletAddress?.toLowerCase()
+    );
+    const dbWalletId = dbWallet?.id;
+    
     if (window.confirm('Are you sure you want to delete this wallet? This action cannot be undone. Make sure you have your seed phrase backed up!')) {
+      // If authenticated and wallet exists in database, delete from database (which will check FDA balance)
+      if (auth && dbWalletId) {
+        try {
+          const res = await fetch(getApiUrl(`wallets/${dbWalletId}`), {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${auth.token}`,
+            },
+          });
+          
+          // Check if response is JSON
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            console.error('[Delete Wallet] Non-JSON response:', text.substring(0, 200));
+            if (res.status === 404) {
+              showErrorModal(`⚠️ Wallet deletion endpoint not found (404). The wallet may have already been deleted, or the backend route is missing.`);
+            } else {
+              showErrorModal(`⚠️ Failed to delete wallet: Server returned non-JSON response (${res.status})`);
+            }
+            return;
+          }
+          
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+            if (errorData.error?.includes('FDA balance')) {
+              showErrorModal(`⚠️ ${errorData.error}\n\nPlease transfer or use your FDA balance before deleting this wallet.`);
+              return;
+            }
+            showErrorModal(`⚠️ Failed to delete wallet: ${errorData.error || 'Unknown error'}`);
+            return;
+          }
+          
+          const data = await res.json();
+          // Successfully deleted from database
+          console.log('[Delete Wallet] ✅ Wallet deleted from database:', data);
+        } catch (err: any) {
+          console.error('[Delete Wallet] Error deleting from database:', err);
+          if (err.message?.includes('JSON')) {
+            showErrorModal(`⚠️ Failed to delete wallet: Server returned invalid response. Please check if the backend server is running and the route exists.`);
+          } else {
+            showErrorModal(`⚠️ Failed to delete wallet from database: ${err.message || 'Please try again.'}`);
+          }
+          return;
+        }
+      }
+      
+      // Delete from local storage
       if (auth) {
-        // Delete from user-specific storage
         const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
         const raw = localStorage.getItem(userWalletsKey);
         if (raw) {
@@ -2537,14 +3120,15 @@ export const Dashboard: React.FC = () => {
               }
             }
           } catch (err) {
-            console.error('Failed to delete wallet:', err);
+            console.error('Failed to delete wallet from localStorage:', err);
           }
         }
       } else {
         clearEncryptedWallet(walletId);
       }
+      
       refreshWallets();
-      showSuccessModal('✅ Wallet deleted successfully.');
+      showSuccessModal('✅ Wallet deleted successfully');
       // Clear unlocked key if it was for the deleted wallet
       unlockedPrivateKeyRef.current = null;
       // Refresh balances
@@ -2808,6 +3392,7 @@ export const Dashboard: React.FC = () => {
             {activeTab === 'unlock' && (
               <UnlockWallet
                 allWallets={allWallets}
+                registeredFdaWallets={registeredFdaWallets}
                 selectedWalletId={selectedUnlockWalletId}
                 unlockExtraWord={unlockExtraWord}
                 unlockPassword={unlockPassword}
