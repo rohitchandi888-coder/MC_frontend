@@ -5787,6 +5787,151 @@ ul:not([style*="padding"]) li {
 
 
 
+/* Disputes Panel - Grid & Cards */
+
+.disputes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.35rem;
+}
+
+.dispute-card {
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.45rem;
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  transition: box-shadow 0.2s ease;
+}
+
+.dispute-card[data-status="OPEN"] { border-left: 4px solid #f59e0b; }
+.dispute-card[data-status="RESOLVED"] { border-left: 4px solid #10b981; }
+.dispute-card[data-status="REJECTED"] { border-left: 4px solid #ef4444; }
+.dispute-card[data-status="CLOSED"] { border-left: 4px solid #94a3b8; }
+.dispute-card:not([data-status]) { border-left: 4px solid #94a3b8; }
+
+.dispute-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.dispute-status-badge { padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+.dispute-status-badge--open { background: #fef3c7; color: #b45309; }
+.dispute-status-badge--resolved { background: #d1fae5; color: #047857; }
+.dispute-status-badge--rejected { background: #fee2e2; color: #b91c1c; }
+.dispute-status-badge--closed { background: #f1f5f9; color: #475569; }
+
+.dispute-reason-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dispute-resolve-btn {
+  width: 100%;
+  padding: 0.2rem 0;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: #10b981;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.dispute-resolve-btn:hover {
+  background: #059669;
+}
+
+/* Site-wide Pagination (Disputes, Trade Listing, Admin Panel, P2P Trading) */
+
+.site-pagination,
+.disputes-pagination {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.site-pagination-prev,
+.site-pagination-next,
+.disputes-pagination-prev,
+.disputes-pagination-next {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.site-pagination-prev:hover:not(:disabled),
+.site-pagination-next:hover:not(:disabled),
+.disputes-pagination-prev:hover:not(:disabled),
+.disputes-pagination-next:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.site-pagination-prev:disabled,
+.site-pagination-next:disabled,
+.disputes-pagination-prev:disabled,
+.disputes-pagination-next:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.site-pagination-info,
+.disputes-pagination-info {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin-left: 0.25rem;
+  margin-right: 0.25rem;
+}
+
+.site-pagination-num,
+.disputes-pagination-num {
+  min-width: 1.75rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.site-pagination-num:hover,
+.disputes-pagination-num:hover {
+  background: #f9fafb;
+}
+
+.site-pagination-num--active,
+.disputes-pagination-num--active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.site-pagination-num--active:hover,
+.disputes-pagination-num--active:hover {
+  background: #1d4ed8;
+}
+
+/* Trade Listing: pagination wrapper for spacing below grid/table */
+.trade-listing-pagination-wrap {
+  margin-top: 0.75rem;
+}
+
 /* Disputes Panel Responsive */
 
 @media (max-width: 768px) {

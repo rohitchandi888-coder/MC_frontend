@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { type AuthState } from '../types';
+import { SitePagination } from '../common/SitePagination';
+
+const MY_TRADES_PER_PAGE = 12;
 
 interface TradeListingProps {
   auth: AuthState | null;
@@ -86,6 +89,16 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     // Return true if current time is BEFORE or EQUAL to deadline (within 2 hours)
     return now.getTime() <= deadline.getTime();
   };
+
+  const [myTradesPage, setMyTradesPage] = useState(1);
+  const totalMyTradesPages = Math.max(1, Math.ceil(myTrades.length / MY_TRADES_PER_PAGE));
+  const paginatedMyTrades = myTrades.slice(
+    (myTradesPage - 1) * MY_TRADES_PER_PAGE,
+    myTradesPage * MY_TRADES_PER_PAGE
+  );
+  useEffect(() => {
+    if (myTradesPage > totalMyTradesPages && totalMyTradesPages > 0) setMyTradesPage(totalMyTradesPages);
+  }, [myTrades.length, totalMyTradesPages, myTradesPage]);
 
   const getHoursRemainingForDispute = (trade: any) => {
     if (!trade.paid_at) return 0;
@@ -286,46 +299,15 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                     );
                   })}
                 </div>
-                
-                {/* Pagination */}
-                {totalPages > 1 && (
-  <div className="pagination flex items-center gap-2 justify-center mt-4">
 
-    {/* Previous */}
-    <button
-      className="btn btn-blue px-3 py-1"
-      disabled={offersPage === 1}
-      onClick={() => setOffersPage(p => Math.max(1, p - 1))}
-    >
-      «
-    </button>
-
-    {/* Page Numbers */}
-    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-      <button
-        key={page}
-        onClick={() => setOffersPage(page)}
-        className={`px-3 py-1 rounded text-sm font-semibold ${
-          page === offersPage
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        }`}
-      >
-        {page}
-      </button>
-    ))}
-
-    {/* Next */}
-    <button
-      className="btn btn-blue px-3 py-1"
-      disabled={offersPage === totalPages}
-      onClick={() => setOffersPage(p => Math.min(totalPages, p + 1))}
-    >
-      »
-    </button>
-
-  </div>
-)}
+                <div className="trade-listing-pagination-wrap">
+                  <SitePagination
+                    id="offers-pagination"
+                    currentPage={offersPage}
+                    totalPages={totalPages}
+                    onPageChange={setOffersPage}
+                  />
+                </div>
               </>
             )}
           </div>
@@ -333,7 +315,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
           {/* My Trades Section */}
           <div className="offer-form-card mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="offer-form-title">My Trades</h3>
+              <h3 className="offer-form-title">My Trades ({myTrades.length})</h3>
               <button
                 className={`btn btn-yellow text-xs py-2 px-4 flex items-center gap-2 ${loadingMyTrades ? 'opacity-60 cursor-not-allowed' : ''}`}
                 onClick={loadMyTrades}
@@ -346,6 +328,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
             {myTrades.length === 0 ? (
               <p className="text-sm text-gray-600 mb-1" style={{ padding: '0.5rem 1rem' }}>No trades yet.</p>
             ) : (
+              <>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: '#ffffff' }}>
                   <thead>
@@ -362,7 +345,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                {myTrades.map((trade) => {
+                {paginatedMyTrades.map((trade) => {
                   const isBuyer = trade.buyer_id === auth?.user.id;
                   const isSeller = trade.seller_id === auth?.user.id;
                   const feeAmount = parseFloat(trade.fee_amount) || 0;
@@ -632,6 +615,15 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                   </tbody>
                 </table>
               </div>
+              <div className="trade-listing-pagination-wrap">
+                <SitePagination
+                  id="my-trades-pagination"
+                  currentPage={myTradesPage}
+                  totalPages={totalMyTradesPages}
+                  onPageChange={setMyTradesPage}
+                />
+              </div>
+              </>
             )}
           </div>
         </>

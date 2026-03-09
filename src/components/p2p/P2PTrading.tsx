@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
 
@@ -85,6 +86,17 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const [loadingPaymentMethods, setLoadingPaymentMethods] = React.useState(false);
   const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = React.useState<number[]>([]);
   const [isOn, setIsOn] = useState(false);
+
+  const P2P_MY_TRADES_PER_PAGE = 12;
+  const [myTradesPage, setMyTradesPage] = useState(1);
+  const totalMyTradesPages = Math.max(1, Math.ceil(myTrades.length / P2P_MY_TRADES_PER_PAGE));
+  const paginatedMyTrades = myTrades.slice(
+    (myTradesPage - 1) * P2P_MY_TRADES_PER_PAGE,
+    myTradesPage * P2P_MY_TRADES_PER_PAGE
+  );
+  useEffect(() => {
+    if (myTradesPage > totalMyTradesPages && totalMyTradesPages > 0) setMyTradesPage(totalMyTradesPages);
+  }, [myTrades.length, totalMyTradesPages, myTradesPage]);
 
   // Load payment methods from database
   React.useEffect(() => {
@@ -496,7 +508,7 @@ ml-auto
           {/* My Trades */}
           <div>
             <div className="flex justify-between items-center mb-4">
-              <p className="text-sm font-semibold text-slate-300">My Trades</p>
+              <p className="text-sm font-semibold text-slate-300">My Trades ({myTrades.length})</p>
               <button
                 className="btn btn-secondary text-xs py-2 px-3"
                 onClick={loadMyTrades}
@@ -505,6 +517,7 @@ ml-auto
               </button>
             </div>
             {myTrades.length > 0 ? (
+              <>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: '#ffffff' }}>
                   <thead>
@@ -521,7 +534,7 @@ ml-auto
                     </tr>
                   </thead>
                   <tbody>
-                    {myTrades.map((trade: any) => {
+                    {paginatedMyTrades.map((trade: any) => {
                       const isBuyer = trade.buyer_id === auth?.user.id;
                       const isSeller = trade.seller_id === auth?.user.id;
                       const feeAmount = parseFloat(trade.fee_amount || trade.fee || 0);
@@ -726,6 +739,13 @@ ml-auto
                   </tbody>
                 </table>
               </div>
+              <SitePagination
+                id="p2p-my-trades-pagination"
+                currentPage={myTradesPage}
+                totalPages={totalMyTradesPages}
+                onPageChange={setMyTradesPage}
+              />
+              </>
             ) : (
               <div className="empty-state">
                 <p className="empty-state-icon" >💼</p>

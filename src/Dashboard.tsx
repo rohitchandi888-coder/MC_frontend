@@ -179,7 +179,7 @@ const getActiveWalletAddress = (): string | null => {
   
   // Offers pagination and filters
   const [offersPage, setOffersPage] = useState(1);
-  const [offersPerPage] = useState(20);
+  const [offersPerPage] = useState(12);
   const [offersSearch, setOffersSearch] = useState('');
   // Only show SELL offers - removed BUY filter option
   const [offersFilterType, setOffersFilterType] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');

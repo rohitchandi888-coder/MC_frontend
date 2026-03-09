@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { type AuthState } from '../types';
 import { getApiUrl } from '../../config';
+import { SitePagination } from '../common/SitePagination';
 
 interface DisputesPanelProps {
   auth: AuthState | null;
@@ -20,11 +21,24 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
   const [resolutionNote, setResolutionNote] = useState('');
   const [tradeAction, setTradeAction] = useState<'release' | 'cancel' | 'none'>('none');
 
+  const DISPUTES_PER_PAGE = 12;
+  const [disputesPage, setDisputesPage] = useState(1);
+  const totalDisputesPages = Math.max(1, Math.ceil(adminDisputes.length / DISPUTES_PER_PAGE));
+  const paginatedDisputes = adminDisputes.slice(
+    (disputesPage - 1) * DISPUTES_PER_PAGE,
+    disputesPage * DISPUTES_PER_PAGE
+  );
+  useEffect(() => {
+    if (disputesPage > totalDisputesPages && totalDisputesPages > 0) {
+      setDisputesPage(totalDisputesPages);
+    }
+  }, [adminDisputes.length, totalDisputesPages, disputesPage]);
+
   const openResolveModal = (dispute: any) => {
     setSelectedDispute(dispute);
     setResolutionStatus('RESOLVED');
     setResolutionNote('');
-    setTradeAction('none');
+    setTradeAction('release'); // default to release so FDA is released when resolving in buyer's favor
     setShowResolveModal(true);
   };
 
@@ -92,10 +106,10 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
         </p>
       </div>
 
-      <div className="offer-form-card mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="offer-form-title">
-            Active Disputes
+      <div className="offer-form-card mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="offer-form-title text-base">
+            Active Disputes {adminDisputes.length > 0 && <span className="text-gray-500 font-normal">({adminDisputes.length})</span>}
           </h3>
           <button 
             className="btn btn-yellow text-sm py-2 px-4 flex items-center gap-2"
@@ -106,149 +120,128 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
         </div>
 
         {adminDisputes.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' ,height:'82vh', overflowY:'scroll' }}>
-            {adminDisputes.map((d) => (
-              <div 
-                key={d.id} 
-                className="card-dark"
-                style={{
-                  width: '33%',
-                  minWidth: '300px',
-                  
-                  
-                  borderRadius: '10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '0.875rem',
-                  color: 'black'
-                }}
+          <>
+          <div className="disputes-grid">
+            {paginatedDisputes.map((d) => {
+              const statusSlug = (d.status || '').toLowerCase();
+              const statusBadgeClass = statusSlug === 'open' ? 'dispute-status-badge--open' : statusSlug === 'resolved' ? 'dispute-status-badge--resolved' : statusSlug === 'rejected' ? 'dispute-status-badge--rejected' : statusSlug === 'closed' ? 'dispute-status-badge--closed' : 'dispute-status-badge--closed';
+              return (
+              <div
+                key={d.id}
+                className="dispute-card"
+                data-status={d.status || ''}
               >
-                <div className="flex justify-between items-start mb-1.5">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                      <p className="text-sm font-bold text-black-900" style={{ padding: 0 }}>
-                        Trade #{d.trade_id}
-                      </p>
-                      <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-yellow-200 text-yellow-800">
-                        #{d.id}
+                {/* Header: Trade #, Dispute #, Status, Date */}
+                <div className="flex justify-between items-start flex-wrap gap-0.5 mb-0.5">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs font-bold text-gray-900">Trade #{d.trade_id}</span>
+                    <span className="text-[10px] text-gray-500">#{d.id}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {d.status && (
+                      <span className={`dispute-status-badge ${statusBadgeClass}`}>
+                        {d.status}
                       </span>
-                      {d.status && (
-                        <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-blue-200 text-blue-800">
-                          {d.status}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
+                    )}
+                    <span className="text-[10px] text-gray-500">
                       {d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A'}
-                    </p>
+                    </span>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 mb-1.5">
-                  <div className="p-1.5 bg-white rounded border border-gray-200">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>Trade: {d.amount} {d.asset_symbol} @ {d.price} {d.fiat_currency}</p>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
-                      <strong>Total:</strong> {(parseFloat(d.amount || 0) * parseFloat(d.price || 0)).toFixed(2)} {d.fiat_currency}
-                    </p>
-                    <p className="text-xs text-black mt-0.5" style={{ padding: 0 }}>
-                      <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
-                        d.trade_status === 'DISPUTED' ? 'bg-yellow-200 text-yellow-800' :
-                        d.trade_status === 'COMPLETED' ? 'bg-green-200 text-green-800' :
-                        d.trade_status === 'CANCELLED' ? 'bg-red-200 text-red-800' :
-                        'bg-gray-200 text-black'
-                      }`}>
-                        {d.trade_status}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="p-1.5 bg-white rounded border border-gray-200">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>Parties</p>
-                    <p className="text-xs text-black mb-0.5" style={{ padding: 0 }}>
-                      <strong>Raised:</strong> {d.raised_by_name || d.raised_by_email || d.raised_by_phone || 'Unknown'}
-                    </p>
-                    <p className="text-xs text-black" style={{ padding: 0 }}>
-                      <strong>Buyer/Seller:</strong> {d.buyer_name || d.buyer_email || d.buyer_phone || 'Unknown'} / {d.seller_name || d.seller_email || d.seller_phone || 'Unknown'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-1.5 p-1.5 bg-white rounded border-2 border-yellow-400">
-                  <p className="text-xs font-bold text-black mb-0.5" style={{ padding: 0 }}>
-                    ⚠️ Reason:
+                {/* Trade amount & total */}
+                <div className="mb-0.5 p-0.5 rounded bg-gray-50 border border-gray-100">
+                  <p className="text-[10px] font-semibold text-gray-700 mb-0 leading-tight">
+                    Amount: {d.amount} {d.asset_symbol} @ {d.price} {d.fiat_currency}
                   </p>
-                  <p className="text-xs text-black whitespace-pre-wrap bg-gray-50 p-1 rounded line-clamp-3" style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    maxHeight: '3.6rem',
-                    padding: '0.25rem'
-                  }}>
+                  <p className="text-[10px] text-gray-600 leading-tight">
+                    Total: {(parseFloat(d.amount || 0) * parseFloat(d.price || 0)).toFixed(2)} {d.fiat_currency}
+                  </p>
+                  <p className="mt-0.5">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      d.trade_status === 'DISPUTED' ? 'bg-amber-100 text-amber-800' :
+                      d.trade_status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                      d.trade_status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {d.trade_status}
+                    </span>
+                  </p>
+                </div>
+
+                {/* Parties */}
+                <div className="mb-0.5 text-[10px]">
+                  <p className="font-semibold text-gray-600 mb-0 leading-tight">
+                    Raised by: <span className="text-gray-900 font-medium">{d.raised_by_name || d.raised_by_email || d.raised_by_phone || '—'}</span>
+                  </p>
+                  <p className="text-gray-600 truncate leading-tight" title={`Buyer: ${d.buyer_name || d.buyer_email || '—'} / Seller: ${d.seller_name || d.seller_email || '—'}`}>
+                    Buyer / Seller: {d.buyer_name || d.buyer_email || '—'} / {d.seller_name || d.seller_email || '—'}
+                  </p>
+                </div>
+
+                {/* Reason */}
+                <div className="mb-0.5 p-0.5 rounded bg-amber-50 border border-amber-200">
+                  <p className="text-[10px] font-semibold text-amber-900 mb-0 leading-tight">Reason</p>
+                  <p className={`text-[10px] text-gray-700 dispute-reason-clamp leading-tight`} title={d.reason || ''}>
                     {d.reason || 'No reason provided'}
                   </p>
                 </div>
 
-                {/* Payment Screenshot - Admin View */}
+                {/* Payment Screenshot */}
                 {d.payment_screenshot && (
-                  <div className="mt-1.5 p-1 bg-white rounded border border-blue-300">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>
-                      📸 Screenshot:
-                    </p>
+                  <div className="mb-0.5">
+                    <p className="text-[10px] font-semibold text-gray-500 mb-0 leading-tight">Screenshot</p>
                     <img
                       src={d.payment_screenshot}
-                      alt="Payment Screenshot"
-                      className="w-full max-h-20 object-contain rounded border border-gray-300 cursor-pointer"
+                      alt="Payment"
+                      className="w-full max-h-8 object-contain rounded border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
                       onClick={() => {
-                        const newWindow = window.open();
-                        if (newWindow) {
-                          newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${d.trade_id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${d.payment_screenshot}" alt="Payment Screenshot" /></body></html>`);
-                        }
+                        const w = window.open();
+                        if (w) w.document.write(`<html><head><title>Payment - Trade #${d.trade_id}</title><style>body{margin:0;padding:20px;background:#f3f4f6;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;max-height:90vh;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15)}</style></head><body><img src="${d.payment_screenshot}" alt="Payment" /></body></html>`);
                       }}
                     />
                   </div>
                 )}
 
-                {/* Resolution Info */}
+                {/* Resolution note (when resolved/rejected/closed) */}
                 {d.status !== 'OPEN' && d.resolution_note && (
-                  <div className="mt-1.5 p-1.5 bg-blue-50 rounded border border-blue-300">
-                    <p className="text-xs font-semibold text-black mb-0.5" style={{ padding: 0 }}>
-                      Resolution ({d.status}):
-                    </p>
-                    <p className="text-xs text-black whitespace-pre-wrap line-clamp-2" style={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      maxHeight: '2.4rem'
-                    }}>
+                  <div className="mb-0.5 p-0.5 rounded bg-blue-50 border border-blue-200">
+                    <p className="text-[10px] font-semibold text-blue-900 mb-0 leading-tight">Resolution</p>
+                    <p className="text-[10px] text-gray-700 dispute-reason-clamp leading-tight" title={d.resolution_note}>
                       {d.resolution_note}
                     </p>
                   </div>
                 )}
 
-                {/* Resolve Button - Only for OPEN disputes */}
+                {/* Resolve button - OPEN only */}
                 {d.status === 'OPEN' && (
-                  <div className="mt-1.5">
+                  <div className="mt-auto pt-0.5">
                     <button
+                      type="button"
                       onClick={() => openResolveModal(d)}
-                      className="btn btn-success w-full py-1"
-                      style={{ fontWeight: '700', fontSize: '0.8125rem' }}
+                      className="dispute-resolve-btn"
                     >
-                      ✅ Resolve
+                      Resolve dispute
                     </button>
                   </div>
                 )}
               </div>
-            ))}
+            );})}
           </div>
+          <SitePagination
+            id="disputes-pagination"
+            currentPage={disputesPage}
+            totalPages={totalDisputesPages}
+            onPageChange={setDisputesPage}
+          />
+          </>
         ) : (
-          <div className="p-8 bg-gray-50 rounded border border-gray-200 text-center">
-            <div className="text-4xl mb-3">✅</div>
-            <p className="text-sm font-semibold text-black mb-1">
-              No Active Disputes
+          <div className="py-12 px-6 rounded-xl bg-gray-50 border border-gray-200 text-center">
+            <div className="text-5xl mb-3">✅</div>
+            <p className="text-base font-semibold text-gray-800 mb-1">
+              No active disputes
             </p>
-            <p className="text-xs text-black">
+            <p className="text-sm text-gray-600">
               All disputes have been resolved or there are no disputes at this time.
             </p>
           </div>

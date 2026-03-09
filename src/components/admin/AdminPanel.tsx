@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { type AuthState } from '../types';
+import { SitePagination } from '../common/SitePagination';
+
+const ADMIN_TRADES_PER_PAGE = 12;
 
 interface AdminPanelProps {
   auth: AuthState | null;
@@ -42,6 +45,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   updateHoldingFda,
   loadAdminData,
 }) => {
+  const [adminTradesPage, setAdminTradesPage] = useState(1);
+  const totalAdminTradesPages = Math.max(1, Math.ceil(adminTrades.length / ADMIN_TRADES_PER_PAGE));
+  const paginatedAdminTrades = adminTrades.slice(
+    (adminTradesPage - 1) * ADMIN_TRADES_PER_PAGE,
+    adminTradesPage * ADMIN_TRADES_PER_PAGE
+  );
+  useEffect(() => {
+    if (adminTradesPage > totalAdminTradesPages && totalAdminTradesPages > 0) {
+      setAdminTradesPage(totalAdminTradesPages);
+    }
+  }, [adminTrades.length, totalAdminTradesPages, adminTradesPage]);
+
   if (!auth?.user.isAdmin) {
     return (
       <div className="card text-center p-8">
@@ -209,25 +224,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Recent Trades ({adminTrades.length})
           </p>
           {adminTrades.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {adminTrades.map((t) => (
-                <div key={t.id} className="card-dark p-3 text-xs text-gray-700">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <strong>Trade #{t.id}:</strong> {t.amount} {t.asset_symbol} @ {t.price} {t.fiat_currency}
+            <>
+              <div className="flex flex-col gap-2">
+                {paginatedAdminTrades.map((t) => (
+                  <div key={t.id} className="card-dark p-3 text-xs text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <strong>Trade #{t.id}:</strong> {t.amount} {t.asset_symbol} @ {t.price} {t.fiat_currency}
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        t.status === 'DISPUTED' ? 'bg-yellow-200 text-yellow-800' :
+                        t.status === 'COMPLETED' ? 'bg-green-200 text-green-800' :
+                        t.status === 'CANCELLED' ? 'bg-red-200 text-red-800' :
+                        'bg-gray-200 text-gray-800'
+                      }`}>
+                        {t.status}
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      t.status === 'DISPUTED' ? 'bg-yellow-200 text-yellow-800' :
-                      t.status === 'COMPLETED' ? 'bg-green-200 text-green-800' :
-                      t.status === 'CANCELLED' ? 'bg-red-200 text-red-800' :
-                      'bg-gray-200 text-gray-800'
-                    }`}>
-                      {t.status}
-                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              <SitePagination
+                id="admin-trades-pagination"
+                currentPage={adminTradesPage}
+                totalPages={totalAdminTradesPages}
+                onPageChange={setAdminTradesPage}
+              />
+            </>
           ) : (
             <div className="p-3 bg-gray-50 rounded border border-gray-200">
               <p className="text-xs text-gray-600 text-center">No trades found.</p>
