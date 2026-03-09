@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
 
@@ -40,6 +40,7 @@ interface P2PTradingProps {
 
 interface PaymentMethod {
   id: number;
+  paymentname: string;
   upi_id: string;
   qr_code: string | null;
   is_active: boolean;
@@ -83,6 +84,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = React.useState(false);
   const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = React.useState<number[]>([]);
+  const [isOn, setIsOn] = useState(false);
 
   // Load payment methods from database
   React.useEffect(() => {
@@ -208,14 +210,14 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
           <div className="action-card mb-6">
             <div className="action-card-header">
               <span className="action-card-icon">📝</span>
-              <p className="action-card-title" style={{color: 'rgb(249, 250, 251)'}}>Create Offer (MC Wallet to MC Wallet Only)</p>
+              <p className="action-card-title" style={{ color: 'rgb(249, 250, 251)' }}>Create Offer (MC Wallet to MC Wallet Only)</p>
             </div>
             <div className="p2p-info-box mb-4">
-              <p className="p2p-info-text" style={{ lineHeight: '1.4',color:'#fde68a' }}>
+              <p className="p2p-info-text" style={{ lineHeight: '1.4', color: '#fde68a' }}>
                 ⚠️ This is MC Wallet internal trading only. {offerType === 'SELL' ? 'For SELL offers, you need tokens in your internal wallet balance.' : 'For BUY offers, you are looking to buy tokens from sellers.'} {p2pFeeRate > 0 ? `${p2pFeeRate}% trading fee applies.` : 'No trading fee applies.'}
               </p>
             </div>
-            
+
             {/* BUY/SELL Dropdown */}
             <div className="mb-4">
               <p className="text-xs text-white mb-2 font-semibold p2p-subheading">Offer Type</p>
@@ -245,7 +247,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 Current selection: <strong className={offerType === 'BUY' ? 'text-green-400' : 'text-yellow-400'}>{offerType}</strong>
               </p>
             </div>
-            
+
             <div className="mb-4">
               <div>
                 <p className="text-xs  mb-2 p2p-subheading">Fiat Currency</p>
@@ -254,7 +256,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   value={offerFiatCurrency}
                   onChange={(e) => setOfferFiatCurrency(e.target.value)}
                 >
-                  <option value="USD">USD</option>
+                  <option value="USD">USDT</option>
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
                   <option value="INR">INR</option>
@@ -346,6 +348,11 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
 
             <div className="mb-4">
               <p className="text-xs  mb-2 p2p-subheading">Payment Methods</p>
+               {selectedPaymentMethodIds.length === 0 && (
+                        <p className="text-xs mt-2" style={{ color: '#93b65a' }}>⚠️ Please select at least one payment method</p>
+                      )}
+
+
               {offerFiatCurrency === 'INR' ? (
                 <div className="space-y-2">
                   {loadingPaymentMethods ? (
@@ -358,50 +365,82 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       </p>
                     </div>
                   ) : (
-                      <>
+                    <>
+
                       {paymentMethods
                         .filter(pm => pm.is_active)
                         .map((method) => (
-                          <label
+                          <div
                             key={method.id}
-                            className=" flex items-start gap-3 p-3 rounded cursor-pointer hover:bg-slate-800 transition-colors border border-slate-700"
+                            className="
+                           grid grid-cols-[auto_1fr]
+                           items-start
+                           gap-4
+                           p-4
+                           rounded-lg
+                           cursor-pointer
+                           hover:bg-slate-800
+                           transition-colors
+                            border border-slate-700
+                               "
+
                           >
-                            <input
-                              type="checkbox"
-                              checked={selectedPaymentMethodIds.includes(method.id)}
-                              onChange={() => handlePaymentMethodToggle(method.id)}
-                              className="w-4 h-4 mt-1 text-yellow-500 bg-slate-700 border-slate-600 rounded focus:ring-yellow-500 focus:ring-2"
-                            />
-                            <div className="flex-1">
+                            <label className="toggle">
+                              <input
+                                className="toggle__input"
+                                type="checkbox"
+                                checked={selectedPaymentMethodIds.includes(method.id)}
+                                onChange={() => handlePaymentMethodToggle(method.id)}
+                              />
+                              <div className="toggle__fill"></div>
+
+                              <p className='p2p-subheading' style={{margin:'-5px'}}>{method?.paymentname}</p>
+                            </label>
+                         
+
+                            <div className="flex-1 " style={{marginBottom:'15px'}}>
                               {/* <span className="text-xs  text-slate-200 block p2p-subheading">{method.upi_id}</span> */}
-                              {method.qr_code && (method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http')) && (
-                                <img
-                                  src={method.qr_code}
-                                  alt="QR Code"
-                                  className="
-                                      w-40 h-40              
-                                      sm:w-44 sm:h-44        
-                                      md:w-48 md:h-48         
-                                      object-contain 
-                                      border-2 border-slate-500 
-                                      rounded-lg 
-                                      mt-2 
-                                      shadow-md 
-                                      hover:shadow-lg 
-                                      transition-shadow
-                                      cursor-zoom-in"
-                                />
+
+
+                              {selectedPaymentMethodIds.includes(method.id) && (
+                                <>
+
+                                  {/* <p className='p2p-subheading'>{method?.paymentname}</p> */}
+
+                                  <span className="text-xs  text-slate-200 block p2p-subheading">
+                                    {method.upi_id}
+                                  </span>
+
+                                  {method.qr_code &&
+                                    (method.qr_code.startsWith('data:image') || method.qr_code.startsWith('http')) && (
+                                      <img
+                                        src={method.qr_code}
+                                        alt="QR Code"
+                                        className="
+w-24 h-24
+object-contain
+border-2 border-slate-500
+rounded-lg
+mt-2
+ml-auto
+"
+                                      />
+                                    )}
+
+                                  {/* <span className="text-xs  text-slate-200 block p2p-subheading">
+                                    {method.upi_id}
+                                  </span> */}
+                                </>
                               )}
-
-                              <span className="text-xs  text-slate-200 block p2p-subheading">{method.upi_id}</span>
                             </div>
+                           
 
-                            
-                          </label>
+                          </div>
+                         
                         ))}
-                      {selectedPaymentMethodIds.length === 0 && (
+                      {/* {selectedPaymentMethodIds.length === 0 && (
                         <p className="text-xs mt-2" style={{ color: '#93b65a' }}>⚠️ Please select at least one payment method</p>
-                      )}
+                      )} */}
                     </>
                   )}
                 </div>
@@ -434,19 +473,18 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             )}
 
             <button
-              className={`btn btn-yellow w-full ${
-                (creatingOffer || 
-                 !offerAmount || 
-                 !offerPrice || 
-                 (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
-                 (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
-                ) ? 'opacity-60 cursor-not-allowed' : ''
-              }`}
+              className={`btn btn-yellow w-full ${(creatingOffer ||
+                !offerAmount ||
+                !offerPrice ||
+                (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
+                (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
+              ) ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
               onClick={createOffer}
               disabled={
-                creatingOffer || 
-                !offerAmount || 
-                !offerPrice || 
+                creatingOffer ||
+                !offerAmount ||
+                !offerPrice ||
                 (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
                 (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
               }
@@ -483,208 +521,208 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                {myTrades.map((trade: any) => {
-                  const isBuyer = trade.buyer_id === auth?.user.id;
-                  const isSeller = trade.seller_id === auth?.user.id;
-                  const feeAmount = parseFloat(trade.fee_amount || trade.fee || 0);
-                  const amountReceived = parseFloat(trade.amount) - feeAmount;
-                  
-                  return (
-                    <tr
-                      key={trade.id}
-                      style={{
-                        borderBottom: '1px solid #e5e7eb',
-                        transition: 'background 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f9fafb';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#ffffff';
-                      }}
-                    >
-                      {/* Trade ID */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        #{trade.id}
-                      </td>
-                      
-                      {/* Type */}
-                      <td style={{ padding: '0.75rem' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          background: isBuyer ? '#dbeafe' : '#fef2f2',
-                          color: isBuyer ? '#2563eb' : '#dc2626',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          fontWeight: '700',
-                          textTransform: 'uppercase'
-                        }}>
-                          {isBuyer ? 'BUY' : 'SELL'}
-                        </span>
-                      </td>
-                      
-                      {/* Amount */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
-                      </td>
-                      
-                      {/* Price */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
-                      </td>
-                      
-                      {/* Total */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
-                        {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
-                      </td>
-                      
-                      {/* Status */}
-                      <td style={{ padding: '0.75rem' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          background: trade.status === 'COMPLETED' ? '#d1fae5' 
-                            : trade.status === 'PAID_PENDING_RELEASE' ? '#fef2f2' 
-                            : trade.status === 'DISPUTED' ? '#fef3c7'
-                            : trade.status === 'CANCELLED' ? '#fee2e2'
-                            : '#e2e8f0',
-                          color: trade.status === 'COMPLETED' ? '#065f46' 
-                            : trade.status === 'PAID_PENDING_RELEASE' ? '#dc2626' 
-                            : trade.status === 'DISPUTED' ? '#d97706'
-                            : trade.status === 'CANCELLED' ? '#991b1b'
-                            : '#475569',
-                          borderRadius: '4px',
-                          fontSize: '0.7rem',
-                          fontWeight: '600',
-                          textTransform: 'uppercase'
-                        }}>
-                          {trade.status === 'COMPLETED' ? '✅ COMPLETED' : trade.status === 'PAID_PENDING_RELEASE' ? '💰 PAID' : trade.status === 'PENDING' ? '⏳ PENDING' : trade.status}
-                        </span>
-                      </td>
-                      
-                      {/* Counterparty */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
-                        {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
-                      </td>
-                      
-                      {/* Received */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
-                        {trade.status === 'COMPLETED' && feeAmount > 0 ? (
-                          <span>
-                            {amountReceived.toFixed(4)} FDA
-                            <br />
-                            <span style={{ fontSize: '0.65rem', color: '#9ca3af' }}>
-                              (fee: {feeAmount.toFixed(4)})
+                    {myTrades.map((trade: any) => {
+                      const isBuyer = trade.buyer_id === auth?.user.id;
+                      const isSeller = trade.seller_id === auth?.user.id;
+                      const feeAmount = parseFloat(trade.fee_amount || trade.fee || 0);
+                      const amountReceived = parseFloat(trade.amount) - feeAmount;
+
+                      return (
+                        <tr
+                          key={trade.id}
+                          style={{
+                            borderBottom: '1px solid #e5e7eb',
+                            transition: 'background 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f9fafb';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#ffffff';
+                          }}
+                        >
+                          {/* Trade ID */}
+                          <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                            #{trade.id}
+                          </td>
+
+                          {/* Type */}
+                          <td style={{ padding: '0.75rem' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '0.25rem 0.5rem',
+                              background: isBuyer ? '#dbeafe' : '#fef2f2',
+                              color: isBuyer ? '#2563eb' : '#dc2626',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '700',
+                              textTransform: 'uppercase'
+                            }}>
+                              {isBuyer ? 'BUY' : 'SELL'}
                             </span>
-                          </span>
-                        ) : trade.status === 'COMPLETED' ? (
-                          <span>{parseFloat(trade.amount).toFixed(4)} FDA</span>
-                        ) : (
-                          <span>-</span>
-                        )}
-                      </td>
-                      
-                      {/* Actions */}
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
-                          {trade.status === 'PENDING' && isBuyer && (
-                            <button
-                              onClick={() => {
-                                setSelectedTradeForPayment(trade);
-                                setPaymentScreenshot(null);
-                                setShowPaymentModal(true);
-                              }}
-                              style={{
-                                padding: '0.375rem 0.75rem',
-                                fontSize: '0.7rem',
-                                fontWeight: '600',
-                                background: '#fbbf24',
-                                color: '#1e293b',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                width: '100%',
-                              }}
-                            >
-                              ✅ Pay
-                            </button>
-                          )}
-                          {trade.status === 'PAID_PENDING_RELEASE' && isSeller && (
-                            <>
-                              <button
-                                onClick={() => openReleaseConfirmModal(trade)}
-                                disabled={releasingTokens === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: releasingTokens === trade.id ? '#d1d5db' : '#10b981',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: releasingTokens === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {releasingTokens === trade.id ? '...' : '🚀 Release'}
-                              </button>
-                              {trade.payment_screenshot && (
+                          </td>
+
+                          {/* Amount */}
+                          <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                            {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
+                          </td>
+
+                          {/* Price */}
+                          <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                            {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
+                          </td>
+
+                          {/* Total */}
+                          <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
+                            {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: '0.75rem' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '0.25rem 0.5rem',
+                              background: trade.status === 'COMPLETED' ? '#d1fae5'
+                                : trade.status === 'PAID_PENDING_RELEASE' ? '#fef2f2'
+                                  : trade.status === 'DISPUTED' ? '#fef3c7'
+                                    : trade.status === 'CANCELLED' ? '#fee2e2'
+                                      : '#e2e8f0',
+                              color: trade.status === 'COMPLETED' ? '#065f46'
+                                : trade.status === 'PAID_PENDING_RELEASE' ? '#dc2626'
+                                  : trade.status === 'DISPUTED' ? '#d97706'
+                                    : trade.status === 'CANCELLED' ? '#991b1b'
+                                      : '#475569',
+                              borderRadius: '4px',
+                              fontSize: '0.7rem',
+                              fontWeight: '600',
+                              textTransform: 'uppercase'
+                            }}>
+                              {trade.status === 'COMPLETED' ? '✅ COMPLETED' : trade.status === 'PAID_PENDING_RELEASE' ? '💰 PAID' : trade.status === 'PENDING' ? '⏳ PENDING' : trade.status}
+                            </span>
+                          </td>
+
+                          {/* Counterparty */}
+                          <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
+                            {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
+                          </td>
+
+                          {/* Received */}
+                          <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                            {trade.status === 'COMPLETED' && feeAmount > 0 ? (
+                              <span>
+                                {amountReceived.toFixed(4)} FDA
+                                <br />
+                                <span style={{ fontSize: '0.65rem', color: '#9ca3af' }}>
+                                  (fee: {feeAmount.toFixed(4)})
+                                </span>
+                              </span>
+                            ) : trade.status === 'COMPLETED' ? (
+                              <span>{parseFloat(trade.amount).toFixed(4)} FDA</span>
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
+                              {trade.status === 'PENDING' && isBuyer && (
                                 <button
                                   onClick={() => {
-                                    const newWindow = window.open();
-                                    if (newWindow) {
-                                      newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot}" alt="Payment Screenshot" /></body></html>`);
-                                    }
+                                    setSelectedTradeForPayment(trade);
+                                    setPaymentScreenshot(null);
+                                    setShowPaymentModal(true);
                                   }}
                                   style={{
                                     padding: '0.375rem 0.75rem',
                                     fontSize: '0.7rem',
                                     fontWeight: '600',
-                                    background: '#6366f1',
-                                    color: '#ffffff',
+                                    background: '#fbbf24',
+                                    color: '#1e293b',
                                     border: 'none',
                                     borderRadius: '4px',
                                     cursor: 'pointer',
                                     width: '100%',
                                   }}
                                 >
-                                  📸 View
+                                  ✅ Pay
                                 </button>
                               )}
-                              <button
-                                onClick={() => openDisputeModal(trade)}
-                                disabled={disputingTrade === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
-                              </button>
-                            </>
-                          )}
-                          {trade.status === 'COMPLETED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
-                          )}
-                          {trade.status === 'DISPUTED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>
-                          )}
-                          {trade.status === 'CANCELLED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '600' }}>❌ Cancelled</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                              {trade.status === 'PAID_PENDING_RELEASE' && isSeller && (
+                                <>
+                                  <button
+                                    onClick={() => openReleaseConfirmModal(trade)}
+                                    disabled={releasingTokens === trade.id}
+                                    style={{
+                                      padding: '0.375rem 0.75rem',
+                                      fontSize: '0.7rem',
+                                      fontWeight: '600',
+                                      background: releasingTokens === trade.id ? '#d1d5db' : '#10b981',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: releasingTokens === trade.id ? 'not-allowed' : 'pointer',
+                                      width: '100%',
+                                    }}
+                                  >
+                                    {releasingTokens === trade.id ? '...' : '🚀 Release'}
+                                  </button>
+                                  {trade.payment_screenshot && (
+                                    <button
+                                      onClick={() => {
+                                        const newWindow = window.open();
+                                        if (newWindow) {
+                                          newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot}" alt="Payment Screenshot" /></body></html>`);
+                                        }
+                                      }}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: '#6366f1',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      📸 View
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => openDisputeModal(trade)}
+                                    disabled={disputingTrade === trade.id}
+                                    style={{
+                                      padding: '0.375rem 0.75rem',
+                                      fontSize: '0.7rem',
+                                      fontWeight: '600',
+                                      background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                      width: '100%',
+                                    }}
+                                  >
+                                    {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                  </button>
+                                </>
+                              )}
+                              {trade.status === 'COMPLETED' && (
+                                <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
+                              )}
+                              {trade.status === 'DISPUTED' && (
+                                <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>
+                              )}
+                              {trade.status === 'CANCELLED' && (
+                                <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '600' }}>❌ Cancelled</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

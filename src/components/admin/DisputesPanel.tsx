@@ -261,26 +261,26 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-icon-large">⚖️</div>
-              <h3 className="modal-title">Resolve Dispute</h3>
+              <h3 className="modal-title p2p-subheading">Resolve Dispute</h3>
             </div>
             <div className="modal-content">
-              <p className="modal-text">
+              <p className="modal-text p2p-subheading">
                 Trade #{selectedDispute.trade_id} - Dispute #{selectedDispute.id}
               </p>
               
-              <div className="modal-info-box mb-4">
+              <div className="modal-info-box mb-4 p2p-subheading">
                 <p className="modal-info-text">
-                  <strong>Amount:</strong> {selectedDispute.amount} {selectedDispute.asset_symbol}
+                  <strong style={{ color: '#9b9595' }} >Amount:</strong> {selectedDispute.amount} {selectedDispute.asset_symbol}
                 </p>
                 <p className="modal-info-text">
-                  <strong>Total:</strong> {(parseFloat(selectedDispute.amount || 0) * parseFloat(selectedDispute.price || 0)).toFixed(2)} {selectedDispute.fiat_currency}
+                  <strong style={{ color: '#9b9595' }} >Total:</strong> {(parseFloat(selectedDispute.amount || 0) * parseFloat(selectedDispute.price || 0)).toFixed(2)} {selectedDispute.fiat_currency}
                 </p>
                 <p className="modal-info-text">
-                  <strong>Dispute Reason:</strong> {selectedDispute.reason}
+                  <strong style={{ color: '#9b9595' }}>Dispute Reason:</strong> {selectedDispute.reason}
                 </p>
               </div>
 
-              <label className="modal-label">
+              <label className="modal-label p2p-subheading">
                 Resolution Status <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
@@ -294,7 +294,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 <option value="CLOSED">🔒 CLOSED - Dispute closed without action</option>
               </select>
 
-              <label className="modal-label mt-3">
+              <label className="modal-label mt-3 p2p-subheading">
                 Trade Action
               </label>
               <select
@@ -308,7 +308,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 <option value="cancel">Cancel Trade - Cancel trade and return funds</option>
               </select>
 
-              <label className="modal-label mt-3">
+              <label className="modal-label mt-3 p2p-subheading">
                 Resolution Note
               </label>
               <textarea
@@ -320,7 +320,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 disabled={resolvingDispute === selectedDispute.id}
                 style={{ minHeight: '100px', resize: 'vertical', fontFamily: 'inherit' }}
               />
-              <p className="modal-info-text-small mt-1">
+              <p className="modal-info-text-small mt-1" style={{color:'#d7ea9a'}}>
                 This note will be visible to all parties involved.
               </p>
             </div>

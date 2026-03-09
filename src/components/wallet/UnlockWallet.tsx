@@ -85,7 +85,7 @@ export const UnlockWallet: React.FC<UnlockWalletProps> = ({
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="mb-2">
         <div className="password-input-wrapper">
           <input
             type={showExtraWord ? "text" : "password"}
@@ -103,7 +103,7 @@ export const UnlockWallet: React.FC<UnlockWalletProps> = ({
             {showExtraWord ? "👁️" : "👁️‍🗨️"}
           </button>
         </div>
-        <div className="password-input-wrapper">
+         {/* <div className="password-input-wrapper">
           <input
             type={showPassword ? "text" : "password"}
             className="form-input"
@@ -119,7 +119,7 @@ export const UnlockWallet: React.FC<UnlockWalletProps> = ({
           >
             {showPassword ? "👁️" : "👁️‍🗨️"}
           </button>
-        </div>
+        </div>  */}
       </div>
       <button className="btn btn-primary" onClick={onUnlock} disabled={combinedWallets.length === 0}>
         Unlock wallet

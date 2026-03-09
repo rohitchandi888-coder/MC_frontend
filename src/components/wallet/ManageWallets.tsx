@@ -88,11 +88,11 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
                             {wallet.label || `Wallet ${wallet.id.slice(-6)}`}
                             {isActive && <span className="text-sm text-yellow-400 ml-2 font-semibold">(Active)</span>}
                           </p>
-                          {wallet.network && (
+                          {/* {wallet.network && (
                             <span className="text-xs px-2 py-1 rounded bg-blue-900/50 text-blue-200 font-bold border border-blue-700">
                               {wallet.network}
                             </span>
-                          )}
+                          )} */}
                         </div>
                         <div className="flex items-center gap-2 mt-2 mb-1">
                           <p className="text-sm text-white font-mono flex-1" style={{ fontSize: '0.8125rem', wordBreak: 'break-all', fontWeight: '500' }}>

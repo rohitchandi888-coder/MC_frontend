@@ -76,7 +76,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
           value={importSeed}
           onChange={(e) => onSeedChange(e.target.value)}
         />
-        <div className="grid grid-cols-2 gap-2 mb-2">
+        <div className="mb-2">
           <div className="password-input-wrapper">
             <input
               type={showExtraWord ? "text" : "password"}
@@ -94,7 +94,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
               {showExtraWord ? "👁️" : "👁️‍🗨️"}
             </button>
           </div>
-          <div className="password-input-wrapper">
+          {/* <div className="password-input-wrapper">
             <input
               type={showPassword ? "text" : "password"}
               className="form-input"
@@ -110,7 +110,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
             >
               {showPassword ? "👁️" : "👁️‍🗨️"}
             </button>
-          </div>
+          </div> */}
         </div>
         <input
           type="text"

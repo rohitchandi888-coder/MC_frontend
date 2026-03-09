@@ -20,7 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth,
         >
           <div className="MobileSidebar">
             <div className="header-logo-badge">M</div>
-            {isMobileOpen && (
+            {/* {isMobileOpen && (
               <button
                 className="sidebar-close-btn"
                 onClick={onClose}
@@ -28,7 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth,
               >
                 ✕
               </button>
-            )}
+            )} */}
           </div>
           <div>
             <p className="text-xs text-slate-400 mb-1">MC Wallet</p>

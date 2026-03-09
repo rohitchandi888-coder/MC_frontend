@@ -323,7 +323,7 @@ export async function setWalletAddres() {
           address: w.address,
           label: w.label || "MC Wallet",
           network: w.network || "BNB Chain",
-          createdAt: w.createdAt || new Date().toISOString(),
+          createdAt: w.created_at,
         },
         encrypted: null, 
       }));

@@ -58,7 +58,7 @@ button {
 
   font-family: inherit;
 
-  background: linear-gradient(135deg, #facc15, #eab308);
+  /* background: linear-gradient(135deg, #facc15, #eab308); */
 
   color: #111827;
 
@@ -727,6 +727,13 @@ input[style*="background: #0f172a"]::placeholder {
 
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
 
+   position: fixed;
+  top: 0;
+  left: 0;
+  width: 250px;   /* apni width set karo */
+  height: 100vh;
+  overflow-y: auto;
+
 }
 
 
@@ -748,24 +755,15 @@ input[style*="background: #0f172a"]::placeholder {
 }
 
 
-
 .sidebar-container {
-
-  width: 260px;
-
-  min-height: 100vh;
-
+  display: flex;
+  flex-direction: column;
+  height: 90vh;
   padding: 2.5rem 1.5rem;
-
-  border-right: 1px solid #1e293b;
-
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
-
+  width: 300px;          /* ← was 250px in one place, 300px in another — pick one */
+  overflow-y: auto;      /* ← MOST IMPORTANT CHANGE */
+  scrollbar-width: thin; /* optional: nicer scrollbar */
 }
-
-
 
 .sidebar-header {
 
@@ -775,6 +773,11 @@ input[style*="background: #0f172a"]::placeholder {
 
 }
 
+.sidebar-nav-scroll {
+  /* flex: 1;           ← remove or comment */
+  /* overflow-y: auto;  ← remove */
+  padding-right: 0.5rem;
+}
 
 
 .sidebar-nav-button {
@@ -833,8 +836,6 @@ input[style*="background: #0f172a"]::placeholder {
 
   padding: 0.75rem;
 
-  margin-top: 2rem;
-
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 
   color: #ffffff;
@@ -849,6 +850,7 @@ input[style*="background: #0f172a"]::placeholder {
 
   cursor: pointer;
 
+  margin-top: auto;
 }
 
 
@@ -1671,7 +1673,9 @@ input[style*="background: #0f172a"]::placeholder {
 
   min-height: 100vh;
 
-  color: #111827; /* Ensure default text color is dark on light background */
+  color: #111827; 
+
+   margin-left: 340px; 
 
 }
 
@@ -5099,7 +5103,7 @@ ul:not([style*="padding"]) li {
 
     z-index: 1000;
 
-    height: 100vh;
+    height: 80vh;
 
     overflow-y: auto;
 
@@ -5110,6 +5114,8 @@ ul:not([style*="padding"]) li {
   .sidebar-container.mobile-open {
 
     left: 0;
+
+    padding-top: 100px;
 
   }
 
@@ -7274,4 +7280,63 @@ img {
 
 .p2p-subheading{
   color:#ffffff !important;
+}
+
+
+
+.toggle {
+  --width: 50px;
+  --height: calc(var(--width) / 2);
+  --border-radius: calc(var(--height) / 2);
+  display: inline-block;
+  cursor: pointer;
+}
+
+.toggle__input {
+  display: none;
+}
+
+.toggle__fill {
+  position: relative;
+  width: var(--width);
+  height: var(--height);
+  border-radius: var(--border-radius);
+  background: #dddddd;
+  transition: background 0.2s;
+}
+
+.toggle__input:checked ~ .toggle__fill {
+  background: #009578; 
+}
+
+.toggle__fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: var(--height);
+  width: var(--height);
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.25);
+  border-radius: var(--border-radius);
+  transition: transform 0.2s;
+}
+
+.toggle__input:checked ~ .toggle__fill::after {
+  transform: translateX(var(--height));
+}
+
+
+.rdt_Pagination button:first-of-type {
+  display: none !important;
+}
+
+.rdt_Pagination button:last-of-type {
+  display: none !important;
+}
+
+.active-token {
+  border: 2px solid #333;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px #333;
 }

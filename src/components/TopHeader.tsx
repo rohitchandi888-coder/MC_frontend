@@ -9,6 +9,8 @@ interface TopHeaderProps {
   allWallets: WalletMeta[];
   registeredFdaWallets: any[]; // Wallets from database
   onProfileClick: () => void;
+  onSwitchWallet: (walletId: string) => void;
+
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -18,6 +20,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   allWallets,
   registeredFdaWallets,
   onProfileClick,
+  onSwitchWallet,
 }) => {
   const [copied, setCopied] = useState<string | null>(null);
   const [showWalletsDropdown, setShowWalletsDropdown] = useState(false);
@@ -51,7 +54,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   // Prioritize registered wallets from database
   const allWalletsList = React.useMemo(() => {
     const registeredMap = new Map<string, any>();
-    
+
     // Add registered wallets from database first
     registeredFdaWallets.forEach((wallet: any) => {
       if (wallet.address) {
@@ -64,7 +67,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         });
       }
     });
-    
+
     // Add local wallets that aren't already in database
     allWallets.forEach((wallet) => {
       if (wallet.address && !registeredMap.has(wallet.address.toLowerCase())) {
@@ -74,7 +77,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         });
       }
     });
-    
+
     return Array.from(registeredMap.values());
   }, [registeredFdaWallets, allWallets]);
 
@@ -88,12 +91,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           👤 Profile
         </button>
       </div>
-      
+
       <div className="top-header-right">
         {auth && internalFdaBalance !== null && (
           <div className="top-header-balance-item">
-            <span className="top-header-balance-label" style={{color:'white'}}>FDA Balance:</span>
-            <span className="top-header-balance-value" style={{color:'#b3a7a7'}}>{internalFdaBalance.toFixed(2)} FDA</span>
+            <span className="top-header-balance-label" style={{ color: 'white' }}>FDA Balance:</span>
+            <span className="top-header-balance-value" style={{ color: '#b3a7a7' }}>{internalFdaBalance.toFixed(2)} FDA</span>
             <button
               className="top-header-copy-btn"
               onClick={() => copyToClipboard(internalFdaBalance.toFixed(2), 'fda')}
@@ -103,7 +106,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </button>
           </div>
         )}
-        
+
         {/* All Wallets Dropdown - Show from database */}
         {allWalletsList.length > 0 && (
           <div className="top-header-wallets-dropdown" ref={dropdownRef} style={{ position: 'relative' }}>
@@ -112,15 +115,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               onClick={() => setShowWalletsDropdown(!showWalletsDropdown)}
               style={{ cursor: 'pointer', background: 'transparent', border: 'none', padding: '0.5rem 1rem' }}
             >
-              <span className="top-header-balance-label" style={{color:'white'}}>Wallets ({allWalletsList.length}):</span>
-              <span className="top-header-balance-value" style={{color:'#b3a7a7'}}>
+              <span className="top-header-balance-label" style={{ color: 'white' }}>Wallets ({allWalletsList.length}):</span>
+              <span className="top-header-balance-value" style={{ color: '#b3a7a7' }}>
                 {storedMeta ? `${storedMeta.address.slice(0, 6)}...${storedMeta.address.slice(-4)}` : 'Select'}
               </span>
-              <span style={{color:'#b3a7a7', marginLeft: '0.5rem'}}>▼</span>
+              <span style={{ color: '#b3a7a7', marginLeft: '0.5rem' }}>▼</span>
             </button>
-            
+
             {showWalletsDropdown && (
-              <div 
+              <div
                 className="wallets-dropdown-menu"
                 style={{
                   position: 'absolute',
@@ -146,15 +149,28 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                       padding: '0.75rem',
                       marginBottom: '0.25rem',
                       borderRadius: '0.25rem',
-                      background: wallet.address?.toLowerCase() === storedMeta?.address?.toLowerCase() ? '#334155' : 'transparent',
+                      // background: wallet.address?.toLowerCase() === storedMeta?.address?.toLowerCase() ? '#334155' : 'transparent',
+                      background:
+                        wallet.address?.toLowerCase() === storedMeta?.address?.toLowerCase()
+                          ? '#334155'
+                          : 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                     }}
+                    // onClick={(e) => {
+                    //   e.stopPropagation();
+                    //   copyToClipboard(wallet.address, `wallet-${wallet.id}`);
+                    // }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyToClipboard(wallet.address, `wallet-${wallet.id}`);
+
+                      // switch wallet
+                      onSwitchWallet(wallet.id);
+
+                      // close dropdown
+                      setShowWalletsDropdown(false);
                     }}
                   >
                     <div style={{ flex: 1 }}>
@@ -181,6 +197,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                         e.stopPropagation();
                         copyToClipboard(wallet.address, `wallet-${wallet.id}`);
                       }}
+                      // onClick={(e) => {
+                      //   e.stopPropagation();
+
+                      //   // switch wallet
+                      //   onSwitchWallet(wallet.id);
+
+                      //   // close dropdown
+                      //   setShowWalletsDropdown(false);
+                      // }}
                       title="Copy wallet address"
                       style={{
                         marginLeft: '0.5rem',
@@ -200,12 +225,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             )}
           </div>
         )}
-        
+
         {/* Active Wallet (if no dropdown or as fallback) */}
         {storedMeta && allWallets.length === 0 && (
           <div className="top-header-balance-item">
-            <span className="top-header-balance-label" style={{color:'white'}}>MC Wallet:</span>
-            <span className="top-header-balance-value" title={storedMeta.address} style={{color:'#b3a7a7'}}>
+            <span className="top-header-balance-label" style={{ color: 'white' }}>MC Wallet:</span>
+            <span className="top-header-balance-value" title={storedMeta.address} style={{ color: '#b3a7a7' }}>
               {storedMeta.address.slice(0, 6)}...{storedMeta.address.slice(-4)}
             </span>
             <button

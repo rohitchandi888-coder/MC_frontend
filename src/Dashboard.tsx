@@ -92,6 +92,41 @@ export const Dashboard: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
 
+const getActiveWalletAddress = (): string | null => {
+
+  if (!auth?.user?.id) return null;
+
+  const walletsRaw = localStorage.getItem(
+    `fda_wallets_user_${auth.user.id}`
+  );
+
+  if (!walletsRaw) return null;
+
+  const wallets = JSON.parse(walletsRaw);
+
+  if (!Array.isArray(wallets) || wallets.length === 0)
+    return null;
+
+
+  // try active wallet id first
+  const activeId = localStorage.getItem("fda_active_wallet_id");
+
+  if (activeId) {
+
+    const activeWallet = wallets.find(
+      (w: any) =>
+        String(w?.meta?.id) === String(activeId)
+    );
+
+    if (activeWallet?.meta?.address)
+      return activeWallet.meta.address;
+  }
+
+
+  // ✅ fallback → use first wallet in array
+  return wallets[0]?.meta?.address || null;
+};
+  
   const [auth, setAuth] = useState<AuthState | null>(() => {
     try {
       const raw = localStorage.getItem(AUTH_KEY);
@@ -189,7 +224,8 @@ export const Dashboard: React.FC = () => {
   const [newFdaWalletLabel, setNewFdaWalletLabel] = useState('');
   const [registeringWallet, setRegisteringWallet] = useState(false);
   
-  const [customTokens, setCustomTokens] = useState<CustomToken[]>(loadCustomTokens(auth?.user.id));
+  // const [customTokens, setCustomTokens] = useState<CustomToken[]>(loadCustomTokens(auth?.user.id));
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [newTokenAddress, setNewTokenAddress] = useState('');
   const [newTokenSymbol, setNewTokenSymbol] = useState('');
   const [newTokenName, setNewTokenName] = useState('');
@@ -205,9 +241,44 @@ export const Dashboard: React.FC = () => {
   const [showMetamaskAccountSelector, setShowMetamaskAccountSelector] = useState(false);
   const [fdaPrivateKey, setFdaPrivateKey] = useState<string | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const unlockedPrivateKeyRef = useRef<string | null>(null);
   const navigate = useNavigate();
+
+
+    useEffect(() => {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+
+    if (!raw) {
+      setAuth(null);
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    const parsed: AuthState = JSON.parse(raw);
+
+    // ensure valid user + token exist
+    if (!parsed?.token || !parsed?.user?.id) {
+      localStorage.removeItem(AUTH_KEY);
+      setAuth(null);
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    // keep your existing state in sync
+    setAuth(parsed);
+
+  } catch (err) {
+    console.error("Auth parse error:", err);
+    localStorage.removeItem(AUTH_KEY);
+    setAuth(null);
+    navigate('/login', { replace: true });
+  } finally {
+    setAuthChecked(true);
+  }
+}, [navigate]);
 
   // Get user-specific wallets from localStorage
   const getUserWallets = (): WalletMeta[] => {
@@ -273,6 +344,13 @@ export const Dashboard: React.FC = () => {
     setAllWallets(getUserWallets());
   };
   
+    // Empty Inputs
+useEffect(() => {
+
+  setUnlockExtraWord("");
+  setUnlockPassword("");
+
+}, [activeTab]);
   // Update wallets when user changes
   useEffect(() => {
     if (auth) {
@@ -418,7 +496,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const registerWalletAddress = async (address: string, label?: string, encryptedData?: any, network?: string) => {
+  const registerWalletAddress = async (address: string, label?: string, encryptedData?: any, network?: string, password?: string) => {
     if (!auth) {
       console.error('[registerWalletAddress] ❌ No auth available');
       return false;
@@ -438,7 +516,7 @@ export const Dashboard: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ address, label, encryptedData, network }),
+        body: JSON.stringify({ address, label, encryptedData, network,password  }),
       });
       
       if (res.ok) {
@@ -1137,10 +1215,10 @@ export const Dashboard: React.FC = () => {
       showErrorModal('⚠️ Please add your custom 13th word.');
       return;
     }
-    if (!walletPassword.trim()) {
-      showErrorModal('⚠️ Please enter a wallet password.');
-      return;
-    }
+    // if (!walletPassword.trim()) {
+    //   showErrorModal('⚠️ Please enter a wallet password.');
+    //   return;
+    // }
 
     try {
       const wallet = walletFromMnemonicAndExtraWord(mnemonic12, extraWord, selectedNetwork);
@@ -1167,7 +1245,8 @@ export const Dashboard: React.FC = () => {
             walletAddress, 
             walletLabel.trim() || undefined,
             encrypted, // Save encrypted wallet data to database
-            selectedNetwork
+            selectedNetwork,
+            walletPassword
           );
           if (registered) {
             console.log('[Wallet Creation] ✅ Wallet auto-registered with MC Wallet (encrypted data saved)');
@@ -1266,10 +1345,10 @@ export const Dashboard: React.FC = () => {
       return;
     }
     
-    if (!walletPassword.trim()) {
-      showErrorModal('⚠️ Please enter a wallet password.');
-      return;
-    }
+    // if (!walletPassword.trim()) {
+    //   showErrorModal('⚠️ Please enter a wallet password.');
+    //   return;
+    // }
 
     // Check if this phrase combination was used by another user (if registered)
     if (auth) {
@@ -1322,7 +1401,8 @@ export const Dashboard: React.FC = () => {
             walletAddress, 
             importWalletLabel.trim() || undefined,
             encrypted, // Save encrypted wallet data to database
-            selectedNetwork
+            selectedNetwork,
+            walletPassword
           );
           console.log('[Import Wallet] ✅ Wallet auto-registered with MC Wallet (encrypted data saved)');
         } catch (regErr: any) {
@@ -1379,10 +1459,10 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleUnlock = async () => {
-    if (!unlockPassword.trim()) {
-      showErrorModal('⚠️ Please enter your wallet password.');
-      return;
-    }
+    // if (!unlockPassword.trim()) {
+    //   showErrorModal('⚠️ Please enter your wallet password.');
+    //   return;
+    // }
     if (!unlockExtraWord.trim()) {
       showErrorModal('⚠️ Enter your custom 13th word to unlock.');
       return;
@@ -1430,9 +1510,9 @@ export const Dashboard: React.FC = () => {
     
     // PRIORITY: If registered wallet, ALWAYS try to restore from database FIRST (before checking local storage)
     if (selectedWallet && isRegisteredWallet) {
-      if (!unlockPassword || !unlockExtraWord) {
+      if (!unlockExtraWord) {
         showErrorModal(
-          '⚠️ This wallet is registered in MC Wallet. Please enter your password and 13th word to restore it from the database.'
+          '⚠️ This wallet is registered in MC Wallet. Please enter your 13th word to restore it from the database.'
         );
         return;
       }
@@ -1703,6 +1783,8 @@ export const Dashboard: React.FC = () => {
                   ? 'Incorrect password. Please check your password and try again.'
                   : 'Failed to decrypt wallet. Please check your password and 13th word.';
                 showErrorModal(`⚠️ ${errorMsg}`);
+            setUnlockExtraWord('');
+        setUnlockPassword('');
                 return;
               }
             } else {
@@ -1766,11 +1848,15 @@ export const Dashboard: React.FC = () => {
       // Only show error for non-registered wallets or if restoration failed
       if (selectedWallet && !isRegisteredWallet) {
         showErrorModal('⚠️ This wallet does not have encrypted data stored. Please create or import a wallet with a password first.');
+        setUnlockExtraWord('');
+        setUnlockPassword('');
       } else if (selectedWallet && isRegisteredWallet) {
         // This shouldn't happen if restoration worked, but just in case
         showErrorModal(
           '⚠️ Failed to restore wallet from database. Please try importing the wallet manually using "Import wallet" in the sidebar.'
         );
+        setUnlockExtraWord('');
+        setUnlockPassword('');
         setTimeout(() => {
           setActiveTab('import');
         }, 2000);
@@ -2167,6 +2253,13 @@ export const Dashboard: React.FC = () => {
       // No balance check needed - buyer pays fiat
     }
     
+     setAcceptingOffer(selectedOffer.id);
+    const activeAddress = getActiveWalletAddress();
+
+    if (!activeAddress) {
+      showErrorModal("⚠️ No active wallet selected.");
+      return;
+    }
     setAcceptingOffer(selectedOffer.id);
     try {
       const res = await fetch(getApiUrl('trades'), {
@@ -2175,7 +2268,7 @@ export const Dashboard: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ offerId: selectedOffer.id, amount: amountNum }),
+        body: JSON.stringify({ offerId: selectedOffer.id, amount: amountNum,wallet_address: activeAddress }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2979,39 +3072,192 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleAddCustomToken = () => {
-    if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
-      showErrorModal('⚠️ Please enter a valid token contract address.');
-      return;
-    }
-    if (!newTokenSymbol.trim()) {
-      showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
-      return;
-    }
+  // const handleAddCustomToken = () => {
+  //   if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
+  //     showErrorModal('⚠️ Please enter a valid token contract address.');
+  //     return;
+  //   }
+  //   if (!newTokenSymbol.trim()) {
+  //     showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
+  //     return;
+  //   }
     
-    const token: CustomToken = {
-      address: newTokenAddress.trim(),
-      symbol: newTokenSymbol.trim().toUpperCase(),
-      name: newTokenName.trim() || undefined,
-    };
+  //   const token: CustomToken = {
+  //     address: newTokenAddress.trim(),
+  //     symbol: newTokenSymbol.trim().toUpperCase(),
+  //     name: newTokenName.trim() || undefined,
+  //   };
     
-    if (addCustomToken(token, auth?.user.id)) {
-      setCustomTokens(loadCustomTokens(auth?.user.id));
-      setNewTokenAddress('');
-      setNewTokenSymbol('');
-      setNewTokenName('');
-      showSuccessModal(`✅ Token ${token.symbol} added successfully.`);
-      // Refresh balances if we have an address
-      if (storedMeta?.address) {
-        fetchBalances(storedMeta.address);
-      } else if (checkAddress) {
-        fetchBalances(checkAddress);
-      }
-    } else {
-      showErrorModal('⚠️ Token already exists in your list.');
-    }
+  //   if (addCustomToken(token, auth?.user.id)) {
+  //     setCustomTokens(loadCustomTokens(auth?.user.id));
+  //     setNewTokenAddress('');
+  //     setNewTokenSymbol('');
+  //     setNewTokenName('');
+  //     showSuccessModal(`✅ Token ${token.symbol} added successfully.`);
+  //     // Refresh balances if we have an address
+  //     if (storedMeta?.address) {
+  //       fetchBalances(storedMeta.address);
+  //     } else if (checkAddress) {
+  //       fetchBalances(checkAddress);
+  //     }
+  //   } else {
+  //     showErrorModal('⚠️ Token already exists in your list.');
+  //   }
+  // };
+
+
+const handleAddCustomToken = async () => {
+
+  if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
+    showErrorModal('⚠️ Please enter a valid token contract address.');
+    return;
+  }
+
+  if (!newTokenSymbol.trim()) {
+    showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
+    return;
+  }
+
+  const token: CustomToken = {
+    address: newTokenAddress.trim(),
+    symbol: newTokenSymbol.trim().toUpperCase(),
+    name: newTokenName.trim() || undefined,
   };
 
+  try {
+
+    const res = await fetch(
+      "https://merchantcoinwallet.com/api/customTokens",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({
+          contract_address: token.address,   // ✅ renamed
+          token_symbol: token.symbol,
+          token_name: token.name,
+          status: "ON"                       // ✅ enum instead of enabled
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to save token");
+    }
+
+    if (data.alreadyExists?.length) {
+
+  showErrorModal("⚠️ Token already added in custom wallets");
+
+  return;
+}
+    // reload tokens from DB
+    await fetchCustomTokens();
+
+    setNewTokenAddress('');
+    setNewTokenSymbol('');
+    setNewTokenName('');
+
+    showSuccessModal(`✅ Token ${token.symbol} added successfully.`);
+
+    if (storedMeta?.address)
+      fetchBalances(storedMeta.address);
+    else if (checkAddress)
+      fetchBalances(checkAddress);
+
+  }
+  catch (err:any) {
+    showErrorModal(`⚠️ ${err.message}`);
+  }
+
+};
+
+useEffect(() => {
+
+  if (auth?.token) {
+    fetchCustomTokens();
+  }
+
+}, [auth]);
+const fetchCustomTokens = async () => {
+
+  if (!auth?.token) return;
+
+  try {
+
+    const res = await fetch(getApiUrl("customTokens"), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${auth.token}`
+      }
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error);
+    }
+
+    setCustomTokens(
+      data.tokens.map((t:any)=>({
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name,
+        enabled: t.status === "ON"   // ✅ convert enum → boolean
+      }))
+    );
+
+  }
+  catch(err){
+    console.error(err);
+  }
+
+};
+
+
+const handleToggleCustomToken = async (address: string) => {
+
+  try {
+
+    const token = customTokens.find(
+      t => t.address.toLowerCase() === address.toLowerCase()
+    );
+
+    if (!token) return;
+
+    const newStatus = token.enabled ? "OFF" : "ON";
+
+    const res = await fetch(getApiUrl(
+      `customTokens/${address}/status`),
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok)
+      throw new Error(data.error);
+
+    await fetchCustomTokens();
+
+  }
+  catch(err:any){
+    showErrorModal(err.message);
+  }
+
+};
   const handleRemoveCustomToken = (address: string) => {
     if (removeCustomToken(address, auth?.user.id)) {
       setCustomTokens(loadCustomTokens(auth?.user.id));
@@ -3022,12 +3268,12 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleToggleCustomToken = (address: string) => {
-    if (toggleCustomToken(address, auth?.user.id)) {
-      setCustomTokens(loadCustomTokens(auth?.user.id));
-      // State is updated silently, no modal needed
-    }
-  };
+  // const handleToggleCustomToken = (address: string) => {
+  //   if (toggleCustomToken(address, auth?.user.id)) {
+  //     setCustomTokens(loadCustomTokens(auth?.user.id));
+  //     // State is updated silently, no modal needed
+  //   }
+  // };
 
   const handleSwitchWallet = (walletId: string) => {
     setActiveWalletId(walletId);
@@ -3239,6 +3485,7 @@ export const Dashboard: React.FC = () => {
             allWallets={allWallets}
             registeredFdaWallets={registeredFdaWallets}
             onProfileClick={() => setActiveTab('profile')}
+            onSwitchWallet={handleSwitchWallet}
           />
           
           <header id="main-header" className="main-header">

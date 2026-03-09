@@ -54,7 +54,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
               <strong>Total:</strong> {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
             </p>
           </div>
-          <label className="modal-label">
+          <label className="modal-label p2p-subheading">
             Dispute Reason <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <textarea

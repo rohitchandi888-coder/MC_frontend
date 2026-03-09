@@ -136,138 +136,168 @@ export async function decryptPrivateKey(
   return payload;
 }
 
-// Encrypt wallet phrase (12 words + 13th word) - uses only password for key derivation
+
 export async function encryptPhrase(
   mnemonic12: string,
   extraWord: string,
-  password: string,
+  password: string, // optional now, not used for key
 ): Promise<EncryptedWalletData> {
-  const subtle = getSubtleCrypto();
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
-  // Use only password (not password + extraWord) for phrase encryption
-  // This allows users to decrypt with just their password when viewing
+  const subtle = getSubtleCrypto();
+
+  const salt = window.crypto.getRandomValues(new Uint8Array(16));
+  const iv   = window.crypto.getRandomValues(new Uint8Array(12));
+
+  // ✅ derive key ONLY from extraWord
   const baseMaterial = await subtle.importKey(
-    'raw',
-    strToUint8Array(password) as BufferSource,
-    { name: 'PBKDF2' },
+    "raw",
+    strToUint8Array(extraWord.trim()),
+    { name: "PBKDF2" },
     false,
-    ['deriveKey'],
+    ["deriveKey"]
   );
 
   const key = await subtle.deriveKey(
     {
-      name: 'PBKDF2',
-      salt: salt as BufferSource,
-      iterations: 150_000,
-      hash: 'SHA-256',
+      name: "PBKDF2",
+      salt,
+      iterations: 150000,
+      hash: "SHA-256",
     },
     baseMaterial,
     {
-      name: 'AES-GCM',
+      name: "AES-GCM",
       length: 256,
     },
     false,
-    ['encrypt', 'decrypt'],
+    ["encrypt","decrypt"]
   );
 
-  const phraseData = `${mnemonic12.trim()}:${extraWord.trim()}`;
-  const plainBytes = strToUint8Array(phraseData);
+  const phraseData = JSON.stringify({
+    mnemonic12,
+    extraWord
+  });
 
   const cipherBuf = await subtle.encrypt(
-    {
-      name: 'AES-GCM',
-      iv: iv as BufferSource,
-    },
+    { name:"AES-GCM", iv },
     key,
-    plainBytes as BufferSource,
+    strToUint8Array(phraseData)
   );
 
-  const cipherText = new Uint8Array(cipherBuf);
-
   return {
-    version: 1,
-    address: '', // Not needed for phrase encryption
-    cipherText: uint8ToBase64(cipherText),
+    version: 3, // new version
+    address: "",
+    cipherText: uint8ToBase64(new Uint8Array(cipherBuf)),
     iv: uint8ToBase64(iv),
     salt: uint8ToBase64(salt),
-    iterations: 150_000,
+    iterations: 150000,
     createdAt: new Date().toISOString(),
   };
 }
 
-// Decrypt wallet phrase - uses only password for key derivation
 export async function decryptPhrase(
   encrypted: EncryptedWalletData,
   password: string,
-): Promise<{ mnemonic12: string; extraWord: string }> {
+  extraWord?: string
+): Promise<{ mnemonic12:string; extraWord:string }> {
+
   const subtle = getSubtleCrypto();
 
-  // Validate encrypted data
-  if (!encrypted.cipherText || !encrypted.iv || !encrypted.salt) {
-    throw new Error('Invalid encrypted data: missing required fields');
-  }
-
   const salt = base64ToUint8(encrypted.salt);
-  const iv = base64ToUint8(encrypted.iv);
+  const iv   = base64ToUint8(encrypted.iv);
   const cipherBytes = base64ToUint8(encrypted.cipherText);
 
-  if (salt.length === 0 || iv.length === 0 || cipherBytes.length === 0) {
-    throw new Error('Invalid encrypted data: empty fields');
-  }
+  let key: CryptoKey;
 
-  // Use only password (not password + extraWord) for phrase decryption
-  const baseMaterial = await subtle.importKey(
-    'raw',
-    strToUint8Array(password) as BufferSource,
-    { name: 'PBKDF2' },
-    false,
-    ['deriveKey'],
-  );
+  // ✅ VERSION 3 → extraWord ONLY
+  if (encrypted.version === 3) {
 
-  const key = await subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt as BufferSource,
-      iterations: encrypted.iterations || 150_000,
-      hash: 'SHA-256',
-    },
-    baseMaterial,
-    {
-      name: 'AES-GCM',
-      length: 256,
-    },
-    false,
-    ['encrypt', 'decrypt'],
-  );
+    if (!extraWord)
+      throw new Error("13th word required");
 
-  try {
-    const plainBuf = await subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv as BufferSource,
-      },
-      key,
-      cipherBytes as BufferSource,
+    const baseMaterial = await subtle.importKey(
+      "raw",
+      strToUint8Array(extraWord.trim()),
+      { name:"PBKDF2" },
+      false,
+      ["deriveKey"]
     );
 
-    const plainStr = new TextDecoder().decode(plainBuf);
-    const parts = plainStr.split(':');
-    if (parts.length !== 2) {
-      throw new Error('Invalid decrypted data format');
-    }
-    const [mnemonic12, decryptedExtraWord] = parts;
-    return { mnemonic12, extraWord: decryptedExtraWord };
-  } catch (decryptErr: any) {
-    // Provide more specific error message
-    if (decryptErr.name === 'OperationError') {
-      throw new Error('Decryption failed. The password may be incorrect. Please verify you are using the correct wallet password.');
-    }
-    throw decryptErr;
-  }
-}
+    key = await subtle.deriveKey(
+      {
+        name:"PBKDF2",
+        salt,
+        iterations: encrypted.iterations || 150000,
+        hash:"SHA-256"
+      },
+      baseMaterial,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["decrypt"]
+    );
 
+  }
+
+  // ✅ VERSION 2 → password + extraWord
+  else if (encrypted.version === 2 && extraWord) {
+
+    const baseMaterial = await subtle.importKey(
+      "raw",
+      strToUint8Array(`${password}:${extraWord}`),
+      { name:"PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    key = await subtle.deriveKey(
+      {
+        name:"PBKDF2",
+        salt,
+        iterations: encrypted.iterations || 150000,
+        hash:"SHA-256"
+      },
+      baseMaterial,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["decrypt"]
+    );
+
+  }
+
+  // ✅ VERSION 1 → password only
+  else {
+
+    const baseMaterial = await subtle.importKey(
+      "raw",
+      strToUint8Array(password),
+      { name:"PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+
+    key = await subtle.deriveKey(
+      {
+        name:"PBKDF2",
+        salt,
+        iterations: encrypted.iterations || 150000,
+        hash:"SHA-256"
+      },
+      baseMaterial,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["decrypt"]
+    );
+
+  }
+
+  const plainBuf = await subtle.decrypt(
+    { name:"AES-GCM", iv },
+    key,
+    cipherBytes
+  );
+
+  return JSON.parse(new TextDecoder().decode(plainBuf));
+}
 // Helper for deriving a wallet from a mnemonic (extraWord is used only for encryption in this MVP).
 export function walletFromMnemonicAndExtraWord(mnemonic: string, extraWord: string, network: 'BNB Chain' | 'Solana' | 'Bitcoin' | 'Tron' = 'BNB Chain') {
   void extraWord;

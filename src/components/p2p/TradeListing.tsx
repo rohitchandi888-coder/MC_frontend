@@ -289,26 +289,43 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="pagination">
-                    <button
-                      className={`pagination-button ${offersPage === 1 ? 'opacity-50 cursor-not-allowed' : 'btn btn-blue'}`}
-                      onClick={() => setOffersPage(p => Math.max(1, p - 1))}
-                      disabled={offersPage === 1}
-                    >
-                      ← Previous
-                    </button>
-                    <span className="text-sm text-gray-600 px-4">
-                      Page {offersPage} of {totalPages}
-                    </span>
-                    <button
-                      className={`pagination-button ${offersPage === totalPages ? 'opacity-50 cursor-not-allowed' : 'btn btn-blue'}`}
-                      onClick={() => setOffersPage(p => Math.min(totalPages, p + 1))}
-                      disabled={offersPage === totalPages}
-                    >
-                      Next →
-                    </button>
-                  </div>
-                )}
+  <div className="pagination flex items-center gap-2 justify-center mt-4">
+
+    {/* Previous */}
+    <button
+      className="btn btn-blue px-3 py-1"
+      disabled={offersPage === 1}
+      onClick={() => setOffersPage(p => Math.max(1, p - 1))}
+    >
+      «
+    </button>
+
+    {/* Page Numbers */}
+    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+      <button
+        key={page}
+        onClick={() => setOffersPage(page)}
+        className={`px-3 py-1 rounded text-sm font-semibold ${
+          page === offersPage
+            ? 'bg-blue-600 text-white'
+            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+        }`}
+      >
+        {page}
+      </button>
+    ))}
+
+    {/* Next */}
+    <button
+      className="btn btn-blue px-3 py-1"
+      disabled={offersPage === totalPages}
+      onClick={() => setOffersPage(p => Math.min(totalPages, p + 1))}
+    >
+      »
+    </button>
+
+  </div>
+)}
               </>
             )}
           </div>
