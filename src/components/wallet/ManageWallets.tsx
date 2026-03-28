@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { WalletMeta } from '../../walletStorage';
 
 interface ManageWalletsProps {
@@ -27,7 +27,18 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
   onDeleteWallet,
 }) => {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  
+  const [search, setSearch] = useState('');
+  const filteredWallets = useMemo(() => {
+
+  const s = search.toLowerCase();
+
+  return allWallets.filter((wallet) => {
+    return (
+      wallet.address.toLowerCase().includes(s) ||
+      wallet.label?.toLowerCase().includes(s)
+    );
+  });
+}, [allWallets, search]);
   const copyToClipboard = (text: string, address: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedAddress(address);
@@ -43,9 +54,21 @@ export const ManageWallets: React.FC<ManageWalletsProps> = ({
         💡 <strong style={{ color: '#374151' }}>Note:</strong> To manage registered MC Wallets (MetaMask/external wallets), go to the "MC Wallets" section.
       </p>
 
-      {allWallets.length > 0 ? (
+<input
+  type="text"
+  placeholder="Search wallets..."
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  style={{
+    width: '100%',
+    padding: '10px',
+    marginBottom: '15px',
+    borderRadius: '6px',
+  }}
+/>
+      {filteredWallets.length > 0 ? (
         <div className="wallet-list">
-          {allWallets.map((wallet) => {
+          {filteredWallets.map((wallet) => {
             const isActive = storedMeta?.id === wallet.id;
             const isEditing = editingWalletId === wallet.id;
             

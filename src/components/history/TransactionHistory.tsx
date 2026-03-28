@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AuthState } from '../types';
 import { getApiUrl } from '../../config';
 
@@ -27,6 +27,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState<string>('');
+
 
   const loadTransactions = async () => {
     if (!auth) {
@@ -50,11 +52,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
       }
 
       const data: Transaction[] = await res.json();
-      
+
       // Filter transactions to only show those involving user's wallet addresses
       // If no wallet addresses, show all transactions (they're already filtered by user_id on backend)
       let filteredTransactions = data;
-      
+
       if (userWalletAddresses.length > 0) {
         filteredTransactions = data.filter((tx) => {
           // If addresses are available, filter by them
@@ -119,6 +121,22 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
     return isFromUser ? 'text-red-400' : 'text-green-400';
   };
 
+  const filterTransaction = useMemo(() => {
+    const s = search.toLowerCase();
+    const onSearchFind = transactions.filter((e) =>
+      // e.to_address.toLowerCase().includes(s) ||
+      // e.amount.toLowerCase().includes(s) ||
+      e.created_at.toLowerCase().includes(s) ||
+      e.from_fda_user_id.toLowerCase().includes(s) ||
+      e.to_fda_user_id.toLowerCase().includes(s) ||
+      e.from_email.toLowerCase().includes(s) ||
+      e.from_phone.toLowerCase().includes(s) ||
+      e.to_email.toLowerCase().includes(s) ||
+      e.to_phone.toLowerCase().includes(s)
+    );
+    return onSearchFind
+  }, [transactions, search])
+
   if (!auth) {
     return (
       <div>
@@ -144,28 +162,38 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
         </p>
       </div>
 
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <p className="text-xs text-slate-400">
-            {transactions.length > 0 
-              ? `Showing ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`
-              : userWalletAddresses.length > 0
-              ? `Showing transactions for ${userWalletAddresses.length} wallet address${userWalletAddresses.length !== 1 ? 'es' : ''}`
-              : 'Showing all your transactions'}
-          </p>
-          {auth?.user?.fdaUserId && (
-            <p className="text-xs text-slate-500">
-              FDA User ID: <span className=" font-semibold" style={{color: '#fff'}}>{auth.user.fdaUserId}</span>
-            </p>
-          )}
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <div className="flex items-center gap-4">
+              <p className="text-xs text-slate-400">
+                {transactions.length > 0
+                  ? `Showing ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`
+                  : userWalletAddresses.length > 0
+                    ? `Showing transactions for ${userWalletAddresses.length} wallet address${userWalletAddresses.length !== 1 ? 'es' : ''}`
+                    : 'Showing all your transactions'}
+              </p>
+              {auth?.user?.fdaUserId && (
+                <p className="text-xs">
+                  FDA User ID: <span className=" font-semibold">{auth.user.fdaUserId}</span>
+                </p>
+              )}
+            </div>
+
+          </div>
+          <div>
+
+            <button
+              className="btn btn-yellow text-xs py-2 px-4"
+              onClick={loadTransactions}
+              disabled={loading}
+            >
+              {loading ? '🔄 Loading...' : '🔄 Refresh'}
+            </button>
+          </div>
+
         </div>
-        <button
-          className="btn btn-yellow text-xs py-2 px-4"
-          onClick={loadTransactions}
-          disabled={loading}
-        >
-          {loading ? '🔄 Loading...' : '🔄 Refresh'}
-        </button>
+        <input type="text" placeholder='Search in Transaction....' style={{ width: '100%', paddingInline: 10, marginBlock: 15, paddingBlock: 15 }} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {error && (
@@ -174,11 +202,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
         </div>
       )}
 
-      {loading && transactions.length === 0 ? (
+      {loading && filterTransaction.length === 0 ? (
         <div className="text-center p-8">
           <p className="text-sm text-slate-400">Loading transactions...</p>
         </div>
-      ) : transactions.length === 0 ? (
+      ) : filterTransaction.length === 0 ? (
         <div className="text-center p-8">
           <p className="text-sm text-slate-400">No transactions found.</p>
           <p className="text-xs text-slate-500 mt-2">
@@ -187,105 +215,105 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
         </div>
       ) : (
         <div className='transactionHistory-Cont'>
-        <div className="transaction-list">
-          {transactions.map((tx) => {
-            const isFromUser = tx.from_address ? userWalletAddresses.some(
-              (addr) => addr.toLowerCase() === tx.from_address?.toLowerCase()
-            ) : false;
-            const isToUser = tx.to_address ? userWalletAddresses.some(
-              (addr) => addr.toLowerCase() === tx.to_address?.toLowerCase()
-            ) : false;
+          <div className="transaction-list">
+            {filterTransaction.map((tx) => {
+              const isFromUser = tx.from_address ? userWalletAddresses.some(
+                (addr) => addr.toLowerCase() === tx.from_address?.toLowerCase()
+              ) : false;
+              const isToUser = tx.to_address ? userWalletAddresses.some(
+                (addr) => addr.toLowerCase() === tx.to_address?.toLowerCase()
+              ) : false;
 
-            return (
-              <div key={tx.id} className="transaction-item">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className={`text-base font-bold ${getTransactionColor(tx)}`} style={{color: '#fff'}}>
-                        {getTransactionType(tx)}
-                      </span>
-                      <span className="text-sm" style={{color: '#fff'}}>
-                        {formatDate(tx.created_at)}
-                      </span>
+              return (
+                <div key={tx.id} className="transaction-item">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className={`text-base font-bold ${getTransactionColor(tx)}`} style={{ color: '#fff' }}>
+                          {getTransactionType(tx)}
+                        </span>
+                        <span className="text-sm" style={{ color: '#fff' }}>
+                          {formatDate(tx.created_at)}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {isFromUser && (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm  font-semibold" style={{ color: '#fff' }}>From:</span>
+                              {tx.from_address && (
+                                <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
+                                  {formatAddress(tx.from_address)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-6">
+                              <span className="text-sm " style={{ color: '#fff' }}>
+                                {tx.from_email || tx.from_phone || 'You'}
+                              </span>
+                              {tx.from_fda_user_id && (
+                                <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounde" style={{ color: '#fff' }}>
+                                  FDA ID: {tx.from_fda_user_id}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {isToUser && (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm  font-semibold" style={{ color: '#fff' }}>To:</span>
+                              {tx.to_address && (
+                                <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
+                                  {formatAddress(tx.to_address)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-6">
+                              <span className="text-sm " style={{ color: '#fff' }}>
+                                {tx.to_email || tx.to_phone || 'Unknown'}
+                              </span>
+                              {tx.to_fda_user_id && (
+                                <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
+                                  FDA ID: {tx.to_fda_user_id}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Show both FDA user IDs if transaction involves different users */}
+                        {!isFromUser && !isToUser && (
+                          <div className="flex flex-col gap-2 bg-slate-800/50 p-2 rounded">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm text-slate-300 font-semibold">From FDA ID:</span>
+                              <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
+                                {tx.from_fda_user_id || tx.from_user_id}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm text-slate-300 font-semibold">To FDA ID:</span>
+                              <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
+                                {tx.to_fda_user_id || tx.to_user_id}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    
-                    <div className="space-y-2">
-                      {isFromUser && (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm  font-semibold" style={{color:'#fff'}}>From:</span>
-                            {tx.from_address && (
-                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{color: '#fff'}}>
-                                {formatAddress(tx.from_address)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap ml-6">
-                            <span className="text-sm " style={{color: '#fff'}}>
-                              {tx.from_email || tx.from_phone || 'You'}
-                            </span>
-                            {tx.from_fda_user_id && (
-                              <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounde" style={{color: '#fff'}}>
-                                FDA ID: {tx.from_fda_user_id}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {isToUser && (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm  font-semibold" style={{color: '#fff'}}>To:</span>
-                            {tx.to_address && (
-                              <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{color: '#fff'}}>
-                                {formatAddress(tx.to_address)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap ml-6">
-                            <span className="text-sm " style={{color: '#fff'}}>
-                              {tx.to_email || tx.to_phone || 'Unknown'}
-                            </span>
-                            {tx.to_fda_user_id && (
-                              <span className="text-sm  font-bold bg-blue-900/30 px-2 py-0.5 rounded" style={{color: '#fff'}}>
-                                FDA ID: {tx.to_fda_user_id}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Show both FDA user IDs if transaction involves different users */}
-                      {!isFromUser && !isToUser && (
-                        <div className="flex flex-col gap-2 bg-slate-800/50 p-2 rounded">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-slate-300 font-semibold">From FDA ID:</span>
-                            <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
-                              {tx.from_fda_user_id || tx.from_user_id}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-slate-300 font-semibold">To FDA ID:</span>
-                            <span className="text-sm text-blue-400 font-bold bg-blue-900/30 px-2 py-0.5 rounded">
-                              {tx.to_fda_user_id || tx.to_user_id}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-lg font-bold ${getTransactionColor(tx)}`}>
+                        {isFromUser ? '-' : '+'}{parseFloat(tx.amount).toFixed(4)} FDA
+                      </p>
                     </div>
-                  </div>
-                  
-                  <div className="text-right flex-shrink-0">
-                    <p className={`text-lg font-bold ${getTransactionColor(tx)}`}>
-                      {isFromUser ? '-' : '+'}{parseFloat(tx.amount).toFixed(4)} FDA
-                    </p>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

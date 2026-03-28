@@ -25,6 +25,70 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(paymentScreenshotProp ? paymentScreenshotProp : null);
   const [compressing, setCompressing] = useState(false);
 
+
+  const renderPaymentMethod = (methods: any) => {
+
+    if (typeof methods === 'string') {
+      try {
+        methods = JSON.parse(methods);
+      } catch {
+        return <span>{methods}</span>;
+      }
+    }
+
+    if (!methods || methods.length === 0) return 'Not available';
+
+    return methods.map((pm: any, index: number) => {
+
+      const isValidQR =
+        pm.qr_code &&
+        (pm.qr_code.startsWith('data:image') ||
+          pm.qr_code.startsWith('http'));
+
+      return (
+        <div key={index} style={{}}>
+
+          <p style={{ fontSize: '13px', fontWeight: '600', color: "#fff" }}>
+            {/* {pm.paymentname} */}
+            Pay to Seller
+          </p>
+
+          {pm.upi_id && (
+            <span style={{ fontSize: '12px', display: 'block' }}>
+              {pm.upi_id}
+            </span>
+          )}
+
+          {isValidQR && (
+            <img
+              src={pm.qr_code}
+              alt="QR"
+              title="Click to view full QR"
+              style={{
+                width: '100%',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                objectFit: 'contain'
+              }}
+              onClick={() => {
+                const win = window.open();
+                if (win) {
+                  win.document.write(`
+        <html>
+          <body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;background:#000;">
+            <img src="${pm.qr_code}" style="max-width:90%;max-height:90%;" />
+          </body>
+        </html>
+      `);
+                }
+              }}
+            />
+          )}
+
+        </div>
+      );
+    });
+  };
   if (!show || !trade) return null;
 
   const handleScreenshotChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,9 +147,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           <p className="modal-text">
             Amount: <strong>{trade.amount} {trade.asset_symbol}</strong>
           </p>
-          <p className="modal-text">
-            Total: <strong>{(trade.amount * trade.price).toFixed(2)} {trade.fiat_currency}</strong>
-          </p>
+          <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+            <p style={{ fontWeight: '600' }}>💳 Seller Payment Details:</p>
+            {renderPaymentMethod(trade.seller_payment_methods)}
+          </div>
           <label className="modal-label">
             Payment Screenshot (Max 10MB, will be compressed):
           </label>

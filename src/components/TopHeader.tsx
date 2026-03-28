@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import type { AuthState } from './types';
 import type { WalletMeta } from '../../walletStorage';
+import { getApiUrl } from '../config';
 
 interface TopHeaderProps {
   auth: AuthState | null;
   internalFdaBalance: number | null;
   storedMeta: { address: string; label?: string } | null;
   allWallets: WalletMeta[];
-  registeredFdaWallets: any[]; // Wallets from database
+  registeredFdaWallets: any[]; // Wallets from database\
   onProfileClick: () => void;
   onSwitchWallet: (walletId: string) => void;
 
 }
+
+
+
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
   auth,
@@ -24,8 +28,48 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 }) => {
   const [copied, setCopied] = useState<string | null>(null);
   const [showWalletsDropdown, setShowWalletsDropdown] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
+  const [fdaPrice, setFdaPrice] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+
+  const loadProfile = async () => {
+    if (!auth) return;
+
+    // setLoading(true);
+    // setError(null);
+    try {
+      const res = await fetch(getApiUrl('auth/profile'), {
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        // setError(data.error || 'Failed to load profile');
+        return;
+      }
+
+      const data = await res.json();
+      console.log({ data });
+
+      setUserData(data);
+    } catch (err: any) {
+      console.error('Failed to load profile:', err);
+      // setError('Unable to load profile. Please try again.');
+    } finally {
+      // setLoading(false);
+    }
+  };
+
+
+
+  useEffect(() => {
+    if (auth) {
+      loadProfile();
+    }
+  }, [auth]);
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -49,6 +93,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       setTimeout(() => setCopied(null), 2000);
     });
   };
+
 
   // Combine registered wallets from database with local wallets
   // Prioritize registered wallets from database
@@ -81,18 +126,59 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     return Array.from(registeredMap.values());
   }, [registeredFdaWallets, allWallets]);
 
+  const loadFdaPrice = async () => {
+    try {
+      const res = await fetch(getApiUrl("fdaPrice"));
+
+      const data = await res.json();
+
+      if (!res.ok) return;
+
+      setFdaPrice(data.price);
+    } catch (err) {
+      console.error("Failed to load FDA price:", err);
+    }
+  };
+  useEffect(() => {
+    loadFdaPrice();
+  }, []);
   return (
-    <header className="top-header">
-      <div className="top-header-left">
-        <button
-          className="top-header-profile-btn"
-          onClick={onProfileClick}
-        >
-          👤 Profile
-        </button>
+    <header className="top-header" style={{ position: 'sticky', top: 0, bottom: 0, borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', zIndex: 9999 }}>
+      <div className="top-header-left" >
+        <div style={{ display: 'flex', alignItems: 'center', flexDirection: 'row-reverse' }}>
+
+          {userData && (
+            <p style={{ color: '#fff' }}>
+              Hi! {userData?.full_name || "User"}
+            </p>
+          )}
+          <button
+            className="top-header-profile-btn"
+            onClick={onProfileClick}
+          >
+            👤 Profile
+          </button>
+        </div>
       </div>
 
       <div className="top-header-right">
+        {fdaPrice !== null && (
+          <div className="top-header-balance-item">
+            <span className="top-header-balance-label" style={{ color: 'white' }}>
+              FDA Price:
+            </span>
+            <span className="top-header-balance-value" style={{ color: '#b3a7a7' }}>
+              {fdaPrice}
+            </span>
+            <button
+              className="top-header-copy-btn"
+              onClick={() => copyToClipboard(fdaPrice.toString(), 'price')}
+              title="Copy FDA price"
+            >
+              {copied === 'price' ? '✓' : '⧉'}
+            </button>
+          </div>
+        )}
         {auth && internalFdaBalance !== null && (
           <div className="top-header-balance-item">
             <span className="top-header-balance-label" style={{ color: 'white' }}>FDA Balance:</span>

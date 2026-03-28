@@ -2,6 +2,66 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
+const popularTokens = [
+  {
+    symbol: "BNB",
+    name: "BNB",
+    address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  },
+  {
+    symbol: "ETH",
+    name: "Ethereum",
+    address: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+  },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    address: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+  },
+  {
+    symbol: "USDT",
+    name: "Tether USD",
+    address: "0x55d398326f99059fF775485246999027B3197955",
+  },
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+  },
+  {
+    symbol: "CAKE",
+    name: "PancakeSwap",
+    address: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+  },
+
+  {
+    symbol: "JIO",
+    name: "JioCoin",
+    address: "0xb314d182de1c3a3ecc6772cc1126db8e5fc29886",
+  },
+];
+
+const TabItem = ({ icon, label, active, onClick }: any) => {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: "transparent",
+        border: "none",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 4,
+        color: active ? "#22c55e" : "#94a3b8",
+        fontSize: 11,
+        cursor: "pointer",
+      }}
+    >
+      <i className={icon} style={{ fontSize: 18 }}></i>
+      <span>{label}</span>
+    </button>
+  );
+};
 // MetaMask type declaration
 declare global {
   interface Window {
@@ -40,12 +100,12 @@ import {
 import { getApiUrl } from './config';
 
 // Import components
-import { 
-  Sidebar, 
+import {
+  Sidebar,
   TopHeader,
-  MessageModal, 
-  AcceptOfferModal, 
-  PaymentModal, 
+  MessageModal,
+  AcceptOfferModal,
+  PaymentModal,
   CancelOfferModal,
   ReleaseConfirmModal,
   DisputeModal,
@@ -67,13 +127,16 @@ import {
   TransactionHistory,
   Profile,
   TradingChart,
-  type Tab, 
-  type AuthState, 
-  AUTH_KEY, 
-  DEFAULT_RPC_URL, 
-  FDA_TOKEN_ADDRESS, 
-  ERC20_ABI 
+  type Tab,
+  type AuthState,
+  AUTH_KEY,
+  DEFAULT_RPC_URL,
+  FDA_TOKEN_ADDRESS,
+  ERC20_ABI
 } from './components';
+import MobileDashboard from './components/MobileView/Dashboard';
+import WalletModal from './components/MobileView/Modal/WalletModal';
+import SwapWalletModal from './components/MobileView/Modal/Swap';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -91,42 +154,42 @@ export const Dashboard: React.FC = () => {
   const [selectedUnlockWalletId, setSelectedUnlockWalletId] = useState<string>('');
   const [message, setMessage] = useState<string | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const getActiveWalletAddress = (): string | null => {
 
-const getActiveWalletAddress = (): string | null => {
+    if (!auth?.user?.id) return null;
 
-  if (!auth?.user?.id) return null;
-
-  const walletsRaw = localStorage.getItem(
-    `fda_wallets_user_${auth.user.id}`
-  );
-
-  if (!walletsRaw) return null;
-
-  const wallets = JSON.parse(walletsRaw);
-
-  if (!Array.isArray(wallets) || wallets.length === 0)
-    return null;
-
-
-  // try active wallet id first
-  const activeId = localStorage.getItem("fda_active_wallet_id");
-
-  if (activeId) {
-
-    const activeWallet = wallets.find(
-      (w: any) =>
-        String(w?.meta?.id) === String(activeId)
+    const walletsRaw = localStorage.getItem(
+      `fda_wallets_user_${auth.user.id}`
     );
 
-    if (activeWallet?.meta?.address)
-      return activeWallet.meta.address;
-  }
+    if (!walletsRaw) return null;
+
+    const wallets = JSON.parse(walletsRaw);
+
+    if (!Array.isArray(wallets) || wallets.length === 0)
+      return null;
 
 
-  // ✅ fallback → use first wallet in array
-  return wallets[0]?.meta?.address || null;
-};
-  
+    // try active wallet id first
+    const activeId = localStorage.getItem("fda_active_wallet_id");
+
+    if (activeId) {
+
+      const activeWallet = wallets.find(
+        (w: any) =>
+          String(w?.meta?.id) === String(activeId)
+      );
+
+      if (activeWallet?.meta?.address)
+        return activeWallet.meta.address;
+    }
+
+
+    // ✅ fallback → use first wallet in array
+    return wallets[0]?.meta?.address || null;
+  };
+
   const [auth, setAuth] = useState<AuthState | null>(() => {
     try {
       const raw = localStorage.getItem(AUTH_KEY);
@@ -153,30 +216,30 @@ const getActiveWalletAddress = (): string | null => {
   const [acceptingOffer, setAcceptingOffer] = useState<number | null>(null);
   const [markingAsPaid, setMarkingAsPaid] = useState<number | null>(null);
   const [releasingTokens, setReleasingTokens] = useState<number | null>(null);
-  
+
   // Offer acceptance modal
   const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<any | null>(null);
   const [acceptAmount, setAcceptAmount] = useState('');
-  
+
   // Payment screenshot upload
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedTradeForPayment, setSelectedTradeForPayment] = useState<any | null>(null);
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
-  
+
   // Cancel offer confirmation modal
   const [showCancelOfferModal, setShowCancelOfferModal] = useState(false);
   const [selectedOfferToCancel, setSelectedOfferToCancel] = useState<any | null>(null);
-  
+
   // Release tokens confirmation modal
   const [showReleaseConfirmModal, setShowReleaseConfirmModal] = useState(false);
   const [selectedTradeToRelease, setSelectedTradeToRelease] = useState<any | null>(null);
-  
+
   // Dispute modal
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [selectedTradeToDispute, setSelectedTradeToDispute] = useState<any | null>(null);
-  
+
   // Offers pagination and filters
   const [offersPage, setOffersPage] = useState(1);
   const [offersPerPage] = useState(12);
@@ -186,7 +249,7 @@ const getActiveWalletAddress = (): string | null => {
   const [cancellingTrade, setCancellingTrade] = useState<number | null>(null);
   const [cancellingOffer, setCancellingOffer] = useState<number | null>(null);
   const [disputingTrade, setDisputingTrade] = useState<number | null>(null);
-  
+
   // P2P Offer creation state
   // Default to BUY to avoid accidental balance checks
   const [offerType, setOfferType] = useState<'BUY' | 'SELL'>('BUY');
@@ -218,12 +281,12 @@ const getActiveWalletAddress = (): string | null => {
   const [checkAddress, setCheckAddress] = useState('');
   const [transferType, setTransferType] = useState<'internal' | 'onchain'>('internal');
   const [recipientFdaWallet, setRecipientFdaWallet] = useState<any>(null);
-  
+
   const [registeredFdaWallets, setRegisteredFdaWallets] = useState<any[]>([]);
   const [newFdaWalletAddress, setNewFdaWalletAddress] = useState('');
   const [newFdaWalletLabel, setNewFdaWalletLabel] = useState('');
   const [registeringWallet, setRegisteringWallet] = useState(false);
-  
+
   // const [customTokens, setCustomTokens] = useState<CustomToken[]>(loadCustomTokens(auth?.user.id));
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [newTokenAddress, setNewTokenAddress] = useState('');
@@ -232,7 +295,7 @@ const getActiveWalletAddress = (): string | null => {
   const [tokenInfoLoading, setTokenInfoLoading] = useState(false);
   const [editingWalletId, setEditingWalletId] = useState<string | null>(null);
   const [editWalletLabel, setEditWalletLabel] = useState('');
-  
+
   // MetaMask connection
   const [metamaskAddress, setMetamaskAddress] = useState<string | null>(null);
   const [metamaskConnected, setMetamaskConnected] = useState(false);
@@ -242,43 +305,60 @@ const getActiveWalletAddress = (): string | null => {
   const [fdaPrivateKey, setFdaPrivateKey] = useState<string | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [fdaPrice, setFdaPrice] = useState(null);
+  
+  // for the customer token to mobile view that can show to 
+    const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
+  
   const unlockedPrivateKeyRef = useRef<string | null>(null);
   const navigate = useNavigate();
 
 
-    useEffect(() => {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
 
-    if (!raw) {
-      setAuth(null);
-      navigate('/login', { replace: true });
-      return;
-    }
+      if (!raw) {
+        setAuth(null);
+        navigate('/login', { replace: true });
+        return;
+      }
 
-    const parsed: AuthState = JSON.parse(raw);
+      const parsed: AuthState = JSON.parse(raw);
 
-    // ensure valid user + token exist
-    if (!parsed?.token || !parsed?.user?.id) {
+      // ensure valid user + token exist
+      if (!parsed?.token || !parsed?.user?.id) {
+        localStorage.removeItem(AUTH_KEY);
+        setAuth(null);
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      // keep your existing state in sync
+      setAuth(parsed);
+
+    } catch (err) {
+      console.error("Auth parse error:", err);
       localStorage.removeItem(AUTH_KEY);
       setAuth(null);
       navigate('/login', { replace: true });
-      return;
+    } finally {
+      setAuthChecked(true);
     }
+  }, [navigate]);
 
-    // keep your existing state in sync
-    setAuth(parsed);
+  useEffect(() => {
+    const checkScreen = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
 
-  } catch (err) {
-    console.error("Auth parse error:", err);
-    localStorage.removeItem(AUTH_KEY);
-    setAuth(null);
-    navigate('/login', { replace: true });
-  } finally {
-    setAuthChecked(true);
-  }
-}, [navigate]);
+    checkScreen();
+    window.addEventListener("resize", checkScreen);
+
+    return () => window.removeEventListener("resize", checkScreen);
+  }, []);
 
   // Get user-specific wallets from localStorage
   const getUserWallets = (): WalletMeta[] => {
@@ -289,18 +369,18 @@ const getActiveWalletAddress = (): string | null => {
     try {
       // const wallets = JSON.parse(raw) as StoredWallet[];
       // return wallets.map(w => w.meta);
-    const wallets = JSON.parse(raw);
-    return wallets.map((w: any) =>
-      w.meta
-        ? w.meta
-        : {
+      const wallets = JSON.parse(raw);
+      return wallets.map((w: any) =>
+        w.meta
+          ? w.meta
+          : {
             id: w.id?.toString(),
             address: w.address,
             label: w.label,
             network: w.network || "BNB Chain",
             createdAt: w.createdAt || new Date().toISOString(),
           }
-    );
+      );
     } catch {
       return [];
     }
@@ -311,7 +391,7 @@ const getActiveWalletAddress = (): string | null => {
     if (!auth) return null;
     const userWallets = getUserWallets();
     const activeId = getActiveWalletId();
-    const wallet = activeId 
+    const wallet = activeId
       ? userWallets.find(w => w.id === activeId)
       : userWallets[0];
     return wallet || null;
@@ -320,14 +400,14 @@ const getActiveWalletAddress = (): string | null => {
   // Get all user wallet addresses for transaction history
   const userWalletAddresses = useMemo(() => {
     const addresses: string[] = [];
-    
+
     // Add addresses from registered MC wallets
     registeredFdaWallets.forEach((wallet: any) => {
       if (wallet.address) {
         addresses.push(wallet.address.toLowerCase());
       }
     });
-    
+
     // Add addresses from local wallets
     const localWallets = getUserWallets();
     localWallets.forEach((wallet) => {
@@ -335,22 +415,22 @@ const getActiveWalletAddress = (): string | null => {
         addresses.push(wallet.address.toLowerCase());
       }
     });
-    
+
     // Remove duplicates
     return [...new Set(addresses)];
   }, [registeredFdaWallets, allWallets, auth]);
-  
+
   const refreshWallets = () => {
     setAllWallets(getUserWallets());
   };
-  
-    // Empty Inputs
-useEffect(() => {
 
-  setUnlockExtraWord("");
-  setUnlockPassword("");
+  // Empty Inputs
+  useEffect(() => {
 
-}, [activeTab]);
+    setUnlockExtraWord("");
+    setUnlockPassword("");
+
+  }, [activeTab]);
   // Update wallets when user changes
   useEffect(() => {
     if (auth) {
@@ -359,13 +439,13 @@ useEffect(() => {
       setAllWallets([]);
     }
   }, [auth]);
-    useEffect(() => {
-      if (auth) {
-        setWalletAddres().then(() => {
-          refreshWallets();
-        });
-      }
-    }, [auth]);
+  useEffect(() => {
+    if (auth) {
+      setWalletAddres().then(() => {
+        refreshWallets();
+      });
+    }
+  }, [auth]);
 
   // Set default selected wallet for unlock when wallets change
   useEffect(() => {
@@ -379,26 +459,26 @@ useEffect(() => {
 
   const fetchBalances = async (address: string) => {
     if (!address || !ethers.isAddress(address)) return;
-    
+
     // Check if address belongs to user's own wallets
     const isOwnWallet = allWallets.some(w => w.address.toLowerCase() === address.toLowerCase()) ||
-                       registeredFdaWallets.some((w: any) => w.address.toLowerCase() === address.toLowerCase());
-    
+      registeredFdaWallets.some((w: any) => w.address.toLowerCase() === address.toLowerCase());
+
     if (!isOwnWallet) {
       showErrorModal('⚠️ You can only check balance for your own wallets. Please select a wallet from your wallet list.');
       setCheckAddress('');
       setBalanceLoading(false);
       return;
     }
-    
+
     setBalanceLoading(true);
     try {
       const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
-      
+
       // Fetch native balance
       const nativeBal = await provider.getBalance(address);
       setNativeBalance(ethers.formatEther(nativeBal));
-      
+
       // Fetch FDA token balance
       try {
         const tokenContract = new ethers.Contract(FDA_TOKEN_ADDRESS, ERC20_ABI, provider);
@@ -409,7 +489,7 @@ useEffect(() => {
         console.error('Failed to fetch FDA balance:', err);
         setFdaBalance('Error');
       }
-      
+
       // Fetch custom token balances
       const tokens = loadCustomTokens(auth?.user.id);
       const balances: Record<string, string> = {};
@@ -454,7 +534,7 @@ useEffect(() => {
       console.warn('[fetchInternalBalance] No auth available');
       return;
     }
-    
+
     // Use provided wallet address or get from storedMeta
     const address = walletAddress || storedMeta?.address;
     if (!address) {
@@ -466,14 +546,14 @@ useEffect(() => {
       setInternalFdaUsable(null);
       return;
     }
-    
+
     try {
       const url = getApiUrl(`internal/balance?wallet_address=${encodeURIComponent(address)}`);
-      
+
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
-      
+
       if (!res.ok) {
         const errorText = await res.text();
         let errorData;
@@ -485,7 +565,7 @@ useEffect(() => {
         console.error('[fetchInternalBalance] Error response:', res.status, errorData);
         return;
       }
-      
+
       const data = await res.json();
       setInternalFdaBalance(data.available !== undefined ? data.available : data.balance);
       setInternalFdaLocked(data.locked !== undefined ? data.locked : 0);
@@ -516,9 +596,9 @@ useEffect(() => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ address, label, encryptedData, network,password  }),
+        body: JSON.stringify({ address, label, encryptedData, network, password }),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         console.log('[registerWalletAddress] ✅ Registration successful:', {
@@ -585,17 +665,17 @@ useEffect(() => {
 
     try {
       setConnectingMetaMask(true);
-      
+
       // First check if account is already connected (no popup)
       const connectedAccounts = await window.ethereum.request({ method: 'eth_accounts' });
-      
+
       if (connectedAccounts && connectedAccounts.includes(address)) {
         // Account is already connected, use it directly without popup
         setMetamaskAddress(address);
         setMetamaskConnected(true);
         setShowMetamaskAccountSelector(false);
         showSuccessModal(`✅ MetaMask connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
-        
+
         // Check if this address is already registered as MC wallet
         if (auth) {
           const fdaWallet = await checkIfFdaWallet(address);
@@ -607,7 +687,7 @@ useEffect(() => {
         }
         return;
       }
-      
+
       // Account is not connected, need to request access (this will open popup)
       // But first, check if user needs to switch accounts in MetaMask
       if (connectedAccounts && connectedAccounts.length > 0) {
@@ -616,27 +696,27 @@ useEffect(() => {
         showErrorModal(`⚠️ Account ${address.slice(0, 6)}...${address.slice(-4)} is not the active account in MetaMask. Please switch to this account in MetaMask extension first, then try again.`);
         return;
       }
-      
+
       // No accounts connected at all, request access (will open popup)
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      
+
       if (!accounts || accounts.length === 0) {
         showErrorModal('⚠️ No MetaMask accounts found. Please add an account in MetaMask.');
         return;
       }
-      
+
       // Check if the selected account is in the list
       if (!accounts.includes(address)) {
         showErrorModal(`⚠️ Account ${address.slice(0, 6)}...${address.slice(-4)} was not connected. Please switch to this account in MetaMask and try again.`);
         return;
       }
-      
+
       // Set the selected account
       setMetamaskAddress(address);
       setMetamaskConnected(true);
       setShowMetamaskAccountSelector(false);
       showSuccessModal(`✅ MetaMask connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
-      
+
       // Check if this address is already registered as MC wallet
       if (auth) {
         const fdaWallet = await checkIfFdaWallet(address);
@@ -737,14 +817,14 @@ useEffect(() => {
       const res = await fetch(getApiUrl('wallets'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
-      
+
       if (!res.ok) {
         console.error('[Dashboard] Failed to fetch wallets, status:', res.status);
         return;
       }
-      
+
       const data = await res.json();
-      
+
       // Ensure data is an array
       if (Array.isArray(data)) {
         setRegisteredFdaWallets(data);
@@ -765,10 +845,10 @@ useEffect(() => {
   // Restore encrypted wallets from database to local storage
   const restoreEncryptedWalletsFromDatabase = async (registeredWallets: any[]) => {
     if (!auth) return;
-    
+
     const localWallets = getUserWallets();
     const localAddresses = new Set(localWallets.map(w => w.address.toLowerCase()));
-    
+
     // Find wallets with encrypted_data in database but not in local storage
     const walletsToRestore = registeredWallets.filter((wallet: any) => {
       // Parse encrypted_data if it's a JSON string
@@ -785,18 +865,18 @@ useEffect(() => {
       const hasLocalData = localAddresses.has(wallet.address?.toLowerCase() || '');
       return hasEncryptedData && !hasLocalData;
     });
-    
+
     if (walletsToRestore.length > 0) {
       const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
       const raw = localStorage.getItem(userWalletsKey);
       let userWallets = raw ? JSON.parse(raw) : [];
-      
+
       for (const wallet of walletsToRestore) {
         try {
-          const encryptedData = typeof wallet.encrypted_data === 'string' 
-            ? JSON.parse(wallet.encrypted_data) 
+          const encryptedData = typeof wallet.encrypted_data === 'string'
+            ? JSON.parse(wallet.encrypted_data)
             : wallet.encrypted_data;
-          
+
           if (encryptedData && encryptedData.address) {
             // Use database ID as wallet ID to ensure consistency
             const walletId = wallet.id?.toString() || `wallet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -807,18 +887,18 @@ useEffect(() => {
               network: wallet.network || 'BNB Chain',
               createdAt: wallet.created_at || new Date().toISOString(),
             };
-            
+
             const storedWallet = {
               meta: walletMeta,
               encrypted: encryptedData,
             };
-            
+
             // Check if wallet already exists in userWallets (by address or ID)
-            const existingIndex = userWallets.findIndex((w: any) => 
+            const existingIndex = userWallets.findIndex((w: any) =>
               w.meta.address?.toLowerCase() === wallet.address?.toLowerCase() ||
               w.meta.id === walletId
             );
-            
+
             if (existingIndex >= 0) {
               // Update existing wallet (preserve database ID)
               userWallets[existingIndex] = storedWallet;
@@ -831,11 +911,11 @@ useEffect(() => {
           console.error('[Restore Encrypted Wallets] Error restoring wallet:', wallet.address, err);
         }
       }
-      
+
       // Save updated wallets to localStorage
       localStorage.setItem(userWalletsKey, JSON.stringify(userWallets));
       refreshWallets();
-      
+
       if (walletsToRestore.length > 0) {
         console.log(`[Restore Encrypted Wallets] ✅ Restored ${walletsToRestore.length} wallet(s) from database`);
       }
@@ -845,28 +925,28 @@ useEffect(() => {
   // Restore wallets from database phrases after login
   const restoreWalletsFromDatabase = async (registeredWallets: any[]) => {
     if (!auth) return;
-    
+
     try {
       // Fetch saved phrases from database
       const phrasesRes = await fetch(getApiUrl('wallets/phrases'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
-      
+
       if (!phrasesRes.ok) {
         return; // No phrases or error, skip restoration
       }
-      
+
       const phrasesData = await phrasesRes.json();
       const savedPhrases = phrasesData.phrases || [];
-      
+
       if (savedPhrases.length === 0) {
         return; // No saved phrases
       }
-      
+
       // Get current local wallets
       const localWallets = getUserWallets();
       const localAddresses = new Set(localWallets.map(w => w.address.toLowerCase()));
-      
+
       // Find registered wallets that have saved phrases but no local encrypted data
       const walletsToRestore = registeredWallets.filter((regWallet: any) => {
         const hasPhrase = savedPhrases.some(
@@ -875,7 +955,7 @@ useEffect(() => {
         const hasLocalData = localAddresses.has(regWallet.address?.toLowerCase() || '');
         return hasPhrase && !hasLocalData;
       });
-      
+
       if (walletsToRestore.length > 0) {
         // Show notification that wallets can be restored
         // The actual restoration will happen when user tries to unlock with password
@@ -896,18 +976,18 @@ useEffect(() => {
       showErrorModal('⚠️ Please enter a wallet address.');
       return false;
     }
-    
+
     // Validate address format (Ethereum/EVM or Solana)
     const isEthereumAddress = ethers.isAddress(trimmedAddress);
     const isSolanaAddress = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmedAddress); // Solana addresses are base58 encoded, 32-44 chars
     const isBitcoinAddress = /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmedAddress);
     const isTronAddress = /^T[A-Za-z1-9]{33}$/.test(trimmedAddress);
-    
+
     if (!isEthereumAddress && !isSolanaAddress && !isBitcoinAddress && !isTronAddress) {
       showErrorModal('⚠️ Please enter a valid wallet address (Ethereum, Solana, Bitcoin, or Tron format).');
       return false;
     }
-    
+
     try {
       setRegisteringWallet(true);
       const res = await fetch(getApiUrl('wallets/register'), {
@@ -916,18 +996,18 @@ useEffect(() => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ 
-          address: address.trim(), 
-          label: label || `Wallet ${address.slice(0, 6)}...${address.slice(-4)}` 
+        body: JSON.stringify({
+          address: address.trim(),
+          label: label || `Wallet ${address.slice(0, 6)}...${address.slice(-4)}`
         }),
       });
-      
+
       const data = await res.json();
       if (!res.ok) {
         showErrorModal(`⚠️ ${data.error || 'Failed to register wallet address.'}`);
         return false;
       }
-      
+
       showSuccessModal(`✅ Wallet address registered successfully! You can now use internal transfers.`);
       // Re-check if it's now an MC wallet
       const info = await checkIfFdaWallet(address.trim());
@@ -952,14 +1032,14 @@ useEffect(() => {
       showErrorModal('⚠️ Please login to create MC wallets.');
       return;
     }
-    
+
     try {
       setRegisteringWallet(true);
-      
+
       // Generate a new wallet
       const wallet = ethers.Wallet.createRandom();
       const address = wallet.address;
-      
+
       // Register it with the backend
       const res = await fetch(getApiUrl('wallets/register'), {
         method: 'POST',
@@ -967,18 +1047,18 @@ useEffect(() => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           address: address,
           label: newFdaWalletLabel.trim() || `MC Wallet ${address.slice(0, 6)}...${address.slice(-4)}`
         }),
       });
-      
+
       const data = await res.json();
       if (!res.ok) {
         showErrorModal(`⚠️ ${data.error || 'Failed to register new wallet.'}`);
         return;
       }
-      
+
       showSuccessModal(`✅ New MC wallet created and registered! Address: ${address}`);
       setNewFdaWalletAddress('');
       setNewFdaWalletLabel('');
@@ -992,16 +1072,16 @@ useEffect(() => {
   };
 
   useEffect(() => {
-      if (storedMeta?.address) {
-        fetchBalances(storedMeta.address);
-        if (auth) {
-          fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
-          // Register wallet address if not already registered
-          registerWalletAddress(storedMeta.address, storedMeta.label);
-          // Fetch P2P fee rate on login/load
-          fetchP2PFeeRate();
-        }
+    if (storedMeta?.address) {
+      fetchBalances(storedMeta.address);
+      if (auth) {
+        fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+        // Register wallet address if not already registered
+        registerWalletAddress(storedMeta.address, storedMeta.label);
+        // Fetch P2P fee rate on login/load
+        fetchP2PFeeRate();
       }
+    }
   }, [storedMeta?.address, auth]);
 
   useEffect(() => {
@@ -1040,7 +1120,7 @@ useEffect(() => {
       console.warn('⚠️ Cannot refresh profile: no auth token');
       return;
     }
-    
+
     try {
       const res = await fetch(getApiUrl('auth/profile'), {
         headers: {
@@ -1103,13 +1183,13 @@ useEffect(() => {
     if (offerAmount && offerPrice) {
       const amount = Number(offerAmount);
       const price = Number(offerPrice);
-      
+
       if (amount > 0 && price > 0) {
         // Min Limit = Price per FDA (minimum 1 FDA)
         const minLimit = price.toFixed(2);
         // Max Limit = Amount * Price (total value)
         const maxLimit = (amount * price).toFixed(2);
-        
+
         setOfferMinLimit(minLimit);
         setOfferMaxLimit(maxLimit);
       }
@@ -1183,7 +1263,7 @@ useEffect(() => {
     const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
     const raw = localStorage.getItem(userWalletsKey);
     const existingWallets = raw ? JSON.parse(raw) : [];
-    
+
     const newWallet = {
       meta: {
         id: walletId,
@@ -1194,7 +1274,7 @@ useEffect(() => {
       },
       encrypted: data,
     };
-    
+
     existingWallets.push(newWallet);
     localStorage.setItem(userWalletsKey, JSON.stringify(existingWallets));
     setActiveWalletId(walletId);
@@ -1224,7 +1304,7 @@ useEffect(() => {
       const wallet = walletFromMnemonicAndExtraWord(mnemonic12, extraWord, selectedNetwork);
       const walletAddress = wallet.address || (wallet as any).address;
       const walletPrivateKey = wallet.privateKey;
-      
+
       const encrypted = await encryptPrivateKey(
         walletPrivateKey,
         walletPassword,
@@ -1233,7 +1313,7 @@ useEffect(() => {
       );
       if (auth) {
         saveUserWallet(encrypted, walletAddress, walletLabel.trim() || undefined, selectedNetwork);
-        
+
         // Auto-register wallet with MC Wallet (with encrypted data)
         try {
           console.log('[Wallet Creation] 📤 Registering wallet with encrypted data...', {
@@ -1242,7 +1322,7 @@ useEffect(() => {
             encryptedKeys: encrypted ? Object.keys(encrypted) : [],
           });
           const registered = await registerWalletAddress(
-            walletAddress, 
+            walletAddress,
             walletLabel.trim() || undefined,
             encrypted, // Save encrypted wallet data to database
             selectedNetwork,
@@ -1260,23 +1340,23 @@ useEffect(() => {
           showErrorModal(`⚠️ Wallet created but failed to register: ${regErr.message || 'Please try registering manually.'}`);
           // Don't fail wallet creation if registration fails
         }
-        
+
         // Save encrypted phrase to database
         try {
           console.log('[Wallet Creation] Encrypting phrase for database storage...');
           const encryptedPhrase = await encryptPhrase(mnemonic12, extraWord.trim(), walletPassword);
           console.log('[Wallet Creation] Phrase encrypted, saving to database...');
-          
+
           // Create hash of phrase for uniqueness checking
           const phraseCombination = `${mnemonic12.trim().toLowerCase()}:${extraWord.trim().toLowerCase()}`;
           const phraseHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phraseCombination));
           const phraseHashHex = Array.from(new Uint8Array(phraseHash))
             .map(b => b.toString(16).padStart(2, '0'))
             .join('');
-          
+
           const savePhraseUrl = getApiUrl('wallets/save-phrase');
           console.log('[Wallet Creation] Saving phrase to:', savePhraseUrl);
-          
+
           const res = await fetch(savePhraseUrl, {
             method: 'POST',
             headers: {
@@ -1291,7 +1371,7 @@ useEffect(() => {
               label: walletLabel.trim() || undefined,
             }),
           });
-          
+
           // Check if response is JSON
           const contentType = res.headers.get('content-type');
           if (!contentType || !contentType.includes('application/json')) {
@@ -1322,7 +1402,7 @@ useEffect(() => {
       setExtraWord('');
       setWalletPassword('');
       setWalletLabel('');
-      
+
       // Show success message
       const phraseSaveStatus = auth ? 'Phrase saved to database.' : '';
       showSuccessModal(`✅ ${selectedNetwork} wallet created and stored in your browser (encrypted). ${phraseSaveStatus} Keep all 13 words and your password safe.`);
@@ -1338,13 +1418,13 @@ useEffect(() => {
       showErrorModal('⚠️ Import requires exactly 12 BIP-39 words.');
       return;
     }
-    
+
     // 13th word is ALWAYS required for all users
     if (!importExtraWord.trim()) {
       showErrorModal('⚠️ Enter your custom 13th word to proceed. The 13th word is always required.');
       return;
     }
-    
+
     // if (!walletPassword.trim()) {
     //   showErrorModal('⚠️ Please enter a wallet password.');
     //   return;
@@ -1365,7 +1445,7 @@ useEffect(() => {
             userId: auth.user.id,
           }),
         });
-        
+
         if (checkRes.ok) {
           const checkData = await checkRes.json();
           if (checkData.exists) {
@@ -1384,21 +1464,21 @@ useEffect(() => {
       const wallet = walletFromMnemonicAndExtraWord(importSeed.trim(), extraWordToUse, selectedNetwork);
       const walletAddress = wallet.address || (wallet as any).address;
       const walletPrivateKey = wallet.privateKey;
-      
+
       const encrypted = await encryptPrivateKey(
         walletPrivateKey,
         walletPassword,
         extraWordToUse,
         walletAddress,
       );
-      
+
       if (auth) {
         saveUserWallet(encrypted, walletAddress, importWalletLabel.trim() || undefined, selectedNetwork);
-        
+
         // Auto-register wallet with MC Wallet (with encrypted data)
         try {
           await registerWalletAddress(
-            walletAddress, 
+            walletAddress,
             importWalletLabel.trim() || undefined,
             encrypted, // Save encrypted wallet data to database
             selectedNetwork,
@@ -1409,18 +1489,18 @@ useEffect(() => {
           console.error('[Import Wallet] Failed to auto-register wallet:', regErr);
           // Don't fail import if registration fails
         }
-        
+
         // Save encrypted phrase to database
         try {
           const encryptedPhrase = await encryptPhrase(importSeed.trim(), extraWordToUse, walletPassword);
-          
+
           // Create hash of phrase for uniqueness checking
           const phraseCombination = `${importSeed.trim().toLowerCase()}:${extraWordToUse.trim().toLowerCase()}`;
           const phraseHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(phraseCombination));
           const phraseHashHex = Array.from(new Uint8Array(phraseHash))
             .map(b => b.toString(16).padStart(2, '0'))
             .join('');
-          
+
           await fetch(getApiUrl('wallets/save-phrase'), {
             method: 'POST',
             headers: {
@@ -1442,13 +1522,13 @@ useEffect(() => {
       } else {
         saveEncryptedWallet(encrypted, walletAddress, importWalletLabel.trim() || undefined, selectedNetwork);
       }
-      
+
       refreshWallets();
       setImportSeed('');
       setImportExtraWord('');
       setWalletPassword('');
       setImportWalletLabel('');
-      
+
       const regMessage = auth ? ' Wallet registered with MC Wallet.' : '';
       const phraseMessage = auth ? ' Phrase saved to database.' : '';
       showSuccessModal(`✅ ${selectedNetwork} wallet imported and stored in your browser (encrypted).${regMessage}${phraseMessage}`);
@@ -1474,14 +1554,14 @@ useEffect(() => {
 
     // Check if wallet exists in the list (from localStorage)
     let selectedWallet = allWallets.find(w => w.id === selectedUnlockWalletId);
-    
+
     // If not found in localStorage, check if it's a registered wallet from database
     // The selectedUnlockWalletId might be the wallet address for registered wallets
     if (!selectedWallet) {
       const registeredWallet = registeredFdaWallets.find(
         (w: any) => w.address?.toLowerCase() === selectedUnlockWalletId?.toLowerCase() ||
-        w.id?.toString() === selectedUnlockWalletId?.toString() ||
-        w.address?.toLowerCase() === selectedUnlockWalletId?.toLowerCase()
+          w.id?.toString() === selectedUnlockWalletId?.toString() ||
+          w.address?.toLowerCase() === selectedUnlockWalletId?.toLowerCase()
       );
       if (registeredWallet) {
         // Convert registered wallet to WalletMeta format for consistency
@@ -1494,20 +1574,20 @@ useEffect(() => {
         };
       }
     }
-    
+
     if (!selectedWallet && (allWallets.length > 0 || registeredFdaWallets.length > 0)) {
       showErrorModal('⚠️ Please select a wallet to unlock.');
       return;
     }
-    
+
     // If it's a registered wallet, also try to find encrypted data by address
     const walletAddress = selectedWallet?.address?.toLowerCase();
-    
+
     // Check if this wallet is registered in the database FIRST
     const isRegisteredWallet = registeredFdaWallets.some(
       (w: any) => w.address?.toLowerCase() === selectedWallet?.address?.toLowerCase()
     );
-    
+
     // PRIORITY: If registered wallet, ALWAYS try to restore from database FIRST (before checking local storage)
     if (selectedWallet && isRegisteredWallet) {
       if (!unlockExtraWord) {
@@ -1516,12 +1596,12 @@ useEffect(() => {
         );
         return;
       }
-      
+
       // First, check if encrypted_data exists in registered wallets (faster, no API call needed)
       let registeredWallet = registeredFdaWallets.find(
         (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
       );
-      
+
       console.log('[Unlock Wallet] 🔍 Checking registered wallet:', {
         walletAddress: selectedWallet.address,
         foundRegistered: !!registeredWallet,
@@ -1529,7 +1609,7 @@ useEffect(() => {
         encryptedDataType: registeredWallet?.encrypted_data ? typeof registeredWallet.encrypted_data : 'none',
         registeredWalletsCount: registeredFdaWallets.length,
       });
-      
+
       // If wallet is registered but has no encrypted_data, try to refresh from database
       if (registeredWallet && !registeredWallet.encrypted_data) {
         console.log('[Unlock Wallet] ⚠️ Wallet registered but no encrypted_data found, refreshing from database...');
@@ -1543,13 +1623,13 @@ useEffect(() => {
           hasEncryptedData: !!registeredWallet?.encrypted_data,
         });
       }
-      
+
       // If still no encrypted_data, try to get it from local storage and re-register
       if (registeredWallet && !registeredWallet.encrypted_data) {
         console.log('[Unlock Wallet] ⚠️ Still no encrypted_data, checking local storage...');
         const localWallets = getUserWallets();
         const localWallet = localWallets.find(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
-        
+
         if (localWallet && localWallet.encrypted) {
           console.log('[Unlock Wallet] ✅ Found encrypted data in local storage, re-registering wallet...');
           try {
@@ -1576,7 +1656,7 @@ useEffect(() => {
           console.log('[Unlock Wallet] ⚠️ No encrypted data found in local storage either');
         }
       }
-      
+
       if (registeredWallet?.encrypted_data) {
         // Try to use encrypted_data directly (no need for phrase)
         try {
@@ -1590,7 +1670,7 @@ useEffect(() => {
               encryptedData = null;
             }
           }
-          
+
           if (encryptedData && encryptedData.address) {
             // Decrypt and unlock directly
             const { decryptPrivateKey } = await import('./walletCrypto');
@@ -1600,7 +1680,7 @@ useEffect(() => {
               unlockExtraWord.trim(),
             );
             unlockedPrivateKeyRef.current = privateKey;
-            
+
             // Also restore to local storage if not already there
             const localWallets = getUserWallets();
             const hasLocal = localWallets.some(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
@@ -1615,7 +1695,7 @@ useEffect(() => {
               refreshWallets();
               setSelectedUnlockWalletId(walletId);
             }
-            
+
             showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
             setUnlockPassword('');
             setUnlockExtraWord('');
@@ -1626,20 +1706,20 @@ useEffect(() => {
           // Fall through to try phrase method
         }
       }
-      
+
       // If encrypted_data doesn't work, try to restore from phrase
       try {
         const phrasesRes = await fetch(getApiUrl('wallets/phrases'), {
           headers: { Authorization: `Bearer ${auth?.token}` },
         });
-        
+
         if (phrasesRes.ok) {
           const phrasesData = await phrasesRes.json();
           const savedPhrases = phrasesData.phrases || [];
           const savedPhrase = savedPhrases.find(
             (p: any) => p.wallet_address?.toLowerCase() === selectedWallet.address?.toLowerCase()
           );
-          
+
           if (savedPhrase) {
             // Try to decrypt the phrase and restore wallet
             try {
@@ -1647,24 +1727,24 @@ useEffect(() => {
               // Parse encrypted phrase from database
               let encryptedPhraseData;
               try {
-                encryptedPhraseData = typeof savedPhrase.encrypted_phrase === 'string' 
-                  ? JSON.parse(savedPhrase.encrypted_phrase) 
+                encryptedPhraseData = typeof savedPhrase.encrypted_phrase === 'string'
+                  ? JSON.parse(savedPhrase.encrypted_phrase)
                   : savedPhrase.encrypted_phrase;
               } catch {
                 encryptedPhraseData = savedPhrase.encrypted_phrase;
               }
-              
+
               const decrypted = await decryptPhrase(encryptedPhraseData, unlockPassword);
               const { mnemonic12, extraWord } = decrypted;
-              
+
               if (extraWord.trim() === unlockExtraWord.trim()) {
                 // Phrase matches! Restore the wallet locally
                 const { walletFromMnemonicAndExtraWord, encryptPrivateKey } = await import('./walletCrypto');
                 const { saveEncryptedWallet } = await import('./walletStorage');
-                
+
                 const wallet = walletFromMnemonicAndExtraWord(mnemonic12, extraWord, selectedWallet.network || 'BNB Chain');
                 const walletAddressFromPhrase = wallet.address || (wallet as any).address;
-                
+
                 if (walletAddressFromPhrase.toLowerCase() === selectedWallet.address.toLowerCase()) {
                   // Address matches! Restore wallet
                   const walletPrivateKey = wallet.privateKey;
@@ -1674,18 +1754,18 @@ useEffect(() => {
                     extraWord,
                     walletAddressFromPhrase,
                   );
-                  
+
                   const walletId = saveEncryptedWallet(
                     encrypted,
                     walletAddressFromPhrase,
                     selectedWallet.label || savedPhrase.label,
                     (selectedWallet.network || savedPhrase.network || 'BNB Chain') as any
                   );
-                  
+
                   // Refresh wallets and set as active
                   refreshWallets();
                   setSelectedUnlockWalletId(walletId);
-                  
+
                   // IMPORTANT: Save encrypted_data to database for future unlocks
                   try {
                     console.log('[Unlock Wallet] 💾 Saving encrypted_data to database after phrase unlock...');
@@ -1702,7 +1782,7 @@ useEffect(() => {
                     console.error('[Unlock Wallet] ⚠️ Failed to save encrypted_data to database:', saveErr);
                     // Don't fail unlock if save fails, but log it
                   }
-                  
+
                   // Now unlock the restored wallet
                   const restoredEncrypted = loadEncryptedWallet(walletId);
                   if (restoredEncrypted) {
@@ -1740,14 +1820,14 @@ useEffect(() => {
             const registeredWallet = registeredFdaWallets.find(
               (w: any) => w.address?.toLowerCase() === selectedWallet.address?.toLowerCase()
             );
-            
+
             if (registeredWallet?.encrypted_data) {
               // Try to use encrypted_data directly (no need for phrase)
               try {
                 const encryptedData = typeof registeredWallet.encrypted_data === 'string'
                   ? JSON.parse(registeredWallet.encrypted_data)
                   : registeredWallet.encrypted_data;
-                
+
                 if (encryptedData && encryptedData.address) {
                   // Decrypt and unlock directly
                   const { decryptPrivateKey } = await import('./walletCrypto');
@@ -1757,7 +1837,7 @@ useEffect(() => {
                     unlockExtraWord.trim(),
                   );
                   unlockedPrivateKeyRef.current = privateKey;
-                  
+
                   // Also restore to local storage if not already there
                   const localWallets = getUserWallets();
                   const hasLocal = localWallets.some(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
@@ -1771,7 +1851,7 @@ useEffect(() => {
                     );
                     refreshWallets();
                   }
-                  
+
                   showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
                   setUnlockPassword('');
                   setUnlockExtraWord('');
@@ -1783,8 +1863,8 @@ useEffect(() => {
                   ? 'Incorrect password. Please check your password and try again.'
                   : 'Failed to decrypt wallet. Please check your password and 13th word.';
                 showErrorModal(`⚠️ ${errorMsg}`);
-            setUnlockExtraWord('');
-        setUnlockPassword('');
+                setUnlockExtraWord('');
+                setUnlockPassword('');
                 return;
               }
             } else {
@@ -1829,7 +1909,7 @@ useEffect(() => {
         }
       }
     }
-    
+
     // Fallback to global storage if not found in user storage
     if (!encrypted) {
       encrypted = loadEncryptedWallet(selectedUnlockWalletId || undefined);
@@ -1842,7 +1922,7 @@ useEffect(() => {
         }
       }
     }
-    
+
     if (!encrypted) {
       // If we reach here and wallet is registered, restoration from database already failed above
       // Only show error for non-registered wallets or if restoration failed
@@ -1880,7 +1960,7 @@ useEffect(() => {
       );
       unlockedPrivateKeyRef.current = privateKey;
       showSuccessModal(`✅ Wallet unlocked in memory. Address: ${encrypted.address}`);
-      
+
       // Clear fields after successful unlock
       setUnlockPassword('');
       setUnlockExtraWord('');
@@ -1923,22 +2003,22 @@ useEffect(() => {
       showErrorModal('⚠️ Please login to add FDA tokens.');
       return;
     }
-    
+
     const amountNum = Number(addFdaAmount);
     if (!addFdaAmount || isNaN(amountNum) || amountNum <= 0) {
       showErrorModal('Please enter a valid amount greater than 0.');
       return;
     }
-    
+
     try {
       setAddingFdaBalance(true);
       setMessage(null); // Clear previous messages
-      
+
       if (!storedMeta?.address) {
         showErrorModal('⚠️ No wallet selected. Please select a wallet first.');
         return;
       }
-      
+
       const res = await fetch(getApiUrl('internal/add-balance'), {
         method: 'POST',
         headers: {
@@ -1950,7 +2030,7 @@ useEffect(() => {
           wallet_address: storedMeta.address,
         }),
       });
-      
+
       // Check if response is JSON
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
@@ -1961,16 +2041,16 @@ useEffect(() => {
         }
         return;
       }
-      
+
       const data = await res.json();
-      
+
       if (!res.ok) {
         const errorMsg = data.error || data.message || `Server error: ${res.status}`;
         console.error('Add balance error response:', data);
         showErrorModal(`❌ ${errorMsg}`);
         return;
       }
-      
+
       if (data.success) {
         showErrorModal(`✅ Added ${amountNum} FDA to your internal balance! New balance: ${data.balance.toFixed(2)} FDA`);
         setAddFdaAmount('');
@@ -1994,14 +2074,14 @@ useEffect(() => {
       showErrorModal('Please login to create offers.');
       return;
     }
-    
+
     // Require 13th word for creating offers
     if (!unlockedPrivateKeyRef.current) {
       showErrorModal('⚠️ Please unlock your wallet first. You need to enter your Custom 13th word to create offers.');
       setActiveTab('unlock');
       return;
     }
-    
+
     if (!offerAmount || Number(offerAmount) <= 0) {
       showErrorModal('Please enter a valid amount.');
       return;
@@ -2010,7 +2090,7 @@ useEffect(() => {
       showErrorModal('Please enter a valid price.');
       return;
     }
-    
+
     // Check for active payment methods if currency is INR
     if (offerFiatCurrency === 'INR') {
       try {
@@ -2039,7 +2119,7 @@ useEffect(() => {
         return;
       }
     }
-    
+
     // CRITICAL: Get the CURRENT offerType value - check it IMMEDIATELY
     // Check FDA balance only for SELL offers (BUY offers don't need balance upfront - you're buying, not selling)
     console.log('[FRONTEND] ========================================');
@@ -2052,7 +2132,7 @@ useEffect(() => {
     console.log('[FRONTEND] offerType === "buy":', offerType === 'buy');
     console.log('[FRONTEND] offerType === "sell":', offerType === 'sell');
     console.log('[FRONTEND] Creating offer - Amount:', offerAmount);
-    
+
     // Normalize offerType to uppercase for case-insensitive comparison
     // Use the current state value directly - no closure issues
     const currentOfferType = offerType;
@@ -2067,26 +2147,26 @@ useEffect(() => {
     // CRITICAL: Only check balance for SELL offers, NEVER for BUY offers
     // BUY offers: Buyer pays fiat, seller provides tokens - NO balance check needed
     // SELL offers: Seller needs tokens to sell - MUST check balance
-    
+
     // EXPLICITLY CHECK FOR BUY FIRST - If it's BUY (in any form), skip ALL balance checks immediately
     // Use multiple checks to ensure we catch BUY in all possible formats
-    const isBuy = normalizedOfferType === 'BUY' || 
-                  currentOfferType === 'BUY' || 
-                  String(currentOfferType).toUpperCase() === 'BUY' ||
-                  String(currentOfferType).toUpperCase().trim() === 'BUY';
-    
-    const isSell = normalizedOfferType === 'SELL' || 
-                   currentOfferType === 'SELL' || 
-                   String(currentOfferType).toUpperCase() === 'SELL' ||
-                   String(currentOfferType).toUpperCase().trim() === 'SELL';
-    
+    const isBuy = normalizedOfferType === 'BUY' ||
+      currentOfferType === 'BUY' ||
+      String(currentOfferType).toUpperCase() === 'BUY' ||
+      String(currentOfferType).toUpperCase().trim() === 'BUY';
+
+    const isSell = normalizedOfferType === 'SELL' ||
+      currentOfferType === 'SELL' ||
+      String(currentOfferType).toUpperCase() === 'SELL' ||
+      String(currentOfferType).toUpperCase().trim() === 'SELL';
+
     console.log('[FRONTEND] Detection results - isBuy:', isBuy, 'isSell:', isSell);
-    
+
     if (isBuy) {
       console.log('[FRONTEND] ✅✅✅ BUY OFFER DETECTED - SKIPPING ALL BALANCE CHECKS ✅✅✅');
       console.log('[FRONTEND] BUY offers do NOT require FDA balance - proceeding to create offer');
       // DO NOT CHECK BALANCE - Continue directly to creating the offer
-    } 
+    }
     // Only check balance for SELL offers - must be explicitly SELL
     else if (isSell) {
       console.log('[FRONTEND] ✅ This is a SELL offer, checking balance...');
@@ -2101,7 +2181,7 @@ useEffect(() => {
       showErrorModal(`⚠️ Invalid offer type: "${normalizedOfferType}". Must be BUY or SELL. Current state: "${currentOfferType}". Please select BUY or SELL from the dropdown.`);
       return;
     }
-    
+
     try {
       setCreatingOffer(true);
       // CRITICAL: Use the normalized type from above, not the raw state
@@ -2125,7 +2205,7 @@ useEffect(() => {
         setCreatingOffer(false);
         return;
       }
-      
+
       const res = await fetch(getApiUrl('offers'), {
         method: 'POST',
         headers: {
@@ -2144,13 +2224,13 @@ useEffect(() => {
           wallet_address: storedMeta.address, // Include wallet address for balance checks
         }),
       });
-      
+
       const data = await res.json();
       if (!res.ok) {
         showErrorModal(`⚠️ ${data.error || 'Failed to create offer.'}`);
         return;
       }
-      
+
       console.log('[FRONTEND] ========================================');
       console.log('[FRONTEND] ✅ OFFER CREATION RESPONSE RECEIVED');
       console.log('[FRONTEND] Response data:', data);
@@ -2158,7 +2238,7 @@ useEffect(() => {
       console.log('[FRONTEND] Type received in response:', data.type);
       console.log('[FRONTEND] Type match?', typeToSend === data.type);
       console.log('[FRONTEND] ========================================');
-      
+
       if (typeToSend !== data.type) {
         console.error('[FRONTEND] ❌ TYPE MISMATCH! Sent:', typeToSend, 'Received:', data.type);
         showErrorModal(`⚠️ Warning: Offer created but type mismatch detected. Sent: ${typeToSend}, Received: ${data.type}. Please check the offer in the list.`);
@@ -2211,33 +2291,33 @@ useEffect(() => {
     setAcceptAmount('');
     setShowAcceptModal(true);
   };
-  
+
   const closeAcceptModal = () => {
     setShowAcceptModal(false);
     setSelectedOffer(null);
     setAcceptAmount('');
   };
-  
+
   const acceptOffer = async () => {
     if (!auth || !selectedOffer) {
       closeAcceptModal(); // Close modal first
       showErrorModal('Please login to accept offers.');
       return;
     }
-    
+
     const amountNum = Number(acceptAmount);
     if (!acceptAmount || amountNum <= 0 || isNaN(amountNum)) {
       closeAcceptModal(); // Close modal first
       showErrorModal('❌ Please enter a valid amount greater than 0.');
       return;
     }
-    
+
     if (amountNum > selectedOffer.remaining) {
       closeAcceptModal(); // Close modal first
       showErrorModal(`❌ Amount cannot exceed available: ${selectedOffer.remaining} FDA`);
       return;
     }
-    
+
     // CRITICAL: Check FDA balance if accepting a BUY offer (user will be SELLER)
     // If accepting a SELL offer (user will be BUYER), no balance check needed (pays fiat)
     const offerType = (selectedOffer.type || selectedOffer.offer_type || 'SELL').toUpperCase();
@@ -2252,8 +2332,8 @@ useEffect(() => {
       console.log('[FRONTEND] ✅ Accepting SELL offer - user will be BUYER, no FDA balance check needed (pays fiat)');
       // No balance check needed - buyer pays fiat
     }
-    
-     setAcceptingOffer(selectedOffer.id);
+
+    setAcceptingOffer(selectedOffer.id);
     const activeAddress = getActiveWalletAddress();
 
     if (!activeAddress) {
@@ -2268,7 +2348,7 @@ useEffect(() => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({ offerId: selectedOffer.id, amount: amountNum,wallet_address: activeAddress }),
+        body: JSON.stringify({ offerId: selectedOffer.id, amount: amountNum, wallet_address: activeAddress }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2320,7 +2400,7 @@ useEffect(() => {
       setMarkingAsPaid(null);
     }
   };
-  
+
   const compressImage = (file: File, maxWidth: number = 1200, maxHeight: number = 1200, quality: number = 0.7): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -2437,7 +2517,7 @@ useEffect(() => {
   const cancelTrade = async (tradeId: number) => {
     if (!auth) return;
     if (!confirm('Are you sure you want to cancel this trade?')) return;
-    
+
     setCancellingTrade(tradeId);
     try {
       const res = await fetch(getApiUrl(`trades/${tradeId}/cancel`), {
@@ -2466,15 +2546,15 @@ useEffect(() => {
     setSelectedOfferToCancel(offer);
     setShowCancelOfferModal(true);
   };
-  
+
   const closeCancelOfferModal = () => {
     setShowCancelOfferModal(false);
     setSelectedOfferToCancel(null);
   };
-  
+
   const cancelOffer = async () => {
     if (!auth || !selectedOfferToCancel) return;
-    
+
     setCancellingOffer(selectedOfferToCancel.id);
     try {
       const res = await fetch(getApiUrl(`offers/${selectedOfferToCancel.id}/cancel`), {
@@ -2515,12 +2595,12 @@ useEffect(() => {
   const createDispute = async (reason: string) => {
     if (!auth || !selectedTradeToDispute) return;
     const tradeId = selectedTradeToDispute.id;
-    
+
     if (!reason || reason.trim() === '') {
       showErrorModal('❌ Dispute reason is required.');
       return;
     }
-    
+
     setDisputingTrade(tradeId);
     try {
       const res = await fetch(getApiUrl(`trades/${tradeId}/disputes`), {
@@ -2548,7 +2628,7 @@ useEffect(() => {
   };
 
   const estimateGasAndMax = async () => {
-      if (!unlockedPrivateKeyRef.current || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
+    if (!unlockedPrivateKeyRef.current || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
       setEstimatedGas(null);
       return;
     }
@@ -2617,7 +2697,7 @@ useEffect(() => {
         const gasPrice = await provider.getFeeData();
         const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
         const gasCostEth = parseFloat(ethers.formatEther(gasCost));
-        
+
         // Max sendable = balance - gas fees (with 10% buffer for safety)
         const maxSendable = Math.max(0, balanceEth - gasCostEth * 1.1);
         setSendAmount(maxSendable.toFixed(6));
@@ -2634,7 +2714,7 @@ useEffect(() => {
         const tokenBalance = await contract.balanceOf(wallet.address);
         const balanceFormatted = ethers.formatUnits(tokenBalance, decimals);
         setSendAmount(parseFloat(balanceFormatted).toFixed(4));
-        
+
         // Also estimate gas
         const testAmount = ethers.parseUnits('1', decimals);
         const gasEstimate = await contract.transfer.estimateGas(wallet.address, testAmount);
@@ -2651,7 +2731,7 @@ useEffect(() => {
   };
 
   const handleSend = async () => {
-    
+
     // Handle internal FDA transfers (zero fee)
     if (transferType === 'internal' && assetType === 'token' && tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()) {
       if (!auth) {
@@ -2670,27 +2750,27 @@ useEffect(() => {
         showErrorModal('⚠️ Amount must be greater than zero.');
         return;
       }
-      
+
       // Check if recipient is an MC wallet
       const recipientInfo = await checkIfFdaWallet(sendTo.trim());
       if (!recipientInfo) {
         showErrorModal('⚠️ Recipient address is not registered as an MC wallet. Click "Register This Address" above to enable zero-fee transfers, or use on-chain transfer instead.');
         return;
       }
-      
+
       // Check internal balance
       if (internalFdaBalance === null || internalFdaBalance < Number(sendAmount)) {
         showErrorModal(`⚠️ Insufficient internal FDA balance. You have ${internalFdaBalance || 0} FDA, but trying to send ${sendAmount}.`);
         return;
       }
-      
+
       try {
         // Processing message - no need to show modal for this
         if (!storedMeta?.address) {
           showErrorModal('⚠️ No wallet selected. Please select a wallet first.');
           return;
         }
-        
+
         const res = await fetch(getApiUrl('internal/transfer'), {
           method: 'POST',
           headers: {
@@ -2704,18 +2784,22 @@ useEffect(() => {
             note: `Internal transfer to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'}`,
           }),
         });
-        
+
         const data = await res.json();
         if (!res.ok) {
           showErrorModal(`⚠️ ${data.error || 'Failed to process internal transfer.'}`);
           return;
         }
-        
+
         showErrorModal(`✅ Internal transfer completed! ${sendAmount} tokens sent to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'} (Zero fee, instant)`);
         if (storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address);
         }
         setSendAmount('');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+
         return;
       } catch (err) {
         console.error(err);
@@ -2723,19 +2807,19 @@ useEffect(() => {
         return;
       }
     }
-    
+
     // On-chain transfers - use only unlocked local wallet (no MetaMask)
     if (!unlockedPrivateKeyRef.current) {
       showErrorModal('⚠️ Please unlock your wallet first before sending on-chain transactions.');
       return;
     }
-    
+
     // Use unlocked local wallet
     const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
     const tempWallet = new ethers.Wallet(unlockedPrivateKeyRef.current);
     const walletAddress = tempWallet.address;
     const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
-    
+
     if (!wallet || !walletAddress) {
       showErrorModal('⚠️ Failed to initialize wallet. Please try again.');
       return;
@@ -2762,7 +2846,7 @@ useEffect(() => {
         // For native transfers, need amount + gas fees
         const sendAmountWei = ethers.parseEther(sendAmount);
         const sendAmountEth = parseFloat(sendAmount);
-        
+
         // Estimate gas
         const gasEstimate = await provider.estimateGas({
           from: walletAddress,
@@ -2773,21 +2857,21 @@ useEffect(() => {
         const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
         const gasCostEth = parseFloat(ethers.formatEther(gasCost));
         const totalNeeded = sendAmountEth + gasCostEth;
-        
+
         if (balanceEth < totalNeeded) {
           showErrorModal(
             `⚠️ Insufficient BNB balance. You have ${balanceEth.toFixed(6)} BNB, but need ${totalNeeded.toFixed(6)} BNB (${sendAmountEth.toFixed(6)} + ~${gasCostEth.toFixed(6)} gas).`
           );
           return;
         }
-        
+
         const tx = await wallet.sendTransaction({
           to: sendTo.trim(),
           value: sendAmountWei,
           gasLimit: gasEstimate,
         });
         showSuccessModal(`✅ Native transfer sent! Tx hash: ${tx.hash}. Waiting for confirmation...`);
-        
+
         // Wait for confirmation
         const receipt = await tx.wait();
         if (receipt) {
@@ -2795,17 +2879,21 @@ useEffect(() => {
         } else {
           showSuccessModal(`✅ Transaction sent! Tx hash: ${tx.hash}`);
         }
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 2500);
       } else {
         // For token transfers, need BNB for gas only
         if (!tokenAddress.trim() || !ethers.isAddress(tokenAddress.trim())) {
           showErrorModal('⚠️ Valid token contract address is required.');
           return;
         }
-        
+
         const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, wallet);
         const decimals: number = await contract.decimals();
         const amountWei = ethers.parseUnits(sendAmount, decimals);
-        
+
         // Check token balance
         const tokenBalance = await contract.balanceOf(walletAddress);
         if (tokenBalance < amountWei) {
@@ -2813,23 +2901,23 @@ useEffect(() => {
           showErrorModal(`⚠️ Insufficient token balance. You have ${parseFloat(balanceFormatted).toFixed(4)} tokens, but trying to send ${sendAmount}.`);
           return;
         }
-        
+
         // Estimate gas for token transfer
         const gasEstimate = await contract.transfer.estimateGas(sendTo.trim(), amountWei);
         const gasPrice = await provider.getFeeData();
         const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
         const gasCostEth = parseFloat(ethers.formatEther(gasCost));
-        
+
         if (balanceEth < gasCostEth) {
           showErrorModal(
             `⚠️ Insufficient BNB for gas fees. You have ${balanceEth.toFixed(6)} BNB, but need ~${gasCostEth.toFixed(6)} BNB for gas.`
           );
           return;
         }
-        
+
         const tx = await contract.transfer(sendTo.trim(), amountWei);
         showSuccessModal(`✅ Token transfer sent! Tx hash: ${tx.hash}. Waiting for confirmation...`);
-        
+
         // Wait for confirmation
         const receipt = await tx.wait();
         if (receipt) {
@@ -2837,8 +2925,11 @@ useEffect(() => {
         } else {
           showSuccessModal(`✅ Transaction sent! Tx hash: ${tx.hash}`);
         }
+        setTimeout(() => {
+          window.location.reload();
+        }, 2500);
       }
-      
+
       // Refresh balances after successful transfer
       if (storedMeta?.address) {
         setTimeout(() => fetchBalances(storedMeta.address), 2000);
@@ -2889,7 +2980,7 @@ useEffect(() => {
       }
       setAdminTrades(tradesData);
       setAdminDisputes(disputesData);
-      
+
       // Load settings
       const settingsRes = await fetch(getApiUrl('admin/settings'), {
         headers: { Authorization: `Bearer ${auth.token}` },
@@ -2906,7 +2997,7 @@ useEffect(() => {
           // If not found in admin settings, fetch from public endpoint
           fetchP2PFeeRate();
         }
-        
+
         const holdingSetting = settingsData.find((s: any) => s.key === 'holding_fda_amount');
         if (holdingSetting) {
           console.log('✅ Found holding setting in admin data:', holdingSetting);
@@ -2943,7 +3034,7 @@ useEffect(() => {
 
   const updateFeeRate = async () => {
     if (!auth || !auth.user.isAdmin) return;
-    
+
     // Allow empty string to be treated as 0
     const feeRateValue = newFeeRate.trim() === '' ? '0' : newFeeRate;
     const feeRateNum = parseFloat(feeRateValue);
@@ -2951,7 +3042,7 @@ useEffect(() => {
       showErrorModal('❌ Fee rate must be a number between 0 and 100');
       return;
     }
-    
+
     // Ensure we send "0" as string, not empty
     const feeRateToSave = feeRateNum === 0 ? '0' : feeRateValue;
 
@@ -2989,26 +3080,26 @@ useEffect(() => {
 
   const updateHoldingFda = async () => {
     if (!auth || !auth.user.isAdmin) return;
-    
+
     // Validate the input: must be a valid decimal number with up to 18 decimal places
     const trimmedValue = newHoldingFda.trim();
     if (trimmedValue === '' || trimmedValue === '.') {
       showErrorModal('❌ Please enter a valid holding FDA amount');
       return;
     }
-    
+
     // Validate format: number with optional decimal and up to 18 decimal places
     if (!/^\d+(\.\d{0,18})?$/.test(trimmedValue)) {
       showErrorModal('❌ Invalid format. Please enter a number with up to 18 decimal places (e.g., 2.000250 or 0.000000000000000000)');
       return;
     }
-    
+
     const holdingNum = parseFloat(trimmedValue);
     if (isNaN(holdingNum) || holdingNum < 0) {
       showErrorModal('❌ Holding FDA amount must be a number >= 0');
       return;
     }
-    
+
     setUpdatingHoldingFda(true);
     try {
       const res = await fetch(getApiUrl('admin/settings/holding_fda_amount'), {
@@ -3055,12 +3146,12 @@ useEffect(() => {
     try {
       const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
       const tokenContract = new ethers.Contract(address.trim(), ERC20_ABI, provider);
-      
+
       const [name, symbol] = await Promise.all([
         tokenContract.name(),
         tokenContract.symbol(),
       ]);
-      
+
       setNewTokenName(name || '');
       setNewTokenSymbol(symbol || '');
       showSuccessModal(`✅ Token info fetched: ${name} (${symbol})`);
@@ -3081,13 +3172,13 @@ useEffect(() => {
   //     showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
   //     return;
   //   }
-    
+
   //   const token: CustomToken = {
   //     address: newTokenAddress.trim(),
   //     symbol: newTokenSymbol.trim().toUpperCase(),
   //     name: newTokenName.trim() || undefined,
   //   };
-    
+
   //   if (addCustomToken(token, auth?.user.id)) {
   //     setCustomTokens(loadCustomTokens(auth?.user.id));
   //     setNewTokenAddress('');
@@ -3106,158 +3197,153 @@ useEffect(() => {
   // };
 
 
-const handleAddCustomToken = async () => {
+  const handleAddCustomToken = async () => {
 
-  if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
-    showErrorModal('⚠️ Please enter a valid token contract address.');
-    return;
-  }
+    if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
+      showErrorModal('⚠️ Please enter a valid token contract address.');
+      return;
+    }
 
-  if (!newTokenSymbol.trim()) {
-    showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
-    return;
-  }
+    if (!newTokenSymbol.trim()) {
+      showErrorModal('⚠️ Please enter a token symbol or fetch token info first.');
+      return;
+    }
 
-  const token: CustomToken = {
-    address: newTokenAddress.trim(),
-    symbol: newTokenSymbol.trim().toUpperCase(),
-    name: newTokenName.trim() || undefined,
+    const token: CustomToken = {
+      address: newTokenAddress.trim(),
+      symbol: newTokenSymbol.trim().toUpperCase(),
+      name: newTokenName.trim() || undefined,
+    };
+
+    try {
+
+      const res = await fetch(
+        "https://merchantcoinwallet.com/api/customTokens",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.token}`
+          },
+          body: JSON.stringify({
+            contract_address: token.address,   // ✅ renamed
+            token_symbol: token.symbol,
+            token_name: token.name,
+            status: "ON"                       // ✅ enum instead of enabled
+          })
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to save token");
+      }
+
+      if (data.alreadyExists?.length) {
+
+        showErrorModal("⚠️ Token already added in custom wallets");
+
+        return;
+      }
+      // reload tokens from DB
+      await fetchCustomTokens();
+
+      setNewTokenAddress('');
+      setNewTokenSymbol('');
+      setNewTokenName('');
+
+      showSuccessModal(`✅ Token ${token.symbol} added successfully.`);
+
+      if (storedMeta?.address)
+        fetchBalances(storedMeta.address);
+      else if (checkAddress)
+        fetchBalances(checkAddress);
+
+    }
+    catch (err: any) {
+      showErrorModal(`⚠️ ${err.message}`);
+    }
+
   };
 
-  try {
+  useEffect(() => {
 
-    const res = await fetch(
-      "https://merchantcoinwallet.com/api/customTokens",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${auth.token}`
-        },
-        body: JSON.stringify({
-          contract_address: token.address,   // ✅ renamed
-          token_symbol: token.symbol,
-          token_name: token.name,
-          status: "ON"                       // ✅ enum instead of enabled
-        })
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to save token");
+    if (auth?.token) {
+      fetchCustomTokens();
     }
 
-    if (data.alreadyExists?.length) {
+  }, [auth]);
+  const fetchCustomTokens = async () => {
 
-  showErrorModal("⚠️ Token already added in custom wallets");
+    if (!auth?.token) return;
 
-  return;
-}
-    // reload tokens from DB
-    await fetchCustomTokens();
+    try {
 
-    setNewTokenAddress('');
-    setNewTokenSymbol('');
-    setNewTokenName('');
+      const res = await fetch(getApiUrl("customTokens"), {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${auth.token}`
+        }
+      });
 
-    showSuccessModal(`✅ Token ${token.symbol} added successfully.`);
+      const data = await res.json();
 
-    if (storedMeta?.address)
-      fetchBalances(storedMeta.address);
-    else if (checkAddress)
-      fetchBalances(checkAddress);
-
-  }
-  catch (err:any) {
-    showErrorModal(`⚠️ ${err.message}`);
-  }
-
-};
-
-useEffect(() => {
-
-  if (auth?.token) {
-    fetchCustomTokens();
-  }
-
-}, [auth]);
-const fetchCustomTokens = async () => {
-
-  if (!auth?.token) return;
-
-  try {
-
-    const res = await fetch(getApiUrl("customTokens"), {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${auth.token}`
+      if (!res.ok) {
+        throw new Error(data.error);
       }
-    });
 
-    const data = await res.json();
+      setCustomTokens(
+        data.tokens.map((t: any) => ({
+          address: t.address,
+          symbol: t.symbol,
+          name: t.name,
+          status: t.status,
+          enabled: t.status === "ON"
+        }))
+      );
 
-    if (!res.ok) {
-      throw new Error(data.error);
+    }
+    catch (err) {
+      console.error(err);
     }
 
-    setCustomTokens(
-      data.tokens.map((t:any)=>({
-        address: t.address,
-        symbol: t.symbol,
-        name: t.name,
-        enabled: t.status === "ON"   // ✅ convert enum → boolean
-      }))
-    );
-
-  }
-  catch(err){
-    console.error(err);
-  }
-
-};
+  };
 
 
-const handleToggleCustomToken = async (address: string) => {
+  const handleToggleCustomToken = async (address: string) => {
+    try {
 
-  try {
+      const token = customTokens.find(
+        t => t.address.toLowerCase() === address.toLowerCase()
+      );
 
-    const token = customTokens.find(
-      t => t.address.toLowerCase() === address.toLowerCase()
-    );
+      if (!token || token.status === "GLOBAL") return;
 
-    if (!token) return;
+      const newStatus = token.status === "ON" ? "OFF" : "ON";
 
-    const newStatus = token.enabled ? "OFF" : "ON";
+      const res = await fetch(
+        getApiUrl(`customTokens/${address}/status`),
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.token}`
+          },
+          body: JSON.stringify({ status: newStatus })
+        }
+      );
 
-    const res = await fetch(getApiUrl(
-      `customTokens/${address}/status`),
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${auth.token}`
-        },
-        body: JSON.stringify({
-          status: newStatus
-        })
-      }
-    );
+      const data = await res.json();
 
-    const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    if (!res.ok)
-      throw new Error(data.error);
+      await fetchCustomTokens();
 
-    await fetchCustomTokens();
-
-  }
-  catch(err:any){
-    showErrorModal(err.message);
-  }
-
-};
+    } catch (err: any) {
+      showErrorModal(err.message);
+    }
+  };
   const handleRemoveCustomToken = (address: string) => {
     if (removeCustomToken(address, auth?.user.id)) {
       setCustomTokens(loadCustomTokens(auth?.user.id));
@@ -3291,13 +3377,13 @@ const handleToggleCustomToken = async (address: string) => {
     // Find wallet to get address for FDA balance check
     const walletToDelete = allWallets.find(w => w.id === walletId);
     const walletAddress = walletToDelete?.address;
-    
+
     // Find database wallet ID from registered wallets (by address match)
-    const dbWallet = registeredFdaWallets.find((w: any) => 
+    const dbWallet = registeredFdaWallets.find((w: any) =>
       w.address?.toLowerCase() === walletAddress?.toLowerCase()
     );
     const dbWalletId = dbWallet?.id;
-    
+
     if (window.confirm('Are you sure you want to delete this wallet? This action cannot be undone. Make sure you have your seed phrase backed up!')) {
       // If authenticated and wallet exists in database, delete from database (which will check FDA balance)
       if (auth && dbWalletId) {
@@ -3309,7 +3395,7 @@ const handleToggleCustomToken = async (address: string) => {
               Authorization: `Bearer ${auth.token}`,
             },
           });
-          
+
           // Check if response is JSON
           const contentType = res.headers.get('content-type');
           if (!contentType || !contentType.includes('application/json')) {
@@ -3322,7 +3408,7 @@ const handleToggleCustomToken = async (address: string) => {
             }
             return;
           }
-          
+
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
             if (errorData.error?.includes('FDA balance')) {
@@ -3332,7 +3418,7 @@ const handleToggleCustomToken = async (address: string) => {
             showErrorModal(`⚠️ Failed to delete wallet: ${errorData.error || 'Unknown error'}`);
             return;
           }
-          
+
           const data = await res.json();
           // Successfully deleted from database
           console.log('[Delete Wallet] ✅ Wallet deleted from database:', data);
@@ -3346,7 +3432,7 @@ const handleToggleCustomToken = async (address: string) => {
           return;
         }
       }
-      
+
       // Delete from local storage
       if (auth) {
         const userWalletsKey = `fda_wallets_user_${auth.user.id}`;
@@ -3356,7 +3442,7 @@ const handleToggleCustomToken = async (address: string) => {
             const wallets = JSON.parse(raw);
             const filtered = wallets.filter((w: any) => w.meta.id !== walletId);
             localStorage.setItem(userWalletsKey, JSON.stringify(filtered));
-            
+
             // If we deleted the active wallet, switch to another
             if (getActiveWalletId() === walletId) {
               if (filtered.length > 0) {
@@ -3372,7 +3458,7 @@ const handleToggleCustomToken = async (address: string) => {
       } else {
         clearEncryptedWallet(walletId);
       }
-      
+
       refreshWallets();
       showSuccessModal('✅ Wallet deleted successfully');
       // Clear unlocked key if it was for the deleted wallet
@@ -3380,7 +3466,7 @@ const handleToggleCustomToken = async (address: string) => {
       // Refresh balances
       const userWallets = getUserWallets();
       const activeId = getActiveWalletId();
-      const newMeta = activeId 
+      const newMeta = activeId
         ? userWallets.find(w => w.id === activeId) || userWallets[0]
         : userWallets[0];
       if (newMeta?.address) {
@@ -3402,7 +3488,8 @@ const handleToggleCustomToken = async (address: string) => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(AUTH_KEY);
+    // localStorage.removeItem(AUTH_KEY);
+    localStorage.clear();
     navigate('/login');
   };
 
@@ -3414,15 +3501,15 @@ const handleToggleCustomToken = async (address: string) => {
     const paymentMethods = offer.paymentMethods || offer.payment_methods || '';
     const offerType = offer.type || '';
     const status = offer.status || 'OPEN';
-    
+
     // CRITICAL: Filter out offers with 0 remaining/available amount
     const remaining = parseFloat(offer.remaining || offer.available_amount || 0);
     if (remaining <= 0) {
       return false; // Don't show offers with 0 or negative available amount
     }
-    
+
     // Filter offers by type (BUY, SELL, or ALL)
-    const matchesSearch = !offersSearch || 
+    const matchesSearch = !offersSearch ||
       assetSymbol.toLowerCase().includes(offersSearch.toLowerCase()) ||
       fiatCurrency.toLowerCase().includes(offersSearch.toLowerCase()) ||
       paymentMethods.toLowerCase().includes(offersSearch.toLowerCase());
@@ -3444,16 +3531,121 @@ const handleToggleCustomToken = async (address: string) => {
     }
   };
 
+
+  /** Helper funtion to define the structure of the table  */
+
+    const getBestPrice = (data: any) => {
+    if (!data?.pairs?.length) return 0;
+
+    const stablePair = data.pairs.find(
+      (p: any) =>
+        p.quoteToken?.symbol === "USDT" ||
+        p.quoteToken?.symbol === "USDC"
+    );
+
+    if (stablePair?.priceUsd) {
+      return parseFloat(stablePair.priceUsd);
+    }
+
+    const sorted = [...data.pairs].sort(
+      (a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
+    );
+
+    if (sorted[0]?.priceUsd) {
+      return parseFloat(sorted[0].priceUsd);
+    }
+
+    return 0;
+  };
+  // Get the custom token in the mobile view 
+  useEffect(() => {
+    let interval: any;
+  
+    const fetchPrices = async () => {
+      const prices: Record<string, number> = {};
+  
+      for (const token of popularTokens) {
+        try {
+          const res = await fetch(
+            `https://api.dexscreener.com/latest/dex/tokens/${token.address}`
+          );
+  
+          const data = await res.json();
+          const price = getBestPrice(data);
+  
+          prices[token.address] = price;
+        } catch {
+          prices[token.address] = 0;
+        }
+      }
+  
+      setTokenPrices(prices);
+    };
+  
+    fetchPrices();
+  
+    //  refresh every 10 sec 
+    interval = setInterval(fetchPrices, 10000);
+  
+    return () => clearInterval(interval);
+  }, []);
+
+    const loadFdaPrice = async () => {
+    try {
+      const res = await fetch(getApiUrl("fdaPrice"));
+  
+      const data = await res.json();
+  
+      if (!res.ok) return;
+  
+      setFdaPrice(data.price);
+  
+    } catch (err) {
+      console.error("Failed to load FDA price:", err);
+    }
+  };
+  
+  useEffect(() =>{
+  loadFdaPrice()
+  },[])
+
+  const handleChangeTab = (tab: string) => {
+  setActiveTab(tab);
+
+  // optional: close sidebar on mobile
+  if (isMobile) {
+    setSidebarOpen(false);
+  }
+};
   return (
+    <>
     <div id="dashboard-root" className="min-h-screen bg-slate-950 text-slate-50">
       {/* Mobile Menu Toggle Button */}
-      <button
-        className="mobile-menu-toggle"
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label="Toggle menu"
-      >
-        {sidebarOpen ? '✕' : '☰'}
-      </button>
+     {isMobile && (
+       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'black', paddingBlock: 10, paddingInline: 20, position: 'sticky', top: 0, zIndex: 999, color: '#fff'}}>
+        <div style={{cursor: 'pointer'}}>
+          <span>Account 1</span>
+          <i className="fa-solid fa-chevron-down"></i>
+        </div>
+
+      
+         <div style={{display: 'flex', alignItems: 'center'}}>
+        <div style={{marginRight: 10, cursor: 'pointer'}} onClick={() => setShowWalletModal(true)}>
+          <i className="fa-regular fa-copy"></i>
+        </div>
+         <span
+         style={{cursor : 'pointer', paddingInline: 10, fontSize: 20}}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Toggle menu"
+        >
+          {sidebarOpen ? '✕' : '☰'}
+
+        </span>
+       </div>
+      
+
+      </div>
+     )}
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -3463,7 +3655,7 @@ const handleToggleCustomToken = async (address: string) => {
         />
       )}
 
-      <div id="dashboard-container" className="flex max-w-7xl mx-auto" style={{ alignItems: 'flex-start' }}>
+      <div id="dashboard-container" className="flex max-w-7xl mx-auto" style={{ alignItems: 'flex-start', paddingBottom: 60, display: isMobile ? 'flex': 'block' }}>
         {/* Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -3475,10 +3667,12 @@ const handleToggleCustomToken = async (address: string) => {
           onClose={() => setSidebarOpen(false)}
         />
 
-        {/* Main content */}
-        <main id="main-content" className="flex-1 main-container">
+       
+         {/* Main content */}
+        <main id="main-content" className="flex-1 main-container" style={{padding: isMobile ? '' : '2.5rem'}}>
           {/* Top Header with Profile and Balances */}
-          <TopHeader
+          {isMobile ? ('') : (
+            <TopHeader
             auth={auth}
             internalFdaBalance={internalFdaBalance}
             storedMeta={storedMeta}
@@ -3487,409 +3681,517 @@ const handleToggleCustomToken = async (address: string) => {
             onProfileClick={() => setActiveTab('profile')}
             onSwitchWallet={handleSwitchWallet}
           />
-          
-          <header id="main-header" className="main-header">
-            <div>
-              <h1 id="dashboard-title" className="main-title">MC Wallet Dashboard</h1>
-              <p id="dashboard-subtitle" className="main-subtitle">
-                Manage your MC wallet and P2P trades. Wallet is non-custodial and encrypted locally.
-              </p>
-            </div>
-          </header>
-
-          {/* Wallet Overview - Only show on Dashboard */}
-          {activeTab === 'dashboard' && (
-          <div id="wallet-overview-card" className="bg-card mb-6 card">
-            <div id="wallet-overview-header" className="card-header">
-              <p id="wallet-overview-title" className="card-title">Wallet overview</p>
-              {(storedMeta?.address || checkAddress) && (
-                <button
-                  id="refresh-balance-btn"
-                  className={`btn btn-yellow text-xs px-2 py-1 ${balanceLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  onClick={() => {
-                    const addr = checkAddress || storedMeta?.address;
-                    if (addr) fetchBalances(addr);
-                    if (auth && addr) {
-                      fetchInternalBalance(addr);
-                    }
-                  }}
-                  disabled={balanceLoading}
-                >
-                  {balanceLoading ? 'Loading...' : '🔄 Refresh'}
-                </button>
-              )}
-            </div>
-            <div id="wallet-address-input-group" className="form-group">
-              <input
-                id="wallet-address-input"
-                type="text"
-                className="form-input mb-3 text-sm py-2"
-                placeholder="Enter wallet address to check balance (e.g. 0x817C0B006b8B85d0807F48A1489b470C52A0DeB6)"
-                value={checkAddress}
-                onChange={(e) => setCheckAddress(e.target.value)}
-              />
-              <button
-                id="check-balance-btn"
-                className={`btn btn-yellow text-sm py-2 px-4 ${(!checkAddress || balanceLoading) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                onClick={() => {
-                  if (checkAddress && ethers.isAddress(checkAddress)) {
-                    fetchBalances(checkAddress);
-                  } else {
-                    showErrorModal('⚠️ Please enter a valid wallet address.');
-                  }
-                }}
-                disabled={balanceLoading || !checkAddress}
-              >
-                Check Balance
-              </button>
-              <p className="text-xs text-slate-400 mt-2">
-                💡 You can only check balance for your own wallets
-              </p>
-            </div>
-            {allWallets.length > 0 && (
-              <div id="wallet-selector-group" className="form-group">
-                <p className="text-xs text-slate-400 mb-2">Active Wallet ({allWallets.length} total)</p>
-                <select
-                  id="wallet-selector"
-                  className="form-select-dark"
-                  value={storedMeta?.id || ''}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleSwitchWallet(e.target.value);
-                    }
-                  }}
-                >
-                  {allWallets.map((wallet) => (
-                    <option key={wallet.id} value={wallet.id}>
-                      {wallet.label || `Wallet ${wallet.id.slice(-6)}`} - {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {storedMeta && (
-              <div id="active-wallet-display" className="flex items-center gap-2 mb-2">
-                <p className="text-xs text-slate-400">
-                  Active wallet:{' '}
-                </p>
-                <span className="font-mono text-xs text-slate-300 flex-1">
-                  {storedMeta.address}
-                </span>
-                <button
-                  className="copy-address-btn-small"
-                  onClick={() => {
-                    navigator.clipboard.writeText(storedMeta.address).then(() => {
-                      showSuccessModal('✅ Wallet address copied to clipboard!');
-                    });
-                  }}
-                  title="Copy wallet address"
-                >
-                  ⧉
-                </button>
-              </div>
-            )}
-            <DashboardView
-              auth={auth}
-              storedMeta={storedMeta}
-              checkAddress={checkAddress}
-              balanceLoading={balanceLoading}
-              nativeBalance={nativeBalance}
-              fdaBalance={fdaBalance}
-              internalFdaBalance={internalFdaBalance}
-              customTokens={customTokens}
-              customTokenBalances={customTokenBalances}
-              onSetActiveTab={setActiveTab}
-            />
-          </div>
           )}
 
-            {activeTab === 'create' && (
-              <CreateWallet
-                mnemonic12={mnemonic12}
-                extraWord={extraWord}
-                walletPassword={walletPassword}
-                walletLabel={walletLabel}
-                selectedNetwork={selectedNetwork}
-                onNetworkChange={setSelectedNetwork}
-                onGenerateSeed={handleGenerateSeed}
-                onExtraWordChange={setExtraWord}
-                onPasswordChange={setWalletPassword}
-                onLabelChange={setWalletLabel}
-                onSaveWallet={handleSaveNewWallet}
-              />
-            )}
+        
 
-            {activeTab === 'import' && (
-              <ImportWallet
-                importSeed={importSeed}
-                importExtraWord={importExtraWord}
-                walletPassword={walletPassword}
-                importWalletLabel={importWalletLabel}
-                selectedNetwork={selectedNetwork}
-                isRegistered={!!auth}
-                onNetworkChange={setSelectedNetwork}
-                onSeedChange={setImportSeed}
-                onExtraWordChange={setImportExtraWord}
-                onPasswordChange={setWalletPassword}
-                onLabelChange={setImportWalletLabel}
-                onImport={handleImportWallet}
-              />
-            )}
+          
+          
 
-            {activeTab === 'unlock' && (
-              <UnlockWallet
-                allWallets={allWallets}
-                registeredFdaWallets={registeredFdaWallets}
-                selectedWalletId={selectedUnlockWalletId}
-                unlockExtraWord={unlockExtraWord}
-                unlockPassword={unlockPassword}
-                onWalletChange={setSelectedUnlockWalletId}
-                onExtraWordChange={setUnlockExtraWord}
-                onPasswordChange={setUnlockPassword}
-                onUnlock={handleUnlock}
-              />
-            )}
-
-            {activeTab === 'send' && (
-              <SendTransfer
-                storedMeta={storedMeta}
-                allWallets={allWallets}
+          {isMobile && activeTab === 'dashboard' && (
+            <div style={{backgroundColor: 'black', width: '100%'}}>
+              <MobileDashboard
+              auth={auth}
+              price={fdaPrice}
+              change="0 (-0.01%)"
+              actions={[
+                { label: "Buy", icon: "fa-solid fa-dollar-sign", changeTab: () => handleChangeTab('p2p') },
+                { label: "Swap", icon: "fa-solid fa-arrows-rotate", changeTab: () => setShowSwapModal(true) },
+                { label: "Send", icon: "fa-solid fa-paper-plane", changeTab: () => handleChangeTab('send') },
+                { label: "Receive", icon: "fa-solid fa-arrow-down" },
+              ]}
+              tokens={popularTokens}
+              tokenPrices={tokenPrices}
+              nativeBalance={nativeBalance}
+              fdaBalance={fdaBalance}
+              allWallets={allWallets}
+              indiAction={() => setActiveTab('tokens')}
+              internalFdaBalance={internalFdaBalance}
+              setActiveTab={handleChangeTab}
+            />
+            </div>
+          )}
+          
+          {!isMobile &&  activeTab === 'dashboard' && (
+            <div id="wallet-overview-card" className="bg-card mb-6 card">
+              <div id="wallet-overview-header" className="card-header">
+                <p id="wallet-overview-title" className="card-title">Wallet overview</p>
+                {(storedMeta?.address || checkAddress) && (
+                  <button
+                    id="refresh-balance-btn"
+                    className={`btn btn-yellow text-xs px-2 py-1 ${balanceLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    onClick={() => {
+                      const addr = checkAddress || storedMeta?.address;
+                      if (addr) fetchBalances(addr);
+                      if (auth && addr) {
+                        fetchInternalBalance(addr);
+                      }
+                    }}
+                    disabled={balanceLoading}
+                  >
+                    {balanceLoading ? 'Loading...' : '🔄 Refresh'}
+                  </button>
+                )}
+              </div>
+              <div id="wallet-address-input-group" className="form-group">
+                <input
+                  id="wallet-address-input"
+                  type="text"
+                  className="form-input mb-3 text-sm py-2"
+                  placeholder="Enter wallet address to check balance (e.g. 0x817C0B006b8B85d0807F48A1489b470C52A0DeB6)"
+                  value={checkAddress}
+                  onChange={(e) => setCheckAddress(e.target.value)}
+                />
+                <button
+                  id="check-balance-btn"
+                  className={`btn btn-yellow text-sm py-2 px-4 ${(!checkAddress || balanceLoading) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  onClick={() => {
+                    if (checkAddress && ethers.isAddress(checkAddress)) {
+                      fetchBalances(checkAddress);
+                    } else {
+                      showErrorModal('⚠️ Please enter a valid wallet address.');
+                    }
+                  }}
+                  disabled={balanceLoading || !checkAddress}
+                >
+                  Check Balance
+                </button>
+                <p className="text-xs text-slate-400 mt-2">
+                  💡 You can only check balance for your own wallets
+                </p>
+              </div>
+              {allWallets.length > 0 && (
+                <div id="wallet-selector-group" className="form-group">
+                  <p className="text-xs text-slate-400 mb-2">Active Wallet ({allWallets.length} total)</p>
+                  <select
+                    id="wallet-selector"
+                    className="form-select-dark"
+                    value={storedMeta?.id || ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleSwitchWallet(e.target.value);
+                      }
+                    }}
+                  >
+                    {allWallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>
+                        {wallet.label || `Wallet ${wallet.id.slice(-6)}`} - {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {storedMeta && (
+                <div id="active-wallet-display" className="flex items-center gap-2 mb-2">
+                  <p className="text-xs text-slate-400">
+                    Active wallet:{' '}
+                  </p>
+                  <span className="font-mono text-xs text-slate-300 flex-1">
+                    {storedMeta.address}
+                  </span>
+                  <button
+                    className="copy-address-btn-small"
+                    onClick={() => {
+                      navigator.clipboard.writeText(storedMeta.address).then(() => {
+                        showSuccessModal('✅ Wallet address copied to clipboard!');
+                      });
+                    }}
+                    title="Copy wallet address"
+                  >
+                    ⧉
+                  </button>
+                </div>
+              )}
+              <DashboardView
                 auth={auth}
-                sendTo={sendTo}
-                setSendTo={setSendTo}
-                sendAmount={sendAmount}
-                setSendAmount={setSendAmount}
-                assetType={assetType}
-                setAssetType={setAssetType}
-                tokenAddress={tokenAddress}
-                setTokenAddress={setTokenAddress}
-                transferType={transferType}
-                setTransferType={setTransferType}
-                estimatedGas={estimatedGas}
-                estimatingGas={estimatingGas}
+                storedMeta={storedMeta}
+                checkAddress={checkAddress}
+                balanceLoading={balanceLoading}
                 nativeBalance={nativeBalance}
+                fdaBalance={fdaBalance}
                 internalFdaBalance={internalFdaBalance}
-                recipientFdaWallet={recipientFdaWallet}
-                unlockedPrivateKeyRef={unlockedPrivateKeyRef}
-                handleSend={handleSend}
-                handleMaxAmount={handleMaxAmount}
-                registerRecipientWallet={registerRecipientWallet}
-              />
-            )}
-
-            {activeTab === 'tokens' && (
-              <CustomTokens
-                newTokenAddress={newTokenAddress}
-                onAddressChange={setNewTokenAddress}
-                newTokenSymbol={newTokenSymbol}
-                onSymbolChange={setNewTokenSymbol}
-                newTokenName={newTokenName}
-                onNameChange={setNewTokenName}
-                tokenInfoLoading={tokenInfoLoading}
-                customTokenBalances={customTokenBalances}
-                onFetchTokenInfo={fetchTokenInfo}
-                onAddToken={handleAddCustomToken}
                 customTokens={customTokens}
-                onRemoveToken={handleRemoveCustomToken}
-                onToggleToken={handleToggleCustomToken}
-                isValidAddress={(address: string) => ethers.isAddress(address)}
+                customTokenBalances={customTokenBalances}
+                onSetActiveTab={setActiveTab}
               />
-            )}
+            </div>
+          )}
 
-            {activeTab === 'wallets' && (
-              <ManageWallets
-                allWallets={allWallets}
-                storedMeta={storedMeta}
-                editingWalletId={editingWalletId}
-                editWalletLabel={editWalletLabel}
-                onEditLabelChange={setEditWalletLabel}
-                onStartEdit={(walletId: string, currentLabel: string) => {
-                  setEditingWalletId(walletId);
-                  setEditWalletLabel(currentLabel);
-                }}
-                onCancelEdit={() => {
-                  setEditingWalletId(null);
-                  setEditWalletLabel('');
-                }}
-                onSaveEdit={handleRenameWallet}
-                onSwitchWallet={handleSwitchWallet}
-                onDeleteWallet={handleDeleteWallet}
-              />
-            )}
+          {activeTab === 'create' && (
+            <CreateWallet
+              mnemonic12={mnemonic12}
+              extraWord={extraWord}
+              walletPassword={walletPassword}
+              walletLabel={walletLabel}
+              selectedNetwork={selectedNetwork}
+              onNetworkChange={setSelectedNetwork}
+              onGenerateSeed={handleGenerateSeed}
+              onExtraWordChange={setExtraWord}
+              onPasswordChange={setWalletPassword}
+              onLabelChange={setWalletLabel}
+              onSaveWallet={handleSaveNewWallet}
+            />
+          )}
 
-            {activeTab === 'fdawallets' && (
-              <FDAWallets
-                auth={auth}
-                registeredFdaWallets={registeredFdaWallets}
-                allWallets={allWallets}
-                newFdaWalletAddress={newFdaWalletAddress}
-                setNewFdaWalletAddress={setNewFdaWalletAddress}
-                newFdaWalletLabel={newFdaWalletLabel}
-                setNewFdaWalletLabel={setNewFdaWalletLabel}
-                registeringWallet={registeringWallet}
-                handleCreateAndRegisterFdaWallet={handleCreateAndRegisterFdaWallet}
-                registerRecipientWallet={registerRecipientWallet}
-              />
-            )}
+          {activeTab === 'import' && (
+            <ImportWallet
+              importSeed={importSeed}
+              importExtraWord={importExtraWord}
+              walletPassword={walletPassword}
+              importWalletLabel={importWalletLabel}
+              selectedNetwork={selectedNetwork}
+              isRegistered={!!auth}
+              onNetworkChange={setSelectedNetwork}
+              onSeedChange={setImportSeed}
+              onExtraWordChange={setImportExtraWord}
+              onPasswordChange={setWalletPassword}
+              onLabelChange={setImportWalletLabel}
+              onImport={handleImportWallet}
+            />
+          )}
 
-            {activeTab === 'metamask' && (
-              <MetaMaskConnect
-                auth={auth}
-                storedMeta={storedMeta}
-                metamaskAddress={metamaskAddress}
-                metamaskConnected={metamaskConnected}
-                connectingMetaMask={connectingMetaMask}
-                fdaPrivateKey={fdaPrivateKey}
-                showPrivateKey={showPrivateKey}
-                registeringWallet={registeringWallet}
-                unlockedPrivateKeyRef={unlockedPrivateKeyRef}
-                setActiveTab={setActiveTab}
-                connectMetaMask={connectMetaMask}
-                registerMetaMaskAsFdaWallet={registerMetaMaskAsFdaWallet}
-                exportFdaWalletToMetaMask={exportFdaWalletToMetaMask}
-                metamaskAccounts={metamaskAccounts}
-                showMetamaskAccountSelector={showMetamaskAccountSelector}
-                setShowMetamaskAccountSelector={setShowMetamaskAccountSelector}
-                connectToMetamaskAccount={connectToMetamaskAccount}
-                getMetamaskAccounts={getMetamaskAccounts}
-              />
-            )}
+          {activeTab === 'unlock' && (
+            <UnlockWallet
+              allWallets={allWallets}
+              registeredFdaWallets={registeredFdaWallets}
+              selectedWalletId={selectedUnlockWalletId}
+              unlockExtraWord={unlockExtraWord}
+              unlockPassword={unlockPassword}
+              onWalletChange={setSelectedUnlockWalletId}
+              onExtraWordChange={setUnlockExtraWord}
+              onPasswordChange={setUnlockPassword}
+              onUnlock={handleUnlock}
+            />
+          )}
 
-            {activeTab === 'p2p' && (
-              <P2PTrading
-                auth={auth}
-                internalFdaBalance={internalFdaBalance}
-                internalFdaLocked={internalFdaLocked}
-                p2pFeeRate={p2pFeeRate}
-                addFdaAmount={addFdaAmount}
-                setAddFdaAmount={setAddFdaAmount}
-                addingFdaBalance={addingFdaBalance}
-                offerType={offerType}
-                setOfferType={setOfferType}
-                offerFiatCurrency={offerFiatCurrency}
-                setOfferFiatCurrency={setOfferFiatCurrency}
-                offerAmount={offerAmount}
-                setOfferAmount={setOfferAmount}
-                offerPrice={offerPrice}
-                setOfferPrice={setOfferPrice}
-                offerMinLimit={offerMinLimit}
-                setOfferMinLimit={setOfferMinLimit}
-                offerMaxLimit={offerMaxLimit}
-                setOfferMaxLimit={setOfferMaxLimit}
-                offerPaymentMethods={offerPaymentMethods}
-                setOfferPaymentMethods={setOfferPaymentMethods}
-                creatingOffer={creatingOffer}
-                myTrades={myTrades}
-                releasingTokens={releasingTokens}
-                disputingTrade={disputingTrade}
-                setSelectedTradeForPayment={setSelectedTradeForPayment}
-                setPaymentScreenshot={setPaymentScreenshot}
-                setShowPaymentModal={setShowPaymentModal}
-                handleAddFdaBalance={handleAddFdaBalance}
-                createOffer={createOffer}
-                loadMyTrades={loadMyTrades}
-                openReleaseConfirmModal={openReleaseConfirmModal}
-                openDisputeModal={openDisputeModal}
-              />
-            )}
+          {activeTab === 'send' && (
+            <SendTransfer
+              key={`send-${unlockedPrivateKeyRef.current ? "unlocked" : "locked"}`}
+              storedMeta={storedMeta}
+              allWallets={allWallets}
+              auth={auth}
+              sendTo={sendTo}
+              setSendTo={setSendTo}
+              sendAmount={sendAmount}
+              setSendAmount={setSendAmount}
+              assetType={assetType}
+              setAssetType={setAssetType}
+              tokenAddress={tokenAddress}
+              setTokenAddress={setTokenAddress}
+              transferType={transferType}
+              setTransferType={setTransferType}
+              estimatedGas={estimatedGas}
+              estimatingGas={estimatingGas}
+              nativeBalance={nativeBalance}
+              internalFdaBalance={internalFdaBalance}
+              recipientFdaWallet={recipientFdaWallet}
+              unlockedPrivateKeyRef={unlockedPrivateKeyRef}
+              handleSend={handleSend}
+              handleMaxAmount={handleMaxAmount}
+              registerRecipientWallet={registerRecipientWallet}
+              goto={() => setActiveTab('unlock')}
+            />
+          )}
 
-            {activeTab === 'trade-listing' && (
-              <TradeListing
-                auth={auth}
-                p2pFeeRate={p2pFeeRate}
-                filteredOffers={filteredOffers}
-                paginatedOffers={paginatedOffers}
-                totalPages={totalPages}
-                offersPage={offersPage}
-                setOffersPage={setOffersPage}
-                offersSearch={offersSearch}
-                setOffersSearch={setOffersSearch}
-                offersFilterType={offersFilterType}
-                setOffersFilterType={setOffersFilterType}
-                loadingOffers={loadingOffers}
-                loadingMyTrades={loadingMyTrades}
-                acceptingOffer={acceptingOffer}
-                cancellingOffer={cancellingOffer}
-                markingAsPaid={markingAsPaid}
-                cancellingTrade={cancellingTrade}
-                disputingTrade={disputingTrade}
-                releasingTokens={releasingTokens}
-                myTrades={myTrades}
-                setSelectedTradeForPayment={setSelectedTradeForPayment}
-                setPaymentScreenshot={setPaymentScreenshot}
-                setShowPaymentModal={setShowPaymentModal}
-                loadOffers={loadOffers}
-                loadMyTrades={loadMyTrades}
-                openAcceptModal={openAcceptModal}
-                openCancelOfferModal={openCancelOfferModal}
-                cancelTrade={cancelTrade}
-                openDisputeModal={openDisputeModal}
-                openReleaseConfirmModal={openReleaseConfirmModal}
-              />
-            )}
+          {activeTab === 'tokens' && (
+            <CustomTokens
+              newTokenAddress={newTokenAddress}
+              onAddressChange={setNewTokenAddress}
+              newTokenSymbol={newTokenSymbol}
+              onSymbolChange={setNewTokenSymbol}
+              newTokenName={newTokenName}
+              onNameChange={setNewTokenName}
+              tokenInfoLoading={tokenInfoLoading}
+              customTokenBalances={customTokenBalances}
+              onFetchTokenInfo={fetchTokenInfo}
+              onAddToken={handleAddCustomToken}
+              customTokens={customTokens}
+              onRemoveToken={handleRemoveCustomToken}
+              onToggleToken={handleToggleCustomToken}
+              isValidAddress={(address: string) => ethers.isAddress(address)}
+            />
+          )}
 
-            {activeTab === 'admin' && (
-              <AdminPanel
-                auth={auth}
-                p2pFeeRate={p2pFeeRate}
-                editingFeeRate={editingFeeRate}
-                newFeeRate={newFeeRate}
-                setNewFeeRate={setNewFeeRate}
-                updatingFeeRate={updatingFeeRate}
-                holdingFdaAmount={holdingFdaAmount}
-                editingHoldingFda={editingHoldingFda}
-                newHoldingFda={newHoldingFda}
-                setNewHoldingFda={setNewHoldingFda}
-                updatingHoldingFda={updatingHoldingFda}
-                adminTrades={adminTrades}
-                adminDisputes={adminDisputes}
-                setEditingFeeRate={setEditingFeeRate}
-                setEditingHoldingFda={setEditingHoldingFda}
-                updateFeeRate={updateFeeRate}
-                updateHoldingFda={updateHoldingFda}
-                loadAdminData={loadAdminData}
-              />
-            )}
+          {activeTab === 'wallets' && (
+            <ManageWallets
+              allWallets={allWallets}
+              storedMeta={storedMeta}
+              editingWalletId={editingWalletId}
+              editWalletLabel={editWalletLabel}
+              onEditLabelChange={setEditWalletLabel}
+              onStartEdit={(walletId: string, currentLabel: string) => {
+                setEditingWalletId(walletId);
+                setEditWalletLabel(currentLabel);
+              }}
+              onCancelEdit={() => {
+                setEditingWalletId(null);
+                setEditWalletLabel('');
+              }}
+              onSaveEdit={handleRenameWallet}
+              onSwitchWallet={handleSwitchWallet}
+              onDeleteWallet={handleDeleteWallet}
+            />
+          )}
 
-            {activeTab === 'disputes' && (
-              <DisputesPanel
-                auth={auth}
-                adminDisputes={adminDisputes}
-                loadAdminData={loadAdminData}
-              />
-            )}
+          {activeTab === 'fdawallets' && (
+            <FDAWallets
+              auth={auth}
+              registeredFdaWallets={registeredFdaWallets}
+              allWallets={allWallets}
+              newFdaWalletAddress={newFdaWalletAddress}
+              setNewFdaWalletAddress={setNewFdaWalletAddress}
+              newFdaWalletLabel={newFdaWalletLabel}
+              setNewFdaWalletLabel={setNewFdaWalletLabel}
+              registeringWallet={registeringWallet}
+              handleCreateAndRegisterFdaWallet={handleCreateAndRegisterFdaWallet}
+              registerRecipientWallet={registerRecipientWallet}
+            />
+          )}
 
-            {activeTab === 'history' && (
-              <TransactionHistory
-                auth={auth}
-                userWalletAddresses={userWalletAddresses}
-              />
-            )}
+          {activeTab === 'metamask' && (
+            <MetaMaskConnect
+              auth={auth}
+              storedMeta={storedMeta}
+              metamaskAddress={metamaskAddress}
+              metamaskConnected={metamaskConnected}
+              connectingMetaMask={connectingMetaMask}
+              fdaPrivateKey={fdaPrivateKey}
+              showPrivateKey={showPrivateKey}
+              registeringWallet={registeringWallet}
+              unlockedPrivateKeyRef={unlockedPrivateKeyRef}
+              setActiveTab={setActiveTab}
+              connectMetaMask={connectMetaMask}
+              registerMetaMaskAsFdaWallet={registerMetaMaskAsFdaWallet}
+              exportFdaWalletToMetaMask={exportFdaWalletToMetaMask}
+              metamaskAccounts={metamaskAccounts}
+              showMetamaskAccountSelector={showMetamaskAccountSelector}
+              setShowMetamaskAccountSelector={setShowMetamaskAccountSelector}
+              connectToMetamaskAccount={connectToMetamaskAccount}
+              getMetamaskAccounts={getMetamaskAccounts}
+            />
+          )}
 
-            {activeTab === 'profile' && (
-              <Profile
-                auth={auth}
-                onUpdateAuth={setAuth}
-                showErrorModal={showErrorModal}
-                showSuccessModal={showSuccessModal}
-              />
-            )}
+          {activeTab === 'p2p' && (
+            <P2PTrading
+              auth={auth}
+              internalFdaBalance={internalFdaBalance}
+              internalFdaLocked={internalFdaLocked}
+              p2pFeeRate={p2pFeeRate}
+              addFdaAmount={addFdaAmount}
+              setAddFdaAmount={setAddFdaAmount}
+              addingFdaBalance={addingFdaBalance}
+              offerType={offerType}
+              setOfferType={setOfferType}
+              offerFiatCurrency={offerFiatCurrency}
+              setOfferFiatCurrency={setOfferFiatCurrency}
+              offerAmount={offerAmount}
+              setOfferAmount={setOfferAmount}
+              offerPrice={offerPrice}
+              setOfferPrice={setOfferPrice}
+              offerMinLimit={offerMinLimit}
+              setOfferMinLimit={setOfferMinLimit}
+              offerMaxLimit={offerMaxLimit}
+              setOfferMaxLimit={setOfferMaxLimit}
+              offerPaymentMethods={offerPaymentMethods}
+              setOfferPaymentMethods={setOfferPaymentMethods}
+              creatingOffer={creatingOffer}
+              myTrades={myTrades}
+              releasingTokens={releasingTokens}
+              disputingTrade={disputingTrade}
+              setSelectedTradeForPayment={setSelectedTradeForPayment}
+              setPaymentScreenshot={setPaymentScreenshot}
+              setShowPaymentModal={setShowPaymentModal}
+              handleAddFdaBalance={handleAddFdaBalance}
+              createOffer={createOffer}
+              loadMyTrades={loadMyTrades}
+              openReleaseConfirmModal={openReleaseConfirmModal}
+              openDisputeModal={openDisputeModal}
+            />
+          )}
 
-            {activeTab === 'charts' && (
-              <TradingChart selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']} auth={auth} />
-            )}
+          {activeTab === 'trade-listing' && (
+            <TradeListing
+              auth={auth}
+              p2pFeeRate={p2pFeeRate}
+              filteredOffers={filteredOffers}
+              paginatedOffers={paginatedOffers}
+              totalPages={totalPages}
+              offersPage={offersPage}
+              setOffersPage={setOffersPage}
+              offersSearch={offersSearch}
+              setOffersSearch={setOffersSearch}
+              offersFilterType={offersFilterType}
+              setOffersFilterType={setOffersFilterType}
+              loadingOffers={loadingOffers}
+              loadingMyTrades={loadingMyTrades}
+              acceptingOffer={acceptingOffer}
+              cancellingOffer={cancellingOffer}
+              markingAsPaid={markingAsPaid}
+              cancellingTrade={cancellingTrade}
+              disputingTrade={disputingTrade}
+              releasingTokens={releasingTokens}
+              myTrades={myTrades}
+              setSelectedTradeForPayment={setSelectedTradeForPayment}
+              setPaymentScreenshot={setPaymentScreenshot}
+              setShowPaymentModal={setShowPaymentModal}
+              loadOffers={loadOffers}
+              loadMyTrades={loadMyTrades}
+              openAcceptModal={openAcceptModal}
+              openCancelOfferModal={openCancelOfferModal}
+              cancelTrade={cancelTrade}
+              openDisputeModal={openDisputeModal}
+              openReleaseConfirmModal={openReleaseConfirmModal}
+            />
+          )}
 
-            {activeTab === 'payment-methods' && (
-              <PaymentMethods auth={auth} />
-            )}
+          {activeTab === 'admin' && (
+            <AdminPanel
+              auth={auth}
+              p2pFeeRate={p2pFeeRate}
+              editingFeeRate={editingFeeRate}
+              newFeeRate={newFeeRate}
+              setNewFeeRate={setNewFeeRate}
+              updatingFeeRate={updatingFeeRate}
+              holdingFdaAmount={holdingFdaAmount}
+              editingHoldingFda={editingHoldingFda}
+              newHoldingFda={newHoldingFda}
+              setNewHoldingFda={setNewHoldingFda}
+              updatingHoldingFda={updatingHoldingFda}
+              adminTrades={adminTrades}
+              adminDisputes={adminDisputes}
+              setEditingFeeRate={setEditingFeeRate}
+              setEditingHoldingFda={setEditingHoldingFda}
+              updateFeeRate={updateFeeRate}
+              updateHoldingFda={updateHoldingFda}
+              loadAdminData={loadAdminData}
+              isValidAddress={(address: string) => ethers.isAddress(address)}
+              newTokenAddress={newTokenAddress}
+              newTokenSymbol={newTokenSymbol}
+              onAddressChange={setNewTokenAddress}
+              onFetchTokenInfo={fetchTokenInfo}
+              tokenInfoLoading={tokenInfoLoading}
+              newTokenName={newTokenName}
+            />
+          )}
 
-            {activeTab === 'view-phrases' && (
-              <ViewPhrases auth={auth} />
-            )}
+          {activeTab === 'disputes' && (
+            <DisputesPanel
+              auth={auth}
+              adminDisputes={adminDisputes}
+              loadAdminData={loadAdminData}
+            />
+          )}
 
-        </main>
+          {activeTab === 'history' && (
+            <TransactionHistory
+              auth={auth}
+              userWalletAddresses={userWalletAddresses}
+            />
+          )}
+
+          {activeTab === 'profile' && (
+            <Profile
+              auth={auth}
+              onUpdateAuth={setAuth}
+              showErrorModal={showErrorModal}
+              showSuccessModal={showSuccessModal}
+            />
+          )}
+
+          {activeTab === 'charts' && (
+            <TradingChart selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']} auth={auth} />
+          )}
+
+          {activeTab === 'payment-methods' && (
+            <PaymentMethods auth={auth} />
+          )}
+
+          {activeTab === 'view-phrases' && (
+            <ViewPhrases auth={auth} />
+          )}
+          
+        </main>       
+        
       </div>
 
+       {isMobile && (
+  <div
+    style={{
+      position: "fixed",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      background: "#020617",
+      borderTop: "1px solid #1e293b",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "10px 0",
+      zIndex: 9999,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    }}
+  >
+    {/* HOME */}
+    <TabItem
+      icon="fa-solid fa-house"
+      label="Home"
+      active={activeTab === "dashboard"}
+      onClick={() => setActiveTab("dashboard")}
+    />
+
+    {/* P2P */}
+    <TabItem
+      icon="fa-solid fa-arrows-left-right"
+      label="P2P"
+      active={activeTab === "p2p"}
+      onClick={() => setActiveTab("p2p")}
+    />
+
+
+    {/* CENTER FAB */}
+   <div  onClick={() => setActiveTab("create")} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#fff', cursor: 'pointer'}}>
+     <button
+      style={{
+        position: "absolute",
+        top: "-20px",
+        background: "#22c55e",
+        border: "none",
+        borderRadius: "50%",
+        width: "3rem",
+        height: "3rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "22px",
+        color: "#fff",
+        boxShadow: "0 6px 15px rgba(0,0,0,0.4)",
+        cursor: "pointer",
+      }}
+    >
+      <i className="fa-solid fa-plus"></i>
+    </button>
+      <span style={{marginTop: 12}}>Trade</span>
+   </div>
+
+
+    {/* UNLOCK */}
+    <TabItem
+      icon="fa-solid fa-unlock"
+      label="Unlock"
+      active={activeTab === "unlock"}
+      onClick={() => setActiveTab("unlock")}
+    />
+
+    {/* TOKENS */}
+    <TabItem
+      icon="fa-solid fa-coins"
+      label="Tokens"
+      active={activeTab === "tokens"}
+      onClick={() => setActiveTab("tokens")}
+    />
+  </div>
+)}
       {/* Error/Message Modal */}
       <MessageModal show={showMessageModal} message={message} onClose={closeMessageModal} />
 
@@ -4096,6 +4398,24 @@ const handleToggleCustomToken = async (address: string) => {
         </div>
       )}
     </div>
+    {/* Wallet Modal for Mobile view only */}
+    <WalletModal
+      isOpen={showWalletModal}
+      onClose={() => setShowWalletModal(false)}
+      wallets={allWallets}
+      onSwitchWallet={handleSwitchWallet}
+      storedMeta={storedMeta}
+    />
+    <SwapWalletModal
+    user={auth}
+      isOpen={showSwapModal}
+      onClose={() => setShowSwapModal(false)}
+      wallets={allWallets}
+      onSwitchWallet={handleSwitchWallet}
+      storedMeta={storedMeta}
+      internalFdaBalance={internalFdaBalance}
+    />
+    </>
   );
 }
 

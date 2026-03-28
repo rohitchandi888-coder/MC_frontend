@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { FDA_TOKEN_ADDRESS, ERC20_ABI, type AuthState } from "../types";
 import type { WalletMeta } from "../../../walletStorage";
@@ -26,6 +26,7 @@ interface SendTransferProps {
   handleSend: () => Promise<void>;
   handleMaxAmount: () => Promise<void>;
   registerRecipientWallet: (address: string, label?: string) => Promise<void>;
+  goto: () => void;
 }
 
 export const SendTransfer: React.FC<SendTransferProps> = ({
@@ -51,9 +52,50 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   handleSend,
   handleMaxAmount,
   registerRecipientWallet,
+  goto
 }) => {
+
+    const [isMobile, setIsMobile] = useState(false);
+  
+    useEffect(() => {
+      const checkScreen = () => {
+        setIsMobile(window.innerWidth <= 768);
+      };
+  
+      checkScreen();
+      window.addEventListener("resize", checkScreen);
+  
+      return () => window.removeEventListener("resize", checkScreen);
+    }, []);
+  if (!unlockedPrivateKeyRef.current) {
   return (
-    <div>
+    <>
+    <div className="warning-box" style={{marginBlock: 10, marginInline: 10}}>
+      <div className="warning-box-content">
+        <span className="warning-icon">🔒</span>
+        <p className="text-sm font-semibold warn-text" style={{ padding: "0.5rem 1rem" }}>
+          Wallet Locked
+        </p>
+      </div>
+
+      <p
+        className="text-xs waring-para"
+        style={{ padding: "0.5rem 1rem" }}
+      >
+        Please unlock your wallet first. You need to enter your
+        <strong> Custom 13th word</strong> to send transactions.
+      </p>
+    </div>
+    {isMobile && (
+      <div style={{width: '100%'}}>
+      <button onClick={() => goto()} style={{width: '100%',fontSize: 14, fontWeight: 600}}>Unlock Wallet</button>
+    </div>
+    )}
+    </>
+  );
+}
+  return (
+    <div >
       <p
         className="text-sm text-slate-300 mb-2"
         style={{ padding: "0.5rem 1rem", lineHeight: "1.6" }}

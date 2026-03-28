@@ -4,9 +4,11 @@ export type AuthState = {
   token: string;
   user: {
     id: number;
+    fdaUserId: string | null;
     email: string | null;
     phone: string | null;
     isAdmin: boolean;
+
   };
 };
 

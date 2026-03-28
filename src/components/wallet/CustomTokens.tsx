@@ -19,17 +19,6 @@ interface CustomTokensProps {
   isValidAddress: (address: string) => boolean;
 }
 
-const staticTokens = [
-  { address: "0x0555e30da8f98308edb960aa94c0db47230d2b9c", symbol: "WBTC", name: "Wrapped BTC" },
-  { address: "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47", symbol: "ADA", name: "Cardano Token" },
-  { address: "0xce7de646e7208a4ef112cb6ed5038fa6cc6b12e3", symbol: "TRX", name: "TRON" },
-  { address: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c", symbol: "WBNB", name: "Wrapped BNB" },
-  { address: "0x3e14602186dd9de538f729547b3918d24c823546", symbol: "BNB", name: "Thunder Wrapped BNB" },
-  { address: "0xb46d67fb63770052a07d5b7c14ed858a8c90f825", symbol: "ANYUSDT", name: "USDT-ERC20" },
-  { address: "0x2170ed0880ac9a755fd29b2688956bd959f933f8", symbol: "ETH", name: "Ethereum Token" },
-  { address: "0x6f817a0ce8f7640add3bc0c1c2298635043c2423", symbol: "ANYETH", name: "ANY Ethereum" },
-  { address: "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe", symbol: "XRP", name: "XRP Token" }
-];
 
 export const CustomTokens: React.FC<CustomTokensProps> = ({
   customTokens,
@@ -48,7 +37,8 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   isValidAddress,
 }) => {
 
-  const allTokens = [...staticTokens, ...customTokens];
+ const allTokens = customTokens ?? [];
+ 
   const columns = [
     {
       name: "Token",
@@ -84,19 +74,17 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   name: "Status",
   cell: (row: any) => {
 
-    const isStatic = staticTokens.some(
-      (token) => token.address === row.address
-    );
+    const status = (row.status || "").toUpperCase();
+    const isGlobal = status === "GLOBAL";
+    const isEnabled = status === "ON";
 
-    if (isStatic) {
+    if (isGlobal) {
       return (
         <span style={{ fontSize: "12px", color: "#888" }}>
           GLOBAL
         </span>
       );
     }
-
-    const isEnabled = row.enabled !== false;
 
     return (
       <button
@@ -169,7 +157,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
         </button>
       </div>
 
-      {[...staticTokens, ...customTokens].length > 0 && (
+      {allTokens.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-slate-300 mb-2">Your Custom Tokens</p>
           <div className="token-list-metamask">

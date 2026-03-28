@@ -14,6 +14,14 @@ import {
 } from 'lightweight-charts';
 import { getApiUrl } from '../../config';
 
+
+const currencyRatesToUSD: Record<string, number> = {
+  USD: 1,
+  INR: 1 / 94.54,
+  EUR: 1.08,
+};
+
+const USD_TO_INR = 94.54;
 interface OHLCData {
   time: string;
   open: number;
@@ -43,7 +51,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  // const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const candlestickSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
   // Coin names mapping - defined early for use in search
@@ -96,8 +105,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
   useEffect(() => {
     fetchLivePrices();
     // Refresh prices every 1 second for live updates
-    const priceInterval = setInterval(fetchLivePrices, 1000);
-    return () => clearInterval(priceInterval);
+    // const priceInterval = setInterval(fetchLivePrices, 1000);
+    // return () => clearInterval(priceInterval);
   }, []);
 
   // Generate realistic OHLC data with volume
@@ -140,7 +149,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
     const basePrices: Record<string, number> = {
       BTC: livePrices.BTC?.price || 82969.41, // Current Bitcoin price fallback
       ETH: livePrices.ETH?.price || 3500, // Current Ethereum price fallback
-      FDA: 2800, // FDA token starts at 2800 INR
+      FDA: 3600, // FDA token starts at 2800 INR
       JIO: 0.02,
     };
 
@@ -394,172 +403,164 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
     }
   }, []);
 
-  // Update chart data
-  useEffect(() => {
-    if (!chartRef.current || !chartContainerRef.current) {
-      console.log('Chart not ready:', {
-        hasChart: !!chartRef.current,
-        hasContainer: !!chartContainerRef.current
-      });
-      return;
-    }
+// Update chart data
+useEffect(() => {
 
-    // Check if chart exists and log all available methods
-    const chart = chartRef.current;
-    if (!chart) {
-      console.log('Chart is null');
-      return;
-    }
+  if (!chartRef.current || !chartContainerRef.current) {
+    console.log('Chart not ready');
+    return;
+  }
 
-    // Log ALL methods to see what's available
-    const chartProto = Object.getPrototypeOf(chart);
-    const allMethods = Object.getOwnPropertyNames(chartProto);
-    console.log('🔍 ALL Chart Methods:', allMethods);
-    console.log('🔍 Chart instance properties:', Object.keys(chart));
-    
-    // Check for any method that might add series
-    const hasAddCandlestick = typeof chart.addCandlestickSeries === 'function';
-    const hasAddSeries = typeof (chart as any).addSeries === 'function';
-    const hasAddLine = typeof (chart as any).addLineSeries === 'function';
-    
-    console.log('🔍 Method checks:', {
-      hasAddCandlestickSeries: hasAddCandlestick,
-      hasAddSeries: hasAddSeries,
-      hasAddLineSeries: hasAddLine
-    });
+  const chart = chartRef.current;
 
-    // Don't return early - let's try to use what's available
+  const data = ohlcData[selectedCoin] || [];
 
-    const data = ohlcData[selectedCoin] || [];
-    if (data.length === 0) {
-      console.log('No data for', selectedCoin, '- waiting for data to load...');
-      // Clear existing series if no data
-      try {
-        if (candlestickSeriesRef.current && chartRef.current) {
-          chartRef.current.removeSeries(candlestickSeriesRef.current);
-          candlestickSeriesRef.current = null;
-        }
-      } catch (error) {
-        console.error('Error clearing series:', error);
-      }
-      return;
-    }
+  if (data.length === 0) {
 
-    console.log('📊 Updating chart with', data.length, 'data points for', selectedCoin);
-    console.log('📊 Sample data:', data.slice(0, 3));
+    console.log('No data for', selectedCoin);
 
-    // Remove existing series
     try {
+
       if (candlestickSeriesRef.current) {
-        chartRef.current.removeSeries(candlestickSeriesRef.current);
+        chart.removeSeries(candlestickSeriesRef.current);
         candlestickSeriesRef.current = null;
       }
+
       if (volumeSeriesRef.current) {
-        chartRef.current.removeSeries(volumeSeriesRef.current);
+        chart.removeSeries(volumeSeriesRef.current);
         volumeSeriesRef.current = null;
       }
+
     } catch (error) {
-      console.error('Error removing series:', error);
+      console.error('Series cleanup error', error);
     }
 
-    // Format data for lightweight-charts - ensure sorted by time (ascending)
-    const sortedData = [...data].sort((a, b) => {
-      const timeA = new Date(a.time).getTime();
-      const timeB = new Date(b.time).getTime();
-      return timeA - timeB;
-    });
-    
-    const formattedData = sortedData.map(item => {
-      const date = new Date(item.time);
-      const timestamp = Math.floor(date.getTime() / 1000) as Time;
-      return {
-        time: timestamp,
-        open: item.open,
-        high: item.high,
-        low: item.low,
-        close: item.close,
-      };
-    });
-    
-    // Final validation: ensure data is in ascending order
-    for (let i = 1; i < formattedData.length; i++) {
-      if (formattedData[i].time < formattedData[i - 1].time) {
-        console.warn('Data not properly sorted, re-sorting...', {
-          index: i,
-          current: formattedData[i].time,
-          previous: formattedData[i - 1].time
-        });
-        formattedData.sort((a, b) => a.time - b.time);
-        break;
-      }
+    return;
+  }
+
+  console.log("Updating chart with", data.length, "points");
+
+  // remove old series
+  try {
+
+    if (candlestickSeriesRef.current) {
+      chart.removeSeries(candlestickSeriesRef.current);
+      candlestickSeriesRef.current = null;
     }
-    
-    console.log('Formatted data (first 3):', formattedData.slice(0, 3).map(d => ({ time: d.time, close: d.close })));
 
-    const volumeData = data.map(item => {
-      const date = new Date(item.time);
-      return {
-        time: Math.floor(date.getTime() / 1000) as Time,
-        value: item.volume || 0,
-        color: item.close >= item.open ? 'rgba(0, 150, 136, 0.5)' : 'rgba(255, 82, 82, 0.5)',
-      };
+    if (volumeSeriesRef.current) {
+      chart.removeSeries(volumeSeriesRef.current);
+      volumeSeriesRef.current = null;
+    }
+
+  } catch (error) {
+    console.error("removeSeries error", error);
+  }
+
+  // sort data by time
+  const sortedData = [...data].sort((a, b) =>
+    new Date(a.time).getTime() - new Date(b.time).getTime()
+  );
+
+  // format candles
+  const formattedData = sortedData.map(item => {
+
+    const date = new Date(item.time);
+
+    return {
+      time: Math.floor(date.getTime() / 1000),
+      open: item.open,
+      high: item.high,
+      low: item.low,
+      close: item.close,
+    };
+
+  });
+
+  // volume data
+  const volumeData = sortedData.map(item => {
+
+    const date = new Date(item.time);
+
+    return {
+
+      time: Math.floor(date.getTime() / 1000),
+
+      value: item.volume || 0,
+
+      color:
+        item.close >= item.open
+          ? 'rgba(0, 212, 170, 0.5)'
+          : 'rgba(255, 73, 118, 0.5)',
+
+    };
+
+  });
+
+  try {
+
+    // add candlestick series
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+
+      upColor: '#00d4aa',
+      downColor: '#ff4976',
+
+      borderVisible: false,
+
+      wickUpColor: '#00d4aa',
+      wickDownColor: '#ff4976',
+
+      priceFormat: {
+        type: 'price',
+        precision: 2,
+        minMove: 0.01,
+      },
+
     });
 
-    // Add candlestick series using the correct API: chart.addSeries(CandlestickSeries, options)
-    try {
-      const chart = chartRef.current;
-      if (!chart) {
-        console.error('Chart is null');
-        return;
-      }
+    candleSeries.setData(formattedData);
 
-      console.log('🔄 Adding candlestick series using addSeries(CandlestickSeries)...');
-      console.log('📊 Formatted data sample:', formattedData.slice(0, 3));
-      
-      const candlestickSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#00d4aa',
-        downColor: '#ff4976',
-        borderVisible: false,
-        wickUpColor: '#00d4aa',
-        wickDownColor: '#ff4976',
-        priceFormat: {
-          type: 'price',
-          precision: 6,
-          minMove: 0.000001,
-        },
-      });
-      
-      console.log('✅ Candlestick series created!', candlestickSeries);
-      
-      if (candlestickSeries && typeof candlestickSeries.setData === 'function') {
-        candlestickSeries.setData(formattedData);
-        candlestickSeriesRef.current = candlestickSeries;
-        console.log('✅ Candlestick series data set successfully with', formattedData.length, 'points');
-        
-        // Force chart update
-        if (chart.timeScale) {
-          chart.timeScale().fitContent();
-          console.log('✅ Chart timeScale fitContent called');
-        }
-        
-        // Force resize to ensure chart is visible
-        setTimeout(() => {
-          if (chartContainerRef.current && chart) {
-            chart.applyOptions({
-              width: chartContainerRef.current.clientWidth,
-              height: 600,
-            });
-            console.log('✅ Chart resized to:', chartContainerRef.current.clientWidth, 'x 600');
-          }
-        }, 100);
-      } else {
-        console.error('❌ Candlestick series created but setData is not available', candlestickSeries);
-      }
-    } catch (error) {
-      console.error('Error adding series to chart:', error);
-      console.error('Error details:', error);
-    }
-  }, [selectedCoin, ohlcData]);
+    candlestickSeriesRef.current = candleSeries;
+
+    console.log("Candles added", formattedData.length);
+
+
+    // add volume bars
+   const volumeSeries = chart.addHistogramSeries({
+
+      color: '#26a69a',
+
+      priceFormat: {
+        type: 'volume',
+      },
+
+      priceScaleId: '',
+
+      scaleMargins: {
+        top: 0.8,
+        bottom: 0,
+      },
+
+    });
+
+    volumeSeries.setData(volumeData);
+
+    volumeSeriesRef.current = volumeSeries;
+
+    console.log("Volume bars added", volumeData.length);
+
+
+    // auto fit chart
+    chart.timeScale().fitContent();
+
+
+  } catch (error) {
+
+    // console.error("Chart rendering error", error);
+
+  }
+
+}, [selectedCoin, ohlcData]);
 
   // Fetch P2P trades data for FDA and convert to OHLC
   const fetchP2PTradesData = async (): Promise<OHLCData[]> => {
@@ -584,14 +585,14 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
       
       // Filter only FDA trades and completed trades
       const fdaTrades = trades.filter((t: any) => 
-        (t.asset_symbol === 'FDA' || !t.asset_symbol) && 
-        t.status === 'COMPLETED'
+        t.asset_symbol === 'FDA' &&
+        ['COMPLETED', 'PAID_PENDING_RELEASE', 'PENDING_PAYMENT'].includes(t.status)
       );
 
-      if (fdaTrades.length === 0) {
-        console.warn('No FDA trades found, using mock data');
-        return generateOHLCData('FDA', timeframe);
-      }
+     if (fdaTrades.length === 0) {
+      console.warn('No trades found → using mock data');
+      return generateOHLCData('FDA', timeframe);
+    }
 
       // Group trades by timeframe intervals
       const intervalMs = {
@@ -621,11 +622,22 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
           grouped[key] = { prices: [], volumes: [] };
         }
         
-        const price = parseFloat(trade.price) || 0;
+        // const price = parseFloat(trade.price) || 0;
+        // convert trade price → USD
+        let priceUSD =
+          parseFloat(trade.price) *
+          (currencyRatesToUSD[trade.fiat_currency] || 1);
+
+        // convert USD → INR
+        let priceINR = priceUSD * USD_TO_INR;
+
+        // FDA price floor
+        priceINR = Math.max(priceINR, 3600);
         const amount = parseFloat(trade.amount) || 0;
         
-        if (price > 0) {
-          grouped[key].prices.push(price);
+        if (priceINR > 0) {
+          grouped[key].prices.push(priceINR);
+          // grouped[key].prices.push(price);
           grouped[key].volumes.push(amount);
         }
       });
@@ -645,10 +657,13 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
 
           return {
             time: key.slice(0, 19).replace('T', ' '),
-            open: Number(open.toFixed(6)),
-            high: Number(high.toFixed(6)),
-            low: Number(low.toFixed(6)),
-            close: Number(close.toFixed(6)),
+            
+            open: Number(open.toFixed(2)),
+            high: Number(high.toFixed(2)),
+            low: Number(low.toFixed(2)),
+            close: Number(close.toFixed(2)),
+
+
             volume: Number(volume.toFixed(2)),
           };
         })
@@ -663,27 +678,27 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
         // Ensure the last price in mock data is exactly 2800
         if (mockData.length > 0) {
           const lastPoint = mockData[mockData.length - 1];
-          lastPoint.close = 2800;
-          lastPoint.high = Math.max(lastPoint.high, 2800);
-          lastPoint.low = Math.min(lastPoint.low, 2800);
+          lastPoint.close = 3600;
+          lastPoint.high = Math.max(lastPoint.high, 3600);
+          lastPoint.low = Math.min(lastPoint.low, 3600);
         }
         // Ensure mock data is also sorted
         const combined = [...ohlc, ...mockData.slice(ohlc.length)].slice(0, 100);
         combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        // Ensure the very last point closes at 2800
+        // Ensure the very last point closes at 3600
         if (combined.length > 0) {
           const lastCombined = combined[combined.length - 1];
-          lastCombined.close = 2800;
+          lastCombined.close = 3600;
         }
         return combined;
       }
       
-      // Ensure the last price in real trade data is also normalized if it's close to 2800
+      // Ensure the last price in real trade data is also normalized if it's close to 3600
       if (ohlc.length > 0) {
         const lastPoint = ohlc[ohlc.length - 1];
-        // If the last price is very close to 2800 (within 50), normalize it to 2800 for consistency
-        if (Math.abs(lastPoint.close - 2800) < 50) {
-          lastPoint.close = 2800;
+        // If the last price is very close to 3600 (within 50), normalize it to 3600 for consistency
+        if (Math.abs(lastPoint.close - 3600) < 50) {
+          lastPoint.close = 3600;
         }
       }
 
@@ -774,9 +789,15 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
     if (coin === 'BTC' || coin === 'ETH') {
       return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
+    // if (coin === 'FDA') {
+    //   return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // }
     if (coin === 'FDA') {
-      return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
+  return `₹${value.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
     return `$${value.toFixed(6)}`;
   };
 
@@ -808,12 +829,12 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
       // Only use actual trade price if we have real P2P trades with significantly different prices
       const lastClose = ohlcData[selectedCoin]?.[ohlcData[selectedCoin].length - 1]?.close;
       // If price is significantly different from 2800 (more than 200 INR difference), it's likely real trade data
-      if (lastClose && lastClose > 0 && Math.abs(lastClose - 2800) > 200) {
+      if (lastClose && lastClose > 0 && Math.abs(lastClose - 3600) > 200) {
         // This is likely real trade data, use it
         return lastClose;
       }
       // Always default to base price (2800) for mock data consistency
-      return 2800;
+      return 3600;
     }
     return ohlcData[selectedCoin]?.[ohlcData[selectedCoin].length - 1]?.close || 0;
   };

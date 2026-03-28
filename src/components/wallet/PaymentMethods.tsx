@@ -27,6 +27,7 @@ interface PaymentMethod {
   qr_code?: string | null;
   is_active: boolean;
   type?: 'UPI' | 'QR';
+  offerFiatCurrency: 'USD' | 'EUR' | 'GBP' | 'INR'
 }
 
 interface PaymentMethodsProps {
@@ -34,6 +35,7 @@ interface PaymentMethodsProps {
 }
 
 export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
+  const [selectedFiat, setSelectedFiat] = useState<'USD' | 'EUR' | 'GBP' | 'INR'>('INR');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,87 +143,88 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleAdd = async () => {
+const handleAdd = async () => {
 
-    if (!auth) return;
+  if (!auth) return;
 
-    // name required
-    if (!newName.trim()) {
-      alert("Please enter payment method name");
+  if (!newName.trim()) {
+    alert("Please enter payment method name");
+    return;
+  }
+
+  if (paymentType === "UPI") {
+    if (!isValidUpiId(newUpiId)) {
+      alert("Please enter a valid UPI ID");
       return;
     }
+  }
 
-    // validate based on type
-    if (paymentType === "UPI") {
-      if (!isValidUpiId(newUpiId)) {
-        alert("Please enter a valid UPI ID");
-        return;
-      }
+  if (paymentType === "QR") {
+    if (!newQrCode) {
+      alert("Please upload QR screenshot");
+      return;
     }
+  }
 
-    if (paymentType === "QR") {
-      if (!newQrCode) {
-        alert("Please upload QR screenshot");
-        return;
-      }
-    }
+  setSaving(true);
 
-    setSaving(true);
+  try {
 
-    try {
+    const cleanName = newName.includes('|')
+      ? newName.split('|').pop()
+      : newName;
+    const res = await fetch(getApiUrl("payment-methods"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.token}`,
+      },
+      body: JSON.stringify({
+    paymentName: `${selectedFiat}|${cleanName}`,
+        fiat_currency: selectedFiat, 
 
-      const res = await fetch(getApiUrl("payment-methods"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${auth.token}`,
-        },
-        body: JSON.stringify({
+        upi_id:
+          paymentType === "UPI"
+            ? newUpiId.trim()
+            : null,
 
-          paymentName: newName,
+        qr_code:
+          paymentType === "QR"
+            ? newQrCode
+            : null,
 
-          upi_id:
-            paymentType === "UPI"
-              ? newUpiId.trim()
-              : null,
+      }),
+    });
 
-          qr_code:
-            paymentType === "QR"
-              ? newQrCode
-              : null,
+    if (res.ok) {
 
-        }),
-      });
+      setNewName("");
+      setNewUpiId("");
+      setNewQrCode("");
+      setNewQrFile(null);
+      setNewQrPreview(null);
+      setPaymentType("UPI");
 
-      if (res.ok) {
+      await loadPaymentMethods();
 
-        setNewName("");
-        setNewUpiId("");
-        setNewQrCode("");
-        setNewQrFile(null);
-        setNewQrPreview(null);
-        setPaymentType("UPI");
+    } else {
 
-        await loadPaymentMethods();
-
-      } else {
-
-        const data = await res.json();
-        alert(data.error || "Failed to add payment method");
-
-      }
-
-    } catch {
-
-      alert("Failed to add payment method");
-
-    } finally {
-
-      setSaving(false);
+      const data = await res.json();
+      alert(data.error || "Failed to add payment method");
 
     }
 
-  };
+  } catch {
+
+    alert("Failed to add payment method");
+
+  } finally {
+
+    setSaving(false);
+
+  }
+
+};
 
   const handleUpdate = async (id: number) => {
     if (!auth || !editType) return;
@@ -240,9 +243,12 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
 
     setSaving(true);
 
+    const cleanName = editName.includes('|')
+  ? editName.split('|').pop()
+  : editName;
     try {
       const payload: any = {
-        paymentName: editName.trim(),
+        paymentName: `${selectedFiat}|${cleanName}`,
       };
 
       if (isUpi) {
@@ -323,33 +329,34 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
   };
 
   const startEdit = (method: PaymentMethod) => {
-  setEditingId(method.id!);
+    setEditingId(method.id!);
 
-  const isUpi = !!method.upi_id;
-  setEditType(isUpi ? 'UPI' : 'QR');
+    const isUpi = !!method.upi_id;
+    setEditType(isUpi ? 'UPI' : 'QR');
 
-  // ──────────────────────────────── FIX HERE ────────────────────────────────
-  setEditName(method.paymentname || method.paymentName || method.name || '');
+    // ──────────────────────────────── FIX HERE ────────────────────────────────
+    // setEditName(method.paymentname || method.paymentName || method.name || '');
+    setEditName(method.paymentname?.split('|')[1] || method.paymentname);
 
-  // If you want to be extra safe:
-  // setEditName(String(method.paymentname ?? method.paymentName ?? ''));
+    // If you want to be extra safe:
+    // setEditName(String(method.paymentname ?? method.paymentName ?? ''));
 
-  if (isUpi) {
-    setEditUpiId(method.upi_id || '');
-    setEditQrCode('');
-    setEditQrPreview(null);
-    setEditQrFile(null);
-  } else {
-    setEditUpiId('');
-    setEditQrCode(method.qr_code || '');
-    setEditQrPreview(
-      method.qr_code && (method.qr_code.startsWith('data:') || method.qr_code.startsWith('http'))
-        ? method.qr_code
-        : null
-    );
-    setEditQrFile(null);
-  }
-};
+    if (isUpi) {
+      setEditUpiId(method.upi_id || '');
+      setEditQrCode('');
+      setEditQrPreview(null);
+      setEditQrFile(null);
+    } else {
+      setEditUpiId('');
+      setEditQrCode(method.qr_code || '');
+      setEditQrPreview(
+        method.qr_code && (method.qr_code.startsWith('data:') || method.qr_code.startsWith('http'))
+          ? method.qr_code
+          : null
+      );
+      setEditQrFile(null);
+    }
+  };
 
   const cancelEdit = () => {
     setEditingId(null);
@@ -377,93 +384,110 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
         </p>
       </div>
 
+      <div className="card-dark mb-4">
+        <label className="text-xs text-slate-400 mb-1 block">
+          Select Payment Methods Currency
+        </label>
+
+        <select
+          className="form-input-dark w-full"
+          value={selectedFiat}
+          onChange={(e) => setSelectedFiat(e.target.value as any)}
+        >
+          <option value="INR">INR (India)</option>
+          <option value="USD">USD (USA)</option>
+          <option value="EUR">EUR (Europe)</option>
+          <option value="GBP">GBP (UK)</option>
+        </select>
+      </div>
       {/* Add New Payment Method */}
-      <div className="card-dark mb-6">
-        <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
+      {selectedFiat === 'INR' && (
+        <div className="card-dark mb-6">
+          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
 
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={paymentType === 'UPI'}
-                  onChange={() => {
-                    setPaymentType("UPI");
-                    setNewQrCode("");
-                    setNewQrPreview(null);
-                  }}
-                />
-                UPI ID
-              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={paymentType === 'UPI'}
+                    onChange={() => {
+                      setPaymentType("UPI");
+                      setNewQrCode("");
+                      setNewQrPreview(null);
+                    }}
+                  />
+                  UPI ID
+                </label>
 
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={paymentType === 'QR'}
-                  onChange={() => {
-                    setPaymentType("QR");
-                    setNewUpiId("");
-                  }}
-                />
-                QR Screenshot
-              </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    checked={paymentType === 'QR'}
+                    onChange={() => {
+                      setPaymentType("QR");
+                      setNewUpiId("");
+                    }}
+                  />
+                  QR Screenshot
+                </label>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">
-              Name (example: Personal UPI)
-            </label>
-            <input
-              type="text"
-              className="form-input-dark w-full"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter payment method name"
-            />
-          </div>
-          {paymentType === 'UPI' && (
-            <div style={{ marginBlock: 10 }}>
-              <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">
+                Name (example: Personal UPI)
+              </label>
               <input
                 type="text"
                 className="form-input-dark w-full"
-                value={newUpiId}
-                onChange={(e) => setNewUpiId(e.target.value)}
-                placeholder="yourname@upi"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Enter payment method name"
               />
-
-              {newUpiId && !isValidUpiId(newUpiId) && (
-                <p style={{ color: '#ff0000' }}>
-                  Invalid UPI ID
-                </p>
-              )}
             </div>
-          )}
-          {paymentType === 'QR' && (
-            <div style={{ display: 'flex', flexDirection: 'column', marginBlock: 10 }}>
-              <label className="text-xs text-slate-400 mb-1 block">
-                Upload QR Screenshot
-              </label>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  handleQrFileChange(e.target.files?.[0] || null)
-                }
-              />
-
-              {newQrPreview && (
-                <img
-                  src={newQrPreview}
-                  className="max-w-32 mt-2"
+            {paymentType === 'UPI' && (
+              <div style={{ marginBlock: 10 }}>
+                <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
+                <input
+                  type="text"
+                  className="form-input-dark w-full"
+                  value={newUpiId}
+                  onChange={(e) => setNewUpiId(e.target.value)}
+                  placeholder="yourname@upi"
                 />
-              )}
-            </div>
-          )}
-          {/* <div>
+
+                {newUpiId && !isValidUpiId(newUpiId) && (
+                  <p style={{ color: '#ff0000' }}>
+                    Invalid UPI ID
+                  </p>
+                )}
+              </div>
+            )}
+            {paymentType === 'QR' && (
+              <div style={{ display: 'flex', flexDirection: 'column', marginBlock: 10 }}>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  Upload QR Screenshot
+                </label>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    handleQrFileChange(e.target.files?.[0] || null)
+                  }
+                />
+
+                {newQrPreview && (
+                  <img
+                    src={newQrPreview}
+                    className="max-w-32 mt-2"
+                  />
+                )}
+              </div>
+            )}
+            {/* <div>
             <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
             <input
               type="text"
@@ -482,7 +506,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
               </p>
             ) }
           </div> */}
-          {/* <div>
+            {/* <div>
             <label className="text-xs text-slate-400 mb-1 block">QR Code Image</label>
             <input
               type="file"
@@ -507,27 +531,91 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
               </div>
             )}
           </div> */}
-          {/* <button
+            {/* <button
             className="btn btn-primary w-full"
             onClick={handleAdd}
             disabled={saving || !newUpiId.trim()}
           >
             {saving ? 'Adding...' : 'Add Payment Method'}
           </button> */}
-          <button
-            className="btn btn-primary w-full"
-            onClick={handleAdd}
-            disabled={
-              saving ||
-              !newName.trim() ||
-              (paymentType === "UPI" && !newUpiId.trim()) ||
-              (paymentType === "QR" && !newQrCode)
-            }
-          >
-            {saving ? "Adding..." : "Add Payment Method"}
-          </button>
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleAdd}
+              disabled={
+                saving ||
+                !newName.trim() ||
+                (paymentType === "UPI" && !newUpiId.trim()) ||
+                (paymentType === "QR" && !newQrCode)
+              }
+            >
+              {saving ? "Adding..." : "Add Payment Method"}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
+      {selectedFiat === 'USD' && (
+        <div className="card-dark mb-6">
+          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+          <div className="space-y-3">
+
+            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleAdd}
+              disabled={
+                saving ||
+                !newName.trim() ||
+                (paymentType === "UPI" && !newUpiId.trim()) ||
+                (paymentType === "QR" && !newQrCode)
+              }
+            >
+              {saving ? "Adding..." : "Add Payment Method"}
+            </button>
+          </div>
+        </div>
+      )}
+      {selectedFiat === 'GBP' && (
+        <div className="card-dark mb-6">
+          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+          <div className="space-y-3">
+
+            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleAdd}
+              disabled={
+                saving ||
+                !newName.trim() ||
+                (paymentType === "UPI" && !newUpiId.trim()) ||
+                (paymentType === "QR" && !newQrCode)
+              }
+            >
+              {saving ? "Adding..." : "Add Payment Method"}
+            </button>
+          </div>
+        </div>
+      )}
+      {selectedFiat === 'EUR' && (
+        <div className="card-dark mb-6">
+          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+          <div className="space-y-3">
+
+            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleAdd}
+              disabled={
+                saving ||
+                !newName.trim() ||
+                (paymentType === "UPI" && !newUpiId.trim()) ||
+                (paymentType === "QR" && !newQrCode)
+              }
+            >
+              {saving ? "Adding..." : "Add Payment Method"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Payment Methods List */}
       {loading ? (
@@ -619,7 +707,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-slate-50">{method.paymentName}</p>
-                      <p>{method?.paymentname}</p>
+                      <p>{method.paymentname?.split('|')[1] || method.paymentname}</p>
                       {method.upi_id && (
                         <p className="text-xs text-slate-400">{method.upi_id}</p>
                       )}

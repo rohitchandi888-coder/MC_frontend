@@ -1,7 +1,45 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { AuthState } from '../types';
 import type { CustomToken, WalletMeta } from '../../walletStorage';
 
+const popularTokens = [
+  {
+    symbol: "BNB",
+    name: "BNB",
+    address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  },
+  {
+    symbol: "ETH",
+    name: "Ethereum",
+    address: "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+  },
+  {
+    symbol: "BTC",
+    name: "Bitcoin",
+    address: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+  },
+  {
+    symbol: "USDT",
+    name: "Tether USD",
+    address: "0x55d398326f99059fF775485246999027B3197955",
+  },
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+  },
+  {
+    symbol: "CAKE",
+    name: "PancakeSwap",
+    address: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+  },
+
+  {
+    symbol: "JIO",
+    name: "JioCoin",
+    address: "0xb314d182de1c3a3ecc6772cc1126db8e5fc29886",
+  },
+];
 interface DashboardViewProps {
   auth: AuthState | null;
   storedMeta: WalletMeta | null;
@@ -29,7 +67,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const activeAddress = storedMeta?.address || checkAddress;
-
+  const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -37,9 +75,183 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
   };
 
+  const getBestPrice = (data: any) => {
+    if (!data?.pairs?.length) return 0;
+
+    const stablePair = data.pairs.find(
+      (p: any) =>
+        p.quoteToken?.symbol === "USDT" ||
+        p.quoteToken?.symbol === "USDC"
+    );
+
+    if (stablePair?.priceUsd) {
+      return parseFloat(stablePair.priceUsd);
+    }
+
+    const sorted = [...data.pairs].sort(
+      (a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0)
+    );
+
+    if (sorted[0]?.priceUsd) {
+      return parseFloat(sorted[0].priceUsd);
+    }
+
+    return 0;
+  };
+useEffect(() => {
+  let interval: any;
+
+  const fetchPrices = async () => {
+    const prices: Record<string, number> = {};
+
+    for (const token of popularTokens) {
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/tokens/${token.address}`
+        );
+
+        const data = await res.json();
+        const price = getBestPrice(data);
+
+        prices[token.address] = price;
+      } catch {
+        prices[token.address] = 0;
+      }
+    }
+
+    setTokenPrices(prices);
+  };
+
+  fetchPrices();
+
+  //  refresh every 10 sec 
+  interval = setInterval(fetchPrices, 10000);
+
+  return () => clearInterval(interval);
+}, []);
   return (
     <>
-      {/* Action Buttons (Send, Receive, Swap) */}
+      <div
+        style={{
+          marginTop: "20px",
+          background: "#0f172a",
+          borderRadius: "12px",
+          padding: "10px",
+          border: "1px solid #1e293b",
+          marginBlock: 20
+        }}
+      >
+        <p
+          style={{
+            color: "#94a3b8",
+            marginBottom: "10px",
+            fontSize: "13px",
+            paddingLeft: "6px",
+          }}
+        >
+          Tokens
+        </p>
+
+        {popularTokens.map((token) => {
+          const price = tokenPrices[token.address] || 0;
+
+          const balance =
+            token.symbol === "BNB"
+              ? parseFloat(nativeBalance || "0")
+              : token.symbol === "ETH"
+                ? parseFloat(fdaBalance || "0")
+                : 0;
+
+          const usdValue = balance * price;
+
+          return (
+            <div
+              key={token.address}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px",
+                borderRadius: "10px",
+                marginBottom: "6px",
+                background: "#020617",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              {/* LEFT */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                {/* Dummy Image */}
+                <div
+                  style={{
+                    width: "38px",
+                    height: "38px",
+                    borderRadius: "50%",
+                    background: "#1e293b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#94a3b8",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                  }}
+                >
+                  {token.symbol[0]}
+                </div>
+
+                <div>
+                  <div
+                    style={{
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: "14px",
+                    }}
+                  >
+                    {token.symbol}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#64748b",
+                    }}
+                  >
+                    ${price.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT */}
+              <div style={{ textAlign: "right" }}>
+                <div
+                  style={{
+                    color: "#fff",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                  }}
+                >
+                  {balance.toFixed(4)}
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#64748b",
+                  }}
+                >
+                  ${usdValue.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
       {activeAddress && (
         <div className="wallet-action-buttons">
           <button
@@ -92,32 +304,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           {auth && internalFdaBalance !== null && (
             <div className="balance-card-green">
-              <p className="text-xs text-slate-200 mb-2">🔄 Internal FDA Balance (Zero Fee Transfers)</p>
-              <p className="text-lg font-semibold text-slate-50">
+              <p className="text-slate-200 mb-2" style={{ fontWeight: '700' }}>🔄 Internal FDA Balance (Zero Fee Transfers)</p>
+              <p className="text-lg font-semibold" style={{ color: "#fff" }}>
                 {internalFdaBalance.toFixed(2)} FDA
               </p>
-              <p className="text-xs text-slate-300 mt-2">
+              <p className="text-xs mt-2" style={{ color: '#fff' }}>
                 Available for instant internal transfers between MC wallets
               </p>
             </div>
           )}
           {customTokens.length > 0 && (
             <div className="mt-6">
-              <p className="text-xs text-slate-400 mb-3">Custom Tokens</p>
+              <p className="text-xl text-slate-400 mb-3">Custom Tokens</p>
+
               <div className="custom-tokens-grid">
-                {customTokens.map((token) => {
-                  const balance = customTokenBalances[token.address];
-                  return (
-                    <div key={token.address} className="balance-card">
-                      <p className="text-xs text-slate-400 mb-2">{token.symbol} Balance</p>
-                      <p className="text-lg font-semibold text-slate-50">
-                        {balanceLoading ? 'Loading...' : balance !== undefined ? (
-                          balance === 'Error' ? 'Error' : `${parseFloat(balance).toFixed(4)} ${token.symbol}`
-                        ) : '—'}
-                      </p>
-                    </div>
-                  );
-                })}
+
+                {customTokens
+                  .filter(token => token.status === "GLOBAL" || token.enabled)
+                  .map((token) => {
+
+                    const balance = customTokenBalances[token.address];
+
+                    return (
+                      <div key={token.address} className="balance-card">
+                        <p className="text-md mb-2" style={{ color: '#fff' }}>
+                          {token.symbol} Balance
+                        </p>
+
+                        <p className="text-lg font-semibold text-slate-50">
+                          {balanceLoading
+                            ? "Loading..."
+                            : balance !== undefined
+                              ? balance === "Error"
+                                ? "Error"
+                                : `${parseFloat(balance).toFixed(4)} ${token.symbol}`
+                              : "—"}
+                        </p>
+                      </div>
+                    );
+
+                  })}
+
               </div>
             </div>
           )}

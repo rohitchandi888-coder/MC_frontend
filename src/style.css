@@ -1667,8 +1667,6 @@ input[style*="background: #0f172a"]::placeholder {
 
 .main-container {
 
-  padding: 2.5rem 2.5rem;
-
   background: #fafafa;
 
   min-height: 100vh;
@@ -5116,6 +5114,7 @@ ul:not([style*="padding"]) li {
     left: 0;
 
     padding-top: 100px;
+    z-index: 99999;
 
   }
 
@@ -5145,7 +5144,7 @@ ul:not([style*="padding"]) li {
 
   .main-container {
 
-    padding: 1rem;
+    /* padding: 1rem; */
 
   }
 
@@ -5791,9 +5790,12 @@ ul:not([style*="padding"]) li {
 
 .disputes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  /* grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); */
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 0.35rem;
 }
+
+
 
 .dispute-card {
   border-radius: 8px;
@@ -6129,7 +6131,8 @@ ul:not([style*="padding"]) li {
   .mobile-menu-toggle {
 
     display: block;
-
+    z-index: 999999999;
+    position: relative;
   }
 
 }
@@ -7279,7 +7282,7 @@ img {
 
   .main-container {
 
-    padding: 2rem;
+    /* padding: 2rem; */
 
   }
 
@@ -7484,4 +7487,37 @@ img {
   border: 2px solid #333;
   color: #fff !important;
   box-shadow: 0 0 0 1px #333;
+}
+
+/* 11-3-26 */
+.amountCont{
+  display: flex;
+  flex-direction: column;
+  margin-block: 10px;
+  padding-inline: 10px;
+  padding-block: 5px;
+  background-color: #d1fae5;
+  border-radius: 10px;
+}
+
+.amountText{
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.amountSpan{
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.totalPrice{
+  font-size: 14px;
+  font-weight: 600;
+  
+}
+
+@media (max-width : 768px) {
+  .colonsmall{
+    flex-direction: column;
+  }
 }

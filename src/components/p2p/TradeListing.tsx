@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { type AuthState } from '../types';
 import { SitePagination } from '../common/SitePagination';
+import { getApiUrl } from '../../config';
 
 const MY_TRADES_PER_PAGE = 12;
 
@@ -69,30 +70,127 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   openDisputeModal,
   openReleaseConfirmModal,
 }) => {
+  const [myTradesSearch, setMyTradesSearch] = useState('');
+  // const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   // Helper function to check if buyer can create dispute (within 2 hours of payment upload)
   const canBuyerCreateDispute = (trade: any) => {
     if (trade.status !== 'PAID_PENDING_RELEASE') return false;
     if (!trade.paid_at) return false;
-    
+
     const paidAt = new Date(trade.paid_at);
     const now = new Date();
-    
+
     // Validate date parsing
     if (isNaN(paidAt.getTime())) {
       console.error('Invalid paid_at date:', trade.paid_at);
       return false;
     }
-    
+
     // Calculate deadline: paid_at + 2 hours
     const deadline = new Date(paidAt.getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours in milliseconds
-    
+
     // Return true if current time is BEFORE or EQUAL to deadline (within 2 hours)
     return now.getTime() <= deadline.getTime();
   };
 
   const [myTradesPage, setMyTradesPage] = useState(1);
-  const totalMyTradesPages = Math.max(1, Math.ceil(myTrades.length / MY_TRADES_PER_PAGE));
-  const paginatedMyTrades = myTrades.slice(
+
+
+//   useEffect(() => {
+//   loadPaymentMethods();
+// }, []);
+
+// const loadPaymentMethods = async () => {
+//   try {
+//     const res = await fetch(getApiUrl('payment-methods'), {
+//       headers: {
+//         Authorization: `Bearer ${auth?.token}`,
+//       },
+//     });
+
+//     if (res.ok) {
+//       const data = await res.json();
+//       console.log('Payment Methods:', data); // ✅ DEBUG
+//       setPaymentMethods(data || []);
+//     }
+//   } catch (err) {
+//     console.error('Failed to load payment methods:', err);
+//   }
+// };
+
+const renderPaymentMethod = (methods: any) => {
+
+  if (!methods) return 'Not specified';
+
+  if (typeof methods === 'string') {
+    try {
+      methods = JSON.parse(methods);
+    } catch {
+      return <span>{methods}</span>;
+    }
+  }
+
+  if (!Array.isArray(methods)) {
+    methods = [methods];
+  }
+
+  if (!methods.length) return 'Not specified';
+
+  return methods.map((pm: any, index: number) => {
+    if (!pm) return null;
+
+    const isValidQR =
+      pm.qr_code &&
+      (pm.qr_code.startsWith('data:image') ||
+       pm.qr_code.startsWith('http'));
+
+    return (
+      <div key={index} style={{ marginBottom: '12px' }}>
+
+        <p style={{ fontSize: '12px', fontWeight: '600' }}>
+          {pm.paymentname || 'Unknown'}
+        </p>
+
+        {pm.upi_id && (
+          <span style={{ display: 'block', fontSize: '11px' }}>
+            {pm.upi_id}
+          </span>
+        )}
+
+        {isValidQR && (
+          <img
+            src={pm.qr_code}
+            alt="QR"
+            style={{ width: '80px', height: '80px', cursor: 'pointer' }}
+          />
+        )}
+      </div>
+    );
+  });
+};
+  const filteredMyTrades = useMemo(() => {
+    if (!myTradesSearch.trim()) return myTrades;
+
+    const s = myTradesSearch.toLowerCase();
+
+    return myTrades.filter((trade) => {
+      const combined = `
+      ${trade.id}
+      ${trade.asset_symbol}
+      ${trade.fiat_currency}
+      ${trade.status}
+      ${trade.buyer_name || ''}
+      ${trade.buyer_email || ''}
+      ${trade.seller_name || ''}
+      ${trade.seller_email || ''}
+    `.toLowerCase();
+
+      return combined.includes(s);
+    });
+  }, [myTrades, myTradesSearch]);
+  // const totalMyTradesPages = Math.max(1, Math.ceil(myTrades.length / MY_TRADES_PER_PAGE));
+  const totalMyTradesPages = Math.max(1, Math.ceil(filteredMyTrades.length / MY_TRADES_PER_PAGE));
+  const paginatedMyTrades = filteredMyTrades.slice(
     (myTradesPage - 1) * MY_TRADES_PER_PAGE,
     myTradesPage * MY_TRADES_PER_PAGE
   );
@@ -104,14 +202,16 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     if (!trade.paid_at) return 0;
     const paidAt = new Date(trade.paid_at);
     const now = new Date();
-    
+
     if (isNaN(paidAt.getTime())) return 0;
-    
+
     // Calculate deadline: paid_at + 2 hours
     const deadline = new Date(paidAt.getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours in milliseconds
     const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
     return Math.max(0, hoursRemaining);
   };
+
+
   return (
     <div>
       <div className="section-header">
@@ -207,17 +307,17 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                   });
                                 }
                                 return (
-                                 <div className='buy'>
-                                   <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
-                                    {offerType}
-                                  </span>
-                                  <span className='buyTxt'>
-                                {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
-                              </span>
-                                 </div>
+                                  <div className='buy'>
+                                    <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
+                                      {offerType}
+                                    </span>
+                                    <span className='buyTxt'>
+                                      {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
+                                    </span>
+                                  </div>
                                 );
                               })()}
-                              
+
                               {isMyOffer && (
                                 <span className="yourOffer">
                                   Your Offer
@@ -227,9 +327,9 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                             <div className={`${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}>
                               <div className='perItemParent'>
                                 <p className="offer-price-large">
-                                {offer.price} <span className="offer-price-currency">{offer.fiatCurrency || offer.fiat_currency}</span>
-                              </p>
-                              <p className="perItemBottonCorner">per {offer.assetSymbol || offer.asset_symbol}</p>
+                                  {offer.price} <span className="offer-price-currency">{offer.fiatCurrency || offer.fiat_currency}</span>
+                                </p>
+                                <p className="perItemBottonCorner">per {offer.assetSymbol || offer.asset_symbol}</p>
                               </div>
                             </div>
                             <div className="offer-info-list">
@@ -258,7 +358,12 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                               <div className="offer-info-row offer-info-divider">
                                 <span className="offer-info-label">Payment:</span>
                                 <span className="offer-info-value">
-                                  {offer.paymentMethods || offer.payment_method || 'Not specified'}
+                                  {/* {offer.paymentMethods || offer.payment_method || 'Not specified'} */}
+{                                  renderPaymentMethod(
+  offer.paymentMethods ||
+  offer.payment_method ||
+  offer.seller_payment_methods
+)}
                                 </span>
                               </div>
                             </div>
@@ -279,7 +384,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                 className={`btn btn-success w-full text-base font-bold py-3 btn-hover-lift ${acceptingOffer === offer.id ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 onClick={() => openAcceptModal(offer)}
                                 disabled={acceptingOffer === offer.id}
-                                style={{ 
+                                style={{
                                   whiteSpace: 'nowrap',
                                   minWidth: '120px',
                                   boxShadow: acceptingOffer === offer.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.4)'
@@ -325,304 +430,320 @@ export const TradeListing: React.FC<TradeListingProps> = ({
               </button>
             </div>
 
+            <input
+              type="text"
+              placeholder="🔍 Search trades..."
+              value={myTradesSearch}
+              onChange={(e) => {
+                setMyTradesSearch(e.target.value);
+                setMyTradesPage(1);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginBottom: '10px',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb'
+              }}
+            />
             {myTrades.length === 0 ? (
               <p className="text-sm text-gray-600 mb-1" style={{ padding: '0.5rem 1rem' }}>No trades yet.</p>
             ) : (
               <>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#ffffff' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Trade ID</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Type</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Amount</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Price</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Total</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Status</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Counterparty</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Date</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                {paginatedMyTrades.map((trade) => {
-                  const isBuyer = trade.buyer_id === auth?.user.id;
-                  const isSeller = trade.seller_id === auth?.user.id;
-                  const feeAmount = parseFloat(trade.fee_amount) || 0;
-                  const amountReceived = parseFloat(trade.amount) - feeAmount;
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', background: '#ffffff' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Trade ID</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Type</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Amount</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Price</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Total</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Status</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Counterparty</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Date</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedMyTrades.map((trade) => {
+                        const isBuyer = trade.buyer_id === auth?.user.id;
+                        const isSeller = trade.seller_id === auth?.user.id;
+                        const feeAmount = parseFloat(trade.fee_amount) || 0;
+                        const amountReceived = parseFloat(trade.amount) - feeAmount;
 
-                  return (
-                    <tr
-                      key={trade.id}
-                      style={{
-                        borderBottom: '1px solid #e5e7eb',
-                        transition: 'background 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f9fafb';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#ffffff';
-                      }}
-                    >
-                      {/* Trade ID */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        #{trade.id}
-                      </td>
-                      
-                      {/* Type */}
-                      <td style={{ padding: '0.75rem' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          background: isBuyer ? '#dbeafe' : '#fef2f2',
-                          color: isBuyer ? '#2563eb' : '#dc2626',
-                          borderRadius: '4px',
-                          fontSize: '0.75rem',
-                          fontWeight: '700',
-                          textTransform: 'uppercase'
-                        }}>
-                          {isBuyer ? 'BUY' : 'SELL'}
-                        </span>
-                      </td>
-                      
-                      {/* Amount */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
-                      </td>
-                      
-                      {/* Price */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
-                        {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
-                      </td>
-                      
-                      {/* Total */}
-                      <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
-                        {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
-                      </td>
-                      
-                      {/* Status */}
-                      <td style={{ padding: '0.75rem' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          padding: '0.25rem 0.5rem',
-                          background: trade.status === 'COMPLETED' ? '#d1fae5' 
-                            : trade.status === 'PAID_PENDING_RELEASE' ? '#fef2f2' 
-                            : trade.status === 'DISPUTED' ? '#fef3c7'
-                            : trade.status === 'CANCELLED' ? '#fee2e2'
-                            : '#e2e8f0',
-                          color: trade.status === 'COMPLETED' ? '#065f46' 
-                            : trade.status === 'PAID_PENDING_RELEASE' ? '#dc2626' 
-                            : trade.status === 'DISPUTED' ? '#d97706'
-                            : trade.status === 'CANCELLED' ? '#991b1b'
-                            : '#475569',
-                          borderRadius: '4px',
-                          fontSize: '0.7rem',
-                          fontWeight: '600',
-                          textTransform: 'uppercase'
-                        }}>
-                          {trade.status}
-                        </span>
-                      </td>
-                      
-                      {/* Counterparty */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
-                        {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
-                      </td>
-                      
-                      {/* Date */}
-                      <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
-                        {trade.created_at ? new Date(trade.created_at).toLocaleDateString() : '-'}
-                      </td>
-                      
-                      {/* Actions */}
-                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
-                          {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setSelectedTradeForPayment(trade);
-                                  setPaymentScreenshot(null);
-                                  setShowPaymentModal(true);
-                                }}
-                                disabled={markingAsPaid === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: markingAsPaid === trade.id ? '#d1d5db' : '#fbbf24',
-                                  color: '#1e293b',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: markingAsPaid === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {markingAsPaid === trade.id ? '...' : '✅ Pay'}
-                              </button>
-                              <button
-                                onClick={() => cancelTrade(trade.id)}
-                                disabled={cancellingTrade === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
-                              </button>
-                            </>
-                          )}
-                          {isBuyer && trade.status === 'PAID_PENDING_RELEASE' && (
-                            <button
-                              onClick={() => openDisputeModal(trade)}
-                              disabled={disputingTrade === trade.id || !canBuyerCreateDispute(trade)}
-                              style={{
-                                padding: '0.375rem 0.75rem',
+                        return (
+                          <tr
+                            key={trade.id}
+                            style={{
+                              borderBottom: '1px solid #e5e7eb',
+                              transition: 'background 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#f9fafb';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#ffffff';
+                            }}
+                          >
+                            {/* Trade ID */}
+                            <td style={{ padding: '0.75rem', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                              #{trade.id}
+                            </td>
+
+                            {/* Type */}
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '0.25rem 0.5rem',
+                                background: isBuyer ? '#dbeafe' : '#fef2f2',
+                                color: isBuyer ? '#2563eb' : '#dc2626',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                textTransform: 'uppercase'
+                              }}>
+                                {isBuyer ? 'BUY' : 'SELL'}
+                              </span>
+                            </td>
+
+                            {/* Amount */}
+                            <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                              {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
+                            </td>
+
+                            {/* Price */}
+                            <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                              {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
+                            </td>
+
+                            {/* Total */}
+                            <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
+                              {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
+                            </td>
+
+                            {/* Status */}
+                            <td style={{ padding: '0.75rem' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '0.25rem 0.5rem',
+                                background: trade.status === 'COMPLETED' ? '#d1fae5'
+                                  : trade.status === 'PAID_PENDING_RELEASE' ? '#fef2f2'
+                                    : trade.status === 'DISPUTED' ? '#fef3c7'
+                                      : trade.status === 'CANCELLED' ? '#fee2e2'
+                                        : '#e2e8f0',
+                                color: trade.status === 'COMPLETED' ? '#065f46'
+                                  : trade.status === 'PAID_PENDING_RELEASE' ? '#dc2626'
+                                    : trade.status === 'DISPUTED' ? '#d97706'
+                                      : trade.status === 'CANCELLED' ? '#991b1b'
+                                        : '#475569',
+                                borderRadius: '4px',
                                 fontSize: '0.7rem',
                                 fontWeight: '600',
-                                background: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? '#d1d5db' : '#f59e0b',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? 'not-allowed' : 'pointer',
-                                width: '100%',
-                              }}
-                            >
-                              {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
-                            </button>
-                          )}
-                          {isSeller && trade.status === 'PAID_PENDING_RELEASE' && (
-                            <>
-                              <button
-                                onClick={() => openReleaseConfirmModal(trade)}
-                                disabled={releasingTokens === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: releasingTokens === trade.id ? '#d1d5db' : '#10b981',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: releasingTokens === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {releasingTokens === trade.id ? '...' : '🚀 Release'}
-                              </button>
-                              {(trade.payment_screenshot || trade.paymentScreenshot) && (
-                                <button
-                                  onClick={() => {
-                                    const newWindow = window.open();
-                                    if (newWindow) {
-                                      newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot || trade.paymentScreenshot}" alt="Payment Screenshot" /></body></html>`);
-                                    }
-                                  }}
-                                  style={{
-                                    padding: '0.375rem 0.75rem',
-                                    fontSize: '0.7rem',
-                                    fontWeight: '600',
-                                    background: '#6366f1',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    width: '100%',
-                                  }}
-                                >
-                                  📸 View
-                                </button>
-                              )}
-                              <button
-                                onClick={() => openDisputeModal(trade)}
-                                disabled={disputingTrade === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
-                              </button>
-                            </>
-                          )}
-                          {isSeller && trade.status === 'PENDING' && (
-                            <>
-                              <button
-                                onClick={() => cancelTrade(trade.id)}
-                                disabled={cancellingTrade === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
-                              </button>
-                              <button
-                                onClick={() => openDisputeModal(trade)}
-                                disabled={disputingTrade === trade.id}
-                                style={{
-                                  padding: '0.375rem 0.75rem',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '600',
-                                  background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
-                                  width: '100%',
-                                }}
-                              >
-                                {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
-                              </button>
-                            </>
-                          )}
-                          {trade.status === 'COMPLETED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
-                          )}
-                          {trade.status === 'DISPUTED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>
-                          )}
-                          {trade.status === 'CANCELLED' && (
-                            <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '600' }}>❌ Cancelled</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="trade-listing-pagination-wrap">
-                <SitePagination
-                  id="my-trades-pagination"
-                  currentPage={myTradesPage}
-                  totalPages={totalMyTradesPages}
-                  onPageChange={setMyTradesPage}
-                />
-              </div>
+                                textTransform: 'uppercase'
+                              }}>
+                                {trade.status}
+                              </span>
+                            </td>
+
+                            {/* Counterparty */}
+                            <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
+                              {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
+                            </td>
+
+                            {/* Date */}
+                            <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                              {trade.created_at ? new Date(trade.created_at).toLocaleDateString() : '-'}
+                            </td>
+
+                            {/* Actions */}
+                            <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
+                                {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedTradeForPayment(trade);
+                                        setPaymentScreenshot(null);
+                                        setShowPaymentModal(true);
+                                      }}
+                                      disabled={markingAsPaid === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: markingAsPaid === trade.id ? '#d1d5db' : '#fbbf24',
+                                        color: '#1e293b',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: markingAsPaid === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {markingAsPaid === trade.id ? '...' : '✅ Pay'}
+                                    </button>
+                                    <button
+                                      onClick={() => cancelTrade(trade.id)}
+                                      disabled={cancellingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                    </button>
+                                  </>
+                                )}
+                                {isBuyer && trade.status === 'PAID_PENDING_RELEASE' && (
+                                  <button
+                                    onClick={() => openDisputeModal(trade)}
+                                    disabled={disputingTrade === trade.id || !canBuyerCreateDispute(trade)}
+                                    style={{
+                                      padding: '0.375rem 0.75rem',
+                                      fontSize: '0.7rem',
+                                      fontWeight: '600',
+                                      background: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? '#d1d5db' : '#f59e0b',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? 'not-allowed' : 'pointer',
+                                      width: '100%',
+                                    }}
+                                  >
+                                    {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                  </button>
+                                )}
+                                {isSeller && trade.status === 'PAID_PENDING_RELEASE' && (
+                                  <>
+                                    <button
+                                      onClick={() => openReleaseConfirmModal(trade)}
+                                      disabled={releasingTokens === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: releasingTokens === trade.id ? '#d1d5db' : '#10b981',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: releasingTokens === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {releasingTokens === trade.id ? '...' : '🚀 Release'}
+                                    </button>
+                                    {(trade.payment_screenshot || trade.paymentScreenshot) && (
+                                      <button
+                                        onClick={() => {
+                                          const newWindow = window.open();
+                                          if (newWindow) {
+                                            newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot || trade.paymentScreenshot}" alt="Payment Screenshot" /></body></html>`);
+                                          }
+                                        }}
+                                        style={{
+                                          padding: '0.375rem 0.75rem',
+                                          fontSize: '0.7rem',
+                                          fontWeight: '600',
+                                          background: '#6366f1',
+                                          color: '#ffffff',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          width: '100%',
+                                        }}
+                                      >
+                                        📸 View
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => openDisputeModal(trade)}
+                                      disabled={disputingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                    </button>
+                                  </>
+                                )}
+                                {isSeller && trade.status === 'PENDING' && (
+                                  <>
+                                    <button
+                                      onClick={() => cancelTrade(trade.id)}
+                                      disabled={cancellingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                    </button>
+                                    <button
+                                      onClick={() => openDisputeModal(trade)}
+                                      disabled={disputingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: disputingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                    </button>
+                                  </>
+                                )}
+                                {trade.status === 'COMPLETED' && (
+                                  <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
+                                )}
+                                {trade.status === 'DISPUTED' && (
+                                  <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>
+                                )}
+                                {trade.status === 'CANCELLED' && (
+                                  <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '600' }}>❌ Cancelled</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="trade-listing-pagination-wrap">
+                  <SitePagination
+                    id="my-trades-pagination"
+                    currentPage={myTradesPage}
+                    totalPages={totalMyTradesPages}
+                    onPageChange={setMyTradesPage}
+                  />
+                </div>
               </>
             )}
           </div>
