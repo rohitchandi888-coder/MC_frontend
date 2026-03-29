@@ -23,6 +23,16 @@ interface TransactionHistoryProps {
   userWalletAddresses: string[];
 }
 
+/** API may return the same transfer row more than once; keep first per id for stable UI. */
+function dedupeTransactionsById(rows: Transaction[]): Transaction[] {
+  const seen = new Set<number>();
+  return rows.filter((tx) => {
+    if (seen.has(tx.id)) return false;
+    seen.add(tx.id);
+    return true;
+  });
+}
+
 export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, userWalletAddresses }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,11 +80,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
             return fromMatch || toMatch;
           }
           // If no addresses in transaction, show it anyway (it's for this user)
-          return true;;
+          return true;
         });
       }
 
-      setTransactions(filteredTransactions);
+      setTransactions(dedupeTransactionsById(filteredTransactions));
     } catch (err: any) {
       console.error('Failed to load transactions:', err);
       setError('Unable to load transactions. Please try again.');
@@ -216,7 +226,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
       ) : (
         <div className='transactionHistory-Cont'>
           <div className="transaction-list">
-            {filterTransaction.map((tx) => {
+            {filterTransaction.map((tx, rowIndex) => {
               const isFromUser = tx.from_address ? userWalletAddresses.some(
                 (addr) => addr.toLowerCase() === tx.from_address?.toLowerCase()
               ) : false;
@@ -224,8 +234,10 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                 (addr) => addr.toLowerCase() === tx.to_address?.toLowerCase()
               ) : false;
 
+              const rowKey = `${tx.id}-${tx.created_at}-${tx.amount}-${tx.from_address ?? ""}-${tx.to_address ?? ""}-${rowIndex}`;
+
               return (
-                <div key={tx.id} className="transaction-item">
+                <div key={rowKey} className="transaction-item">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-3">

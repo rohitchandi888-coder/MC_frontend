@@ -47,7 +47,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                zIndex: 2000,
+                zIndex: 12000,
             }}
         >
             <div

@@ -34,15 +34,15 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
   const [showExtraWord, setShowExtraWord] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   return (
-    <div className="layout-2-col">
-      <div>
-        <p className="text-sm text-slate-300 mb-4" style={{ padding: '0.5rem 1rem', lineHeight: '1.6' }}>
+    <div className="layout-2-col wallet-setup-panel">
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+        <p className="text-sm text-slate-600 md:text-slate-300 mb-4" style={{ padding: '0.5rem 0.25rem', lineHeight: '1.6' }}>
           First, choose the network for your wallet, then paste your original 12-word phrase and 13th word to import an existing wallet.
-          <span className="block mt-2 text-xs text-yellow-400">
+          <span className="block mt-2 text-xs text-amber-700 md:text-yellow-400">
             ⚠️ The 13th word is always required for importing wallets.
           </span>
           {!isRegistered && (
-            <span className="block mt-2 text-xs text-slate-400">
+            <span className="block mt-2 text-xs text-slate-500 md:text-slate-400">
               ℹ️ Wallet will be registered automatically with MC Wallet after import.
             </span>
           )}
@@ -50,7 +50,7 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
         
         {/* Network Selection */}
         <div className="mb-4">
-          <label className="text-sm font-semibold text-slate-200 mb-2 block" style={{ padding: '0.5rem 1rem' }}>
+          <label className="text-sm font-semibold text-slate-800 md:text-slate-200 mb-2 block" style={{ padding: '0.5rem 0.25rem' }}>
             Select Network:
           </label>
           <select
@@ -64,8 +64,8 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
             <option value="Bitcoin">Bitcoin</option>
             <option value="Tron">Tron</option>
           </select>
-          <p className="text-xs text-slate-400" style={{ padding: '0 1rem', marginTop: '0.25rem' }}>
-            Selected: <strong className="text-slate-300">{selectedNetwork}</strong>
+          <p className="text-xs text-slate-500 md:text-slate-400" style={{ padding: '0 0.25rem', marginTop: '0.25rem' }}>
+            Selected: <strong className="text-slate-800 md:text-slate-300">{selectedNetwork}</strong>
           </p>
         </div>
         
@@ -121,15 +121,15 @@ export const ImportWallet: React.FC<ImportWalletProps> = ({
         />
         <button className="btn btn-primary" onClick={onImport}>Import wallet</button>
       </div>
-      <div>
-        <p className="text-xs text-slate-300 mb-2" style={{ padding: '0.5rem 1rem' }}>Before you import</p>
-        <ul className="text-xs text-slate-300" style={{ paddingLeft: '1.25rem', paddingTop: '0.5rem', paddingBottom: '0.5rem', lineHeight: '1.8' }}>
-          <li style={{ padding: '0.5rem 1rem' }}>Only import into a secure, private device you trust.</li>
-          <li style={{ padding: '0.5rem 1rem' }}>
+      <div className="rounded-xl border border-amber-100 bg-amber-50/80 p-3 md:border-0 md:bg-transparent md:p-0">
+        <p className="text-xs font-semibold text-slate-700 md:text-slate-300 mb-2" style={{ padding: '0.5rem 0.25rem' }}>Before you import</p>
+        <ul className="text-xs text-slate-600 md:text-slate-300" style={{ paddingLeft: '1.25rem', paddingTop: '0.5rem', paddingBottom: '0.5rem', lineHeight: '1.8' }}>
+          <li style={{ padding: '0.35rem 0.25rem' }}>Only import into a secure, private device you trust.</li>
+          <li style={{ padding: '0.35rem 0.25rem' }}>
             Make sure the 12 words and 13th word exactly match the original spelling and
             order.
           </li>
-          <li style={{ padding: '0.5rem 1rem' }}>Your new wallet password is local to this browser and can be different.</li>
+          <li style={{ padding: '0.35rem 0.25rem' }}>Your new wallet password is local to this browser and can be different.</li>
         </ul>
       </div>
     </div>

@@ -38,40 +38,99 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
 }) => {
 
  const allTokens = customTokens ?? [];
- 
+
+  const tableCustomStyles = {
+    table: {
+      style: {
+        minWidth: "100%",
+      },
+    },
+    headCells: {
+      style: {
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        wordBreak: "normal" as const,
+        whiteSpace: "nowrap" as const,
+      },
+    },
+    cells: {
+      style: {
+        wordBreak: "normal" as const,
+        overflowWrap: "break-word" as const,
+        whiteSpace: "normal" as const,
+        verticalAlign: "middle" as const,
+      },
+    },
+    rows: {
+      style: {
+        minHeight: "56px",
+      },
+    },
+  };
+
   const columns = [
     {
       name: "Token",
       selector: (row: any) => row.symbol,
       sortable: true,
+      minWidth: "200px",
+      grow: 2,
       cell: (row: any) => (
-        <div className="flex items-center gap-2">
-          <div className="token-icon-placeholder">
+        <div
+          className="token-table-token-row"
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            minWidth: 0,
+            width: "100%",
+          }}
+        >
+          <div className="token-icon-placeholder" style={{ flexShrink: 0 }}>
             {row.symbol.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <p className="token-symbol">{row.symbol}</p>
-            {row.name && <p className="token-name">{row.name}</p>}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p
+              className="token-symbol"
+              style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+            >
+              {row.symbol}
+            </p>
+            {row.name && (
+              <p
+                className="token-name"
+                style={{ wordBreak: "normal", overflowWrap: "break-word" }}
+              >
+                {row.name}
+              </p>
+            )}
           </div>
         </div>
       ),
     },
     {
       name: "Balance",
+      minWidth: "120px",
+      grow: 1,
       cell: (row: any) => {
         const balance =
           customTokenBalances[row.address.toLowerCase()];
         const balanceNum = balance ? parseFloat(balance) : 0;
 
         return (
-          <div>
-            <p>{balanceNum.toFixed(4)} {row.symbol}</p>
+          <div style={{ wordBreak: "normal", minWidth: 0 }}>
+            <p style={{ margin: 0, wordBreak: "normal", overflowWrap: "break-word" }}>
+              {balanceNum.toFixed(4)} {row.symbol}
+            </p>
           </div>
         );
       },
     },
 {
   name: "Status",
+  minWidth: "88px",
+  grow: 0,
   cell: (row: any) => {
 
     const status = (row.status || "").toUpperCase();
@@ -164,6 +223,8 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
             <DataTable
               columns={columns}
               data={allTokens}
+              customStyles={tableCustomStyles}
+              responsive
               pagination
               paginationPerPage={10}
               paginationRowsPerPageOptions={[10, 20, 30, 50, 100]}

@@ -91,19 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth,
             <button className={`sidebar-nav-button ${activeTab === 'trade-listing' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('trade-listing')}>
               📊 Trade Listing
             </button>
-            {(() => {
-              const isAdmin = auth?.user?.isAdmin === true;
-              console.log('🔍 Sidebar - Checking admin status:', {
-                hasAuth: !!auth,
-                hasUser: !!auth?.user,
-                isAdmin: isAdmin,
-                isAdminValue: auth?.user?.isAdmin,
-                isAdminType: typeof auth?.user?.isAdmin,
-                userId: auth?.user?.id,
-                email: auth?.user?.email
-              });
-              return isAdmin;
-            })() && (
+            {auth?.user?.isAdmin === true && (
               <>
                 <button className={`sidebar-nav-button ${activeTab === 'admin' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('admin')}>
                   🛡️ Admin Panel

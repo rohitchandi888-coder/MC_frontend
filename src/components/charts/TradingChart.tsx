@@ -13,7 +13,7 @@ import {
   CandlestickSeries,
 } from 'lightweight-charts';
 import { getApiUrl } from '../../config';
-
+import { MM } from '../../theme/metaMaskShell';
 
 const currencyRatesToUSD: Record<string, number> = {
   USD: 1,
@@ -34,9 +34,87 @@ interface OHLCData {
 interface TradingChartProps {
   selectedCoins: string[];
   auth?: { token: string } | null;
+  /** Light MetaMask-style chrome + chart theme (mobile Explore tab). */
+  inMobileShell?: boolean;
 }
 
-export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth }) => {
+function buildChartOptions(shell: boolean, width: number, height: number) {
+  const bg = shell ? MM.surface : '#131722';
+  const text = shell ? MM.textSecondary : '#d1d4dc';
+  const grid = shell ? MM.borderLight : '#1e222d';
+  const scaleBorder = shell ? MM.border : '#2B2B43';
+  const cross = shell ? MM.textMuted : '#758696';
+  return {
+    layout: {
+      background: { type: ColorType.Solid, color: bg },
+      textColor: text,
+      fontSize: 12,
+      fontFamily:
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    },
+    grid: {
+      vertLines: {
+        color: grid,
+        style: LineStyle.Solid,
+        visible: true,
+      },
+      horzLines: {
+        color: grid,
+        style: LineStyle.Solid,
+        visible: true,
+      },
+    },
+    width,
+    height,
+    autoSize: false,
+    handleScroll: {
+      mouseWheel: true,
+      pressedMouseMove: true,
+    },
+    handleScale: {
+      axisPressedMouseMove: true,
+      mouseWheel: true,
+      pinch: true,
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: {
+        color: cross,
+        width: 1,
+        style: LineStyle.Dashed,
+        labelBackgroundColor: bg,
+      },
+      horzLine: {
+        color: cross,
+        width: 1,
+        style: LineStyle.Dashed,
+        labelBackgroundColor: bg,
+      },
+    },
+    rightPriceScale: {
+      borderColor: scaleBorder,
+      scaleMargins: {
+        top: 0.1,
+        bottom: 0.1,
+      },
+    },
+    timeScale: {
+      borderColor: scaleBorder,
+      timeVisible: true,
+      secondsVisible: false,
+      rightOffset: 12,
+      barSpacing: 3,
+      rightBarStaysOnScroll: true,
+      lockVisibleTimeRangeOnResize: true,
+    },
+  };
+}
+
+export const TradingChart: React.FC<TradingChartProps> = ({
+  selectedCoins,
+  auth,
+  inMobileShell = false,
+}) => {
   const [selectedCoin, setSelectedCoin] = useState<string>('FDA');
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d' | '1w'>('1h');
   const [loading, setLoading] = useState(true);
@@ -54,6 +132,8 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
   // const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const candlestickSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+
+  const chartAreaHeight = inMobileShell ? 360 : 600;
 
   // Coin names mapping - defined early for use in search
   const coinNames: Record<string, string> = {
@@ -232,176 +312,78 @@ export const TradingChart: React.FC<TradingChartProps> = ({ selectedCoins, auth 
     return data;
   };
 
-  // Initialize TradingView-like chart
+  // Initialize chart (theme follows inMobileShell; rebuild when it changes)
   useEffect(() => {
-    const initChart = () => {
-      if (!chartContainerRef.current) {
-        console.log('Chart container not ready, retrying...');
-        return false;
-      }
+    let removeResize: (() => void) | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const shell = inMobileShell;
+    const defaultH = shell ? 360 : 600;
 
-      // Clean up existing chart if any
+    const tryInit = () => {
+      if (!chartContainerRef.current) return;
+
       if (chartRef.current) {
         try {
           chartRef.current.remove();
-        } catch (error) {
-          console.error('Error removing existing chart:', error);
+        } catch {
+          /* ignore */
         }
         chartRef.current = null;
-        setChartReady(false);
       }
 
       const container = chartContainerRef.current;
-      if (!container) {
-        console.log('Container is null');
-        return false;
-      }
-
-      // Ensure container has dimensions
-      if (container.clientWidth === 0 || container.clientHeight === 0) {
-        console.log('Container has no dimensions, retrying...', {
-          width: container.clientWidth,
-          height: container.clientHeight
-        });
-        return false;
+      if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
+        return;
       }
 
       try {
-        console.log('Creating chart with dimensions:', {
-          width: container.clientWidth,
-          height: container.clientHeight
-        });
-        
-        const chart = createChart(container, {
-          layout: {
-            background: { type: ColorType.Solid, color: '#131722' },
-            textColor: '#d1d4dc',
-            fontSize: 12,
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          },
-          grid: {
-            vertLines: { 
-              color: '#1e222d',
-              style: LineStyle.Solid,
-              visible: true,
-            },
-            horzLines: { 
-              color: '#1e222d',
-              style: LineStyle.Solid,
-              visible: true,
-            },
-          },
-          width: container.clientWidth,
-          height: 600,
-          autoSize: false,
-          handleScroll: {
-            mouseWheel: true,
-            pressedMouseMove: true,
-          },
-          handleScale: {
-            axisPressedMouseMove: true,
-            mouseWheel: true,
-            pinch: true,
-          },
-          crosshair: {
-            mode: CrosshairMode.Normal,
-            vertLine: {
-              color: '#758696',
-              width: 1,
-              style: LineStyle.Dashed,
-              labelBackgroundColor: '#131722',
-            },
-            horzLine: {
-              color: '#758696',
-              width: 1,
-              style: LineStyle.Dashed,
-              labelBackgroundColor: '#131722',
-            },
-          },
-          rightPriceScale: {
-            borderColor: '#2B2B43',
-            scaleMargins: {
-              top: 0.1,
-              bottom: 0.1,
-            },
-          },
-          timeScale: {
-            borderColor: '#2B2B43',
-            timeVisible: true,
-            secondsVisible: false,
-            rightOffset: 12,
-            barSpacing: 3,
-            rightBarStaysOnScroll: true,
-            lockVisibleTimeRangeOnResize: true,
-          },
-          watermark: {
-            visible: false,
-          },
-        });
-
+        const chart = createChart(
+          container,
+          buildChartOptions(shell, container.clientWidth, defaultH),
+        );
         chartRef.current = chart;
-        const chartProto = Object.getPrototypeOf(chart);
-        const allMethods = Object.getOwnPropertyNames(chartProto);
-        const addMethods = allMethods.filter(m => m.includes('add') || m.includes('Series') || m.includes('Candle'));
-        console.log('Chart created successfully', {
-          hasAddCandlestickSeries: typeof chart.addCandlestickSeries === 'function',
-          chartType: typeof chart,
-          allMethods: allMethods,
-          addMethods: addMethods,
-          chartKeys: Object.keys(chart).slice(0, 20)
-        });
-        
-        // Set chart ready immediately
         setChartReady(true);
 
-        // Handle resize
         const handleResize = () => {
-          if (chartContainerRef.current && chartRef.current) {
-            const width = chartContainerRef.current.clientWidth;
-            const height = chartContainerRef.current.clientHeight;
-            chartRef.current.applyOptions({
-              width: width,
-              height: height || 600,
-            });
-            console.log('📏 Chart resized to:', width, 'x', height || 600);
-          }
+          if (!chartContainerRef.current || !chartRef.current) return;
+          const w = chartContainerRef.current.clientWidth;
+          const h = chartContainerRef.current.clientHeight || defaultH;
+          chartRef.current.applyOptions({ width: w, height: h });
         };
 
-        // Initial resize after a short delay to ensure container is ready
-        setTimeout(() => {
-          handleResize();
-        }, 200);
-
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-          window.removeEventListener('resize', handleResize);
-          setChartReady(false);
-          try {
-            chart.remove();
-          } catch (error) {
-            console.error('Error removing chart:', error);
-          }
+        const t = setTimeout(handleResize, 200);
+        window.addEventListener("resize", handleResize);
+        removeResize = () => {
+          clearTimeout(t);
+          window.removeEventListener("resize", handleResize);
         };
       } catch (error) {
-        console.error('Error creating chart:', error);
+        console.error("Error creating chart:", error);
         setChartReady(false);
-        return false;
       }
-      return true;
     };
 
-    // Try to initialize immediately
-    if (!initChart()) {
-      // If failed, retry after a short delay
-      const timer = setTimeout(() => {
-        if (!chartRef.current) {
-          initChart();
-        }
+    tryInit();
+    if (!chartRef.current) {
+      retryTimer = setTimeout(() => {
+        if (!chartRef.current) tryInit();
       }, 300);
-      return () => clearTimeout(timer);
     }
-  }, []);
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      removeResize?.();
+      if (chartRef.current) {
+        try {
+          chartRef.current.remove();
+        } catch {
+          /* ignore */
+        }
+        chartRef.current = null;
+      }
+      setChartReady(false);
+    };
+  }, [inMobileShell]);
 
 // Update chart data
 useEffect(() => {
@@ -560,7 +542,7 @@ useEffect(() => {
 
   }
 
-}, [selectedCoin, ohlcData]);
+}, [selectedCoin, ohlcData, inMobileShell]);
 
   // Fetch P2P trades data for FDA and convert to OHLC
   const fetchP2PTradesData = async (): Promise<OHLCData[]> => {
@@ -854,40 +836,125 @@ useEffect(() => {
 
   const volume24h = getVolume24h();
 
-    return (
-    <div className="tradingview-chart-container" style={{ background: '#0f172a' }}>
-      {/* TradingView-like Header */}
-      <div className="bg-slate-800 border-b border-slate-600 p-4" style={{ background: '#1e293b' }}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          {/* Coin Search */}
-          <div className="flex-1 min-w-[250px] flex gap-2">
+  const shell = inMobileShell;
+  const pageBg = shell ? MM.pageBg : "#0f172a";
+  const cardBg = shell ? MM.surface : "#1e293b";
+  const cardBorder = shell ? MM.borderLight : "#475569";
+  const inputBg = shell ? MM.pageBg : "#334155";
+  const inputFg = shell ? MM.text : "#e2e8f0";
+  const muted = shell ? MM.textSecondary : "#94a3b8";
+  const chartBg = shell ? MM.surface : "#131722";
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: shell ? 0 : 250,
+    padding: "10px 14px",
+    borderRadius: MM.radius,
+    border: `1px solid ${shell ? MM.border : "#475569"}`,
+    background: inputBg,
+    color: inputFg,
+    fontSize: 14,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const btnPrimary: React.CSSProperties = {
+    padding: "10px 18px",
+    borderRadius: MM.radius,
+    border: "none",
+    background: shell ? MM.accent : "#eab308",
+    color: shell ? "#fff" : "#0f172a",
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    minWidth: shell ? "100%" : 160,
+    cursor: "pointer",
+  };
+
+  return (
+    <div
+      className="tradingview-chart-container"
+      style={{
+        background: pageBg,
+        borderRadius: shell ? MM.radius : 0,
+        overflow: shell ? "hidden" : undefined,
+      }}
+    >
+      <div
+        style={{
+          background: cardBg,
+          borderBottom: `1px solid ${cardBorder}`,
+          padding: shell ? 12 : 16,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: shell ? "column" : "row",
+            alignItems: shell ? "stretch" : "center",
+            justifyContent: "space-between",
+            flexWrap: shell ? "nowrap" : "wrap",
+            gap: shell ? 12 : 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flex: shell ? undefined : 1,
+              gap: 8,
+              minWidth: shell ? 0 : 250,
+            }}
+          >
             <input
               type="text"
-              placeholder="🔍 Search coin (Bitcoin, Ethereum, FDA, JIO)..."
+              placeholder={
+                shell
+                  ? "Search BTC, ETH, FDA, JIO…"
+                  : "🔍 Search coin (Bitcoin, Ethereum, FDA, JIO)..."
+              }
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === "Enter") {
                   handleSearchSubmit();
                 }
               }}
               value={coinSearch}
               onChange={(e) => setCoinSearch(e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-slate-700 text-slate-200 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent placeholder-slate-400"
+              style={inputStyle}
             />
-            <button
-              onClick={handleSearchSubmit}
-              className="px-6 py-2.5 bg-yellow-500 text-slate-900 font-semibold rounded-lg hover:bg-yellow-600 transition-all focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 focus:ring-offset-slate-800"
-            >
+            <button type="button" onClick={handleSearchSubmit} style={btnPrimary}>
               Search
             </button>
           </div>
 
-          {/* Timeframe Dropdown */}
-          <div className="flex items-center gap-2">
-            <label className="text-slate-300 text-sm font-semibold whitespace-nowrap">Timeframe:</label>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <label
+              style={{
+                color: muted,
+                fontSize: 13,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Timeframe
+            </label>
             <select
               value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value as typeof timeframe)}
-              className="px-4 py-2.5 bg-slate-700 text-slate-200 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent cursor-pointer"
+              onChange={(e) =>
+                setTimeframe(e.target.value as typeof timeframe)
+              }
+              style={selectStyle}
             >
               <option value="1m">1 Minute</option>
               <option value="5m">5 Minutes</option>
@@ -901,58 +968,139 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Price Info Bar */}
-      <div className="bg-slate-800 border-b border-slate-600 p-4" style={{ background: '#1e293b' }}>
-        <div className="flex items-center justify-between flex-wrap gap-6">
-          <div className="flex items-center gap-6">
-            <div>
-              <p className="text-xs text-slate-400 mb-1 font-semibold">{coinNames[selectedCoin]}</p>
-              <p className="text-3xl font-bold " style={{ color: "#ce1010" }}>
-                {formatPrice(currentPrice, selectedCoin)}
-              </p>
-            </div>
-          </div>
+      <div
+        style={{
+          background: cardBg,
+          borderBottom: `1px solid ${cardBorder}`,
+          padding: shell ? "12px 14px" : 16,
+        }}
+      >
+        <div>
+          <p
+            style={{
+              fontSize: 12,
+              color: muted,
+              margin: "0 0 4px",
+              fontWeight: 600,
+            }}
+          >
+            {coinNames[selectedCoin]}
+          </p>
+          <p
+            style={{
+              fontSize: shell ? 28 : 30,
+              fontWeight: 700,
+              margin: 0,
+              color: shell ? MM.text : "#f87171",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {formatPrice(currentPrice, selectedCoin)}
+          </p>
         </div>
       </div>
 
-      {/* Chart Container - Always render container, show overlays */}
-      <div className="border-b border-slate-600" style={{ position: 'relative', minHeight: '600px', background: '#131722', width: '100%' }}>
-        {/* Chart container - always rendered and visible */}
-        <div 
-          ref={chartContainerRef} 
+      <div
+        style={{
+          position: "relative",
+          minHeight: chartAreaHeight,
+          background: chartBg,
+          width: "100%",
+          borderBottom: shell ? `1px solid ${cardBorder}` : undefined,
+        }}
+      >
+        <div
+          ref={chartContainerRef}
           id="chart-container"
-          style={{ 
-            width: '100%', 
-            height: '600px',
-            minHeight: '600px',
-            position: 'relative',
-            background: '#131722',
+          style={{
+            width: "100%",
+            height: chartAreaHeight,
+            minHeight: chartAreaHeight,
+            position: "relative",
+            background: chartBg,
             zIndex: 1,
-            display: 'block',
-            visibility: 'visible',
-          }} 
+            display: "block",
+            visibility: "visible",
+          }}
         />
-        {/* Loading overlay */}
         {loading && ohlcData[selectedCoin]?.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 z-10" style={{ pointerEvents: 'none' }}>
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-              <p className="text-slate-300 font-semibold">Loading chart data...</p>
-              <p className="text-slate-400 text-sm mt-2">Fetching P2P trade data...</p>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: shell
+                ? "rgba(255,255,255,0.9)"
+                : "rgba(15,23,42,0.9)",
+              zIndex: 10,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div
+                className="animate-spin rounded-full h-12 w-12 mx-auto mb-4"
+                style={{
+                  border: `2px solid ${shell ? MM.borderLight : "#334155"}`,
+                  borderTopColor: shell ? MM.accent : "#eab308",
+                }}
+              />
+              <p
+                style={{
+                  color: shell ? MM.text : "#e2e8f0",
+                  fontWeight: 600,
+                  margin: 0,
+                }}
+              >
+                Loading chart data…
+              </p>
+              <p
+                style={{
+                  color: muted,
+                  fontSize: 13,
+                  marginTop: 8,
+                  marginBottom: 0,
+                }}
+              >
+                Fetching P2P trade data…
+              </p>
             </div>
           </div>
         )}
-        {/* Empty state overlay */}
         {!loading && ohlcData[selectedCoin]?.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 z-10" style={{ pointerEvents: 'none' }}>
-            <div className="text-center">
-              <p className="text-slate-300 font-semibold text-lg mb-2">No chart data available</p>
-              <p className="text-slate-400 text-sm">No completed FDA trades found for the selected timeframe.</p>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: shell
+                ? "rgba(255,255,255,0.92)"
+                : "rgba(15,23,42,0.9)",
+              zIndex: 10,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{ textAlign: "center", padding: 16 }}>
+              <p
+                style={{
+                  color: shell ? MM.text : "#e2e8f0",
+                  fontWeight: 600,
+                  fontSize: 17,
+                  margin: "0 0 8px",
+                }}
+              >
+                No chart data available
+              </p>
+              <p style={{ color: muted, fontSize: 13, margin: 0 }}>
+                No completed FDA trades found for the selected timeframe.
+              </p>
             </div>
           </div>
         )}
       </div>
-
     </div>
   );
 };

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
+import { MM } from './theme/metaMaskShell';
 
 const popularTokens = [
   {
@@ -41,9 +42,72 @@ const popularTokens = [
   },
 ];
 
-const TabItem = ({ icon, label, active, onClick }: any) => {
+type NavTabGlyph = "home" | "explore" | "activity" | "rewards";
+
+/** Inline SVGs — avoids Font Awesome webfont failures (broken “image” placeholders in some browsers). */
+const NavTabIcon: React.FC<{ name: NavTabGlyph }> = ({ name }) => {
+  const s = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (name) {
+    case "home":
+      return (
+        <svg {...s} aria-hidden>
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      );
+    case "explore":
+      return (
+        <svg {...s} aria-hidden>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      );
+    case "activity":
+      return (
+        <svg {...s} aria-hidden>
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      );
+    case "rewards":
+      return (
+        <svg {...s} aria-hidden>
+          <polyline points="20 12 20 22 4 22 4 12" />
+          <rect x="2" y="7" width="20" height="5" rx="1" />
+          <line x1="12" y1="22" x2="12" y2="7" />
+          <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+          <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
+const TabItem = ({
+  glyph,
+  label,
+  active,
+  onClick,
+}: {
+  glyph: NavTabGlyph;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) => {
+  const c = active ? MM.accent : MM.navInactive;
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         background: "transparent",
@@ -51,14 +115,35 @@ const TabItem = ({ icon, label, active, onClick }: any) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        justifyContent: "flex-end",
         gap: 4,
-        color: active ? "#22c55e" : "#94a3b8",
-        fontSize: 11,
+        flex: 1,
+        minWidth: 0,
+        maxWidth: 88,
+        padding: "6px 2px 10px",
+        color: c,
+        fontSize: 10,
+        fontWeight: active ? 600 : 500,
         cursor: "pointer",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
-      <i className={icon} style={{ fontSize: 18 }}></i>
-      <span>{label}</span>
+      <span
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: 22,
+          width: 22,
+          opacity: active ? 1 : 0.92,
+          color: c,
+        }}
+      >
+        <NavTabIcon name={glyph} />
+      </span>
+      <span style={{ letterSpacing: "0.02em", lineHeight: 1.1, color: c }}>
+        {label}
+      </span>
     </button>
   );
 };
@@ -154,7 +239,9 @@ export const Dashboard: React.FC = () => {
   const [selectedUnlockWalletId, setSelectedUnlockWalletId] = useState<string>('');
   const [message, setMessage] = useState<string | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth <= 768,
+  );
   const getActiveWalletAddress = (): string | null => {
 
     if (!auth?.user?.id) return null;
@@ -313,6 +400,8 @@ export const Dashboard: React.FC = () => {
     const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   
   const unlockedPrivateKeyRef = useRef<string | null>(null);
+  /** Avoid multiple redirects when several API calls return 401 together. */
+  const authFailureHandledRef = useRef(false);
   const navigate = useNavigate();
 
 
@@ -529,6 +618,23 @@ export const Dashboard: React.FC = () => {
     setMessage(null);
   };
 
+  /** JWT rejected by API (expired, rotated, or invalid) — clear session and go to login. */
+  const onUnauthorizedApi = useCallback(() => {
+    if (authFailureHandledRef.current) return;
+    authFailureHandledRef.current = true;
+    try {
+      localStorage.removeItem(AUTH_KEY);
+    } catch {
+      /* ignore */
+    }
+    setAuth(null);
+    navigate('/login', { replace: true });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (auth?.token) authFailureHandledRef.current = false;
+  }, [auth?.token]);
+
   const fetchInternalBalance = async (walletAddress?: string) => {
     if (!auth) {
       console.warn('[fetchInternalBalance] No auth available');
@@ -553,6 +659,11 @@ export const Dashboard: React.FC = () => {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
+
+      if (res.status === 401) {
+        onUnauthorizedApi();
+        return;
+      }
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -817,6 +928,11 @@ export const Dashboard: React.FC = () => {
       const res = await fetch(getApiUrl('wallets'), {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
+
+      if (res.status === 401) {
+        onUnauthorizedApi();
+        return;
+      }
 
       if (!res.ok) {
         console.error('[Dashboard] Failed to fetch wallets, status:', res.status);
@@ -1127,6 +1243,11 @@ export const Dashboard: React.FC = () => {
           Authorization: `Bearer ${currentAuth.token}`,
         },
       });
+
+      if (res.status === 401) {
+        onUnauthorizedApi();
+        return;
+      }
 
       if (res.ok) {
         const profileData = await res.json();
@@ -3287,10 +3408,17 @@ export const Dashboard: React.FC = () => {
         }
       });
 
-      const data = await res.json();
+      if (res.status === 401) {
+        onUnauthorizedApi();
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.error);
+        throw new Error(
+          typeof data?.error === "string" ? data.error : `Request failed (${res.status})`,
+        );
       }
 
       setCustomTokens(
@@ -3590,6 +3718,22 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const mobileWalletTitle = useMemo(() => {
+    const raw = storedMeta?.label?.trim();
+    const addr = storedMeta?.address;
+    const walletIndex =
+      storedMeta && allWallets.length > 0
+        ? allWallets.findIndex((w) => w.id === storedMeta.id) + 1
+        : 0;
+    if (raw && !/^new$/i.test(raw)) return raw;
+    if (walletIndex > 0) return `Wallet ${walletIndex}`;
+    if (addr && addr.length > 10) {
+      return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    }
+    if (addr) return addr;
+    return "Wallet";
+  }, [storedMeta?.label, storedMeta?.address, storedMeta?.id, allWallets]);
+
     const loadFdaPrice = async () => {
     try {
       const res = await fetch(getApiUrl("fdaPrice"));
@@ -3619,22 +3763,58 @@ export const Dashboard: React.FC = () => {
 };
   return (
     <>
-    <div id="dashboard-root" className="min-h-screen bg-slate-950 text-slate-50">
+    <div
+      id="dashboard-root"
+      className={
+        isMobile
+          ? "min-h-screen min-h-[100dvh] mobile-app-shell bg-[#f2f4f6] text-slate-900"
+          : "min-h-screen bg-slate-950 text-slate-50"
+      }
+    >
       {/* Mobile Menu Toggle Button */}
      {isMobile && (
-       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'black', paddingBlock: 10, paddingInline: 20, position: 'sticky', top: 0, zIndex: 999, color: '#fff'}}>
-        <div style={{cursor: 'pointer'}}>
-          <span>Account 1</span>
-          <i className="fa-solid fa-chevron-down"></i>
+       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', paddingBlock: 12, paddingInline: 16, position: 'sticky', top: 0, zIndex: 999, color: '#0f172a', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(15,23,42,0.06)'}}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowWalletModal(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowWalletModal(true);
+            }
+          }}
+          style={{
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontWeight: 600,
+            fontSize: 15,
+            maxWidth: "min(200px, 55vw)",
+          }}
+          aria-label="Switch wallet"
+        >
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={storedMeta?.address || undefined}
+          >
+            {mobileWalletTitle}
+          </span>
+          <i className="fa-solid fa-chevron-down" style={{ fontSize: 12, opacity: 0.7, flexShrink: 0 }}></i>
         </div>
 
       
          <div style={{display: 'flex', alignItems: 'center'}}>
-        <div style={{marginRight: 10, cursor: 'pointer'}} onClick={() => setShowWalletModal(true)}>
-          <i className="fa-regular fa-copy"></i>
+        <div style={{marginRight: 14, cursor: 'pointer', padding: 8}} onClick={() => setShowWalletModal(true)} aria-label="Copy address">
+          <i className="fa-regular fa-copy" style={{ fontSize: 18 }}></i>
         </div>
          <span
-         style={{cursor : 'pointer', paddingInline: 10, fontSize: 20}}
+         style={{cursor : 'pointer', padding: 8, fontSize: 20, lineHeight: 1}}
           onClick={() => setSidebarOpen(!sidebarOpen)}
           aria-label="Toggle menu"
         >
@@ -3655,7 +3835,15 @@ export const Dashboard: React.FC = () => {
         />
       )}
 
-      <div id="dashboard-container" className="flex max-w-7xl mx-auto" style={{ alignItems: 'flex-start', paddingBottom: 60, display: isMobile ? 'flex': 'block' }}>
+      <div
+        id="dashboard-container"
+        className="flex max-w-7xl mx-auto"
+        style={{
+          alignItems: "flex-start",
+          paddingBottom: isMobile ? 0 : 60,
+          display: isMobile ? "flex" : "block",
+        }}
+      >
         {/* Sidebar */}
         <Sidebar
           activeTab={activeTab}
@@ -3669,7 +3857,18 @@ export const Dashboard: React.FC = () => {
 
        
          {/* Main content */}
-        <main id="main-content" className="flex-1 main-container" style={{padding: isMobile ? '' : '2.5rem'}}>
+        <main
+          id="main-content"
+          className="flex-1 main-container"
+          style={{
+            padding: isMobile ? "12px 12px 0" : "2.5rem",
+            paddingBottom: isMobile
+              ? "calc(92px + env(safe-area-inset-bottom, 0px))"
+              : undefined,
+            boxSizing: "border-box",
+            width: isMobile ? "100%" : undefined,
+          }}
+        >
           {/* Top Header with Profile and Balances */}
           {isMobile ? ('') : (
             <TopHeader
@@ -3689,21 +3888,23 @@ export const Dashboard: React.FC = () => {
           
 
           {isMobile && activeTab === 'dashboard' && (
-            <div style={{backgroundColor: 'black', width: '100%'}}>
+            <div style={{ backgroundColor: MM.pageBg, width: "100%", minHeight: "100%" }}>
               <MobileDashboard
               auth={auth}
               price={fdaPrice}
               change="0 (-0.01%)"
               actions={[
                 { label: "Buy", icon: "fa-solid fa-dollar-sign", changeTab: () => handleChangeTab('p2p') },
-                { label: "Swap", icon: "fa-solid fa-arrows-rotate", changeTab: () => setShowSwapModal(true) },
-                { label: "Send", icon: "fa-solid fa-paper-plane", changeTab: () => handleChangeTab('send') },
-                { label: "Receive", icon: "fa-solid fa-arrow-down" },
+                { label: "Swap", icon: "fa-solid fa-right-left", changeTab: () => setShowSwapModal(true) },
+                { label: "Send", icon: "fa-solid fa-arrow-up-right-from-square", changeTab: () => handleChangeTab('send') },
+                { label: "Receive", icon: "fa-solid fa-arrow-down", changeTab: () => setShowWalletModal(true) },
               ]}
               tokens={popularTokens}
               tokenPrices={tokenPrices}
               nativeBalance={nativeBalance}
               fdaBalance={fdaBalance}
+              customTokens={customTokens}
+              customTokenBalances={customTokenBalances}
               allWallets={allWallets}
               indiAction={() => setActiveTab('tokens')}
               internalFdaBalance={internalFdaBalance}
@@ -3973,6 +4174,7 @@ export const Dashboard: React.FC = () => {
 
           {activeTab === 'p2p' && (
             <P2PTrading
+              inMobileShell={isMobile}
               auth={auth}
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
@@ -4099,7 +4301,11 @@ export const Dashboard: React.FC = () => {
           )}
 
           {activeTab === 'charts' && (
-            <TradingChart selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']} auth={auth} />
+            <TradingChart
+              selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']}
+              auth={auth}
+              inMobileShell={isMobile}
+            />
           )}
 
           {activeTab === 'payment-methods' && (
@@ -4115,83 +4321,159 @@ export const Dashboard: React.FC = () => {
       </div>
 
        {isMobile && (
-  <div
-    style={{
-      position: "fixed",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      background: "#020617",
-      borderTop: "1px solid #1e293b",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "10px 0",
-      zIndex: 9999,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-    }}
-  >
-    {/* HOME */}
-    <TabItem
-      icon="fa-solid fa-house"
-      label="Home"
-      active={activeTab === "dashboard"}
-      onClick={() => setActiveTab("dashboard")}
-    />
+          <nav
+            aria-label="Main"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              background: MM.surface,
+              borderTop: `1px solid ${MM.borderLight}`,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr auto 1fr 1fr",
+              alignItems: "end",
+              justifyItems: "stretch",
+              columnGap: 0,
+              paddingLeft: 4,
+              paddingRight: 4,
+              paddingTop: 8,
+              paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
+              zIndex: 9990,
+              boxShadow: MM.shadowBar,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                minWidth: 0,
+              }}
+            >
+              <TabItem
+                glyph="home"
+                label="Home"
+                active={activeTab === "dashboard"}
+                onClick={() => setActiveTab("dashboard")}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                minWidth: 0,
+              }}
+            >
+              <TabItem
+                glyph="explore"
+                label="Explore"
+                active={activeTab === "charts"}
+                onClick={() => setActiveTab("charts")}
+              />
+            </div>
 
-    {/* P2P */}
-    <TabItem
-      icon="fa-solid fa-arrows-left-right"
-      label="P2P"
-      active={activeTab === "p2p"}
-      onClick={() => setActiveTab("p2p")}
-    />
+            <div
+              role="presentation"
+              onClick={() => setActiveTab("p2p")}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                cursor: "pointer",
+                position: "relative",
+                width: MM.navFabSize + 16,
+                paddingBottom: 2,
+                flexShrink: 0,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Trade"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTab("p2p");
+                }}
+                style={{
+                  position: "absolute",
+                  top: -MM.navFabRise,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: MM.accent,
+                  border: `3px solid ${MM.surface}`,
+                  borderRadius: "50%",
+                  width: MM.navFabSize,
+                  height: MM.navFabSize,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 22,
+                  color: "#fff",
+                  boxShadow:
+                    "0 4px 14px rgba(37, 99, 235, 0.35), 0 2px 6px rgba(0,0,0,0.08)",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    fontSize: 30,
+                    fontWeight: 300,
+                    lineHeight: 1,
+                    color: "inherit",
+                    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+                    display: "block",
+                    marginTop: -2,
+                  }}
+                >
+                  +
+                </span>
+              </button>
+              <span
+                style={{
+                  marginTop: MM.navFabRise - 6,
+                  fontSize: 10,
+                  letterSpacing: "0.02em",
+                  color: activeTab === "p2p" ? MM.accent : MM.navInactive,
+                  fontWeight: activeTab === "p2p" ? 600 : 500,
+                  lineHeight: 1.1,
+                }}
+              >
+                Trade
+              </span>
+            </div>
 
-
-    {/* CENTER FAB */}
-   <div  onClick={() => setActiveTab("create")} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#fff', cursor: 'pointer'}}>
-     <button
-      style={{
-        position: "absolute",
-        top: "-20px",
-        background: "#22c55e",
-        border: "none",
-        borderRadius: "50%",
-        width: "3rem",
-        height: "3rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "22px",
-        color: "#fff",
-        boxShadow: "0 6px 15px rgba(0,0,0,0.4)",
-        cursor: "pointer",
-      }}
-    >
-      <i className="fa-solid fa-plus"></i>
-    </button>
-      <span style={{marginTop: 12}}>Trade</span>
-   </div>
-
-
-    {/* UNLOCK */}
-    <TabItem
-      icon="fa-solid fa-unlock"
-      label="Unlock"
-      active={activeTab === "unlock"}
-      onClick={() => setActiveTab("unlock")}
-    />
-
-    {/* TOKENS */}
-    <TabItem
-      icon="fa-solid fa-coins"
-      label="Tokens"
-      active={activeTab === "tokens"}
-      onClick={() => setActiveTab("tokens")}
-    />
-  </div>
-)}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                minWidth: 0,
+              }}
+            >
+              <TabItem
+                glyph="activity"
+                label="Activity"
+                active={activeTab === "history"}
+                onClick={() => setActiveTab("history")}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                minWidth: 0,
+              }}
+            >
+              <TabItem
+                glyph="rewards"
+                label="Rewards"
+                active={activeTab === "profile"}
+                onClick={() => setActiveTab("profile")}
+              />
+            </div>
+          </nav>
+        )}
       {/* Error/Message Modal */}
       <MessageModal show={showMessageModal} message={message} onClose={closeMessageModal} />
 
@@ -4407,13 +4689,22 @@ export const Dashboard: React.FC = () => {
       storedMeta={storedMeta}
     />
     <SwapWalletModal
-    user={auth}
+      user={auth}
       isOpen={showSwapModal}
       onClose={() => setShowSwapModal(false)}
       wallets={allWallets}
       onSwitchWallet={handleSwitchWallet}
       storedMeta={storedMeta}
       internalFdaBalance={internalFdaBalance}
+      unlockedPrivateKeyRef={unlockedPrivateKeyRef}
+      nativeBalance={nativeBalance}
+      fdaBalance={fdaBalance}
+      onSwapComplete={() => {
+        if (storedMeta?.address) {
+          void fetchBalances(storedMeta.address);
+          void fetchInternalBalance(storedMeta.address);
+        }
+      }}
     />
     </>
   );

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
+import { MM } from '../../theme/metaMaskShell';
 
 interface P2PTradingProps {
+  /** Light MetaMask-style cards/inputs on mobile (matches app shell). */
+  inMobileShell?: boolean;
   auth: AuthState | null;
   internalFdaBalance: number | null;
   internalFdaLocked: number | null;
@@ -48,6 +51,7 @@ interface PaymentMethod {
 }
 
 export const P2PTrading: React.FC<P2PTradingProps> = ({
+  inMobileShell = false,
   auth,
   internalFdaBalance,
   internalFdaLocked,
@@ -178,7 +182,92 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   };
 
   return (
-    <div>
+    <>
+      {inMobileShell && (
+        <style>
+          {`
+          [data-p2p-mm="1"] .section-header { background: transparent !important; }
+          [data-p2p-mm="1"] .section-title { color: ${MM.text} !important; }
+          [data-p2p-mm="1"] .section-subtitle { color: ${MM.textSecondary} !important; }
+          [data-p2p-mm="1"] .p2p-info-box { background: #fffbeb !important; border: 1px solid #fcd34d !important; }
+          [data-p2p-mm="1"] .p2p-info-title { color: #92400e !important; }
+          [data-p2p-mm="1"] .p2p-info-text { color: #78350f !important; }
+          [data-p2p-mm="1"] .balance-display-card {
+            background: ${MM.surface} !important;
+            border: 1px solid ${MM.borderLight} !important;
+            box-shadow: 0 1px 3px rgba(15,23,42,0.06) !important;
+          }
+          [data-p2p-mm="1"] .balance-label { color: ${MM.textSecondary} !important; }
+          [data-p2p-mm="1"] .balance-amount { color: ${MM.text} !important; }
+          [data-p2p-mm="1"] .balance-locked { color: ${MM.textMuted} !important; }
+          [data-p2p-mm="1"] .action-card {
+            background: ${MM.surface} !important;
+            border: 1px solid ${MM.borderLight} !important;
+            box-shadow: 0 1px 3px rgba(15,23,42,0.06) !important;
+          }
+          [data-p2p-mm="1"] .action-card-header { border-bottom-color: ${MM.borderLight} !important; }
+          [data-p2p-mm="1"] .action-card-title { color: ${MM.text} !important; }
+          [data-p2p-mm="1"] .form-input-dark,
+          [data-p2p-mm="1"] .form-select-dark {
+            background: ${MM.surface} !important;
+            color: ${MM.text} !important;
+            border: 1px solid ${MM.border} !important;
+          }
+          [data-p2p-mm="1"] .p2p-subheading { color: #374151 !important; }
+          [data-p2p-mm="1"] .card-dark {
+            background: ${MM.pageBg} !important;
+            border: 1px solid ${MM.borderLight} !important;
+          }
+          [data-p2p-mm="1"] .warning-box { background: #fff7ed !important; border-color: #fed7aa !important; }
+          [data-p2p-mm="1"] .warn-text { color: #9a3412 !important; }
+          [data-p2p-mm="1"] .text-slate-300 { color: ${MM.text} !important; }
+          `}
+        </style>
+      )}
+    <div data-p2p-mm={inMobileShell ? '1' : undefined}>
+      {inMobileShell && (
+        <div style={{ padding: '0 1rem 12px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 14px',
+              borderRadius: MM.radius,
+              border: `1px solid ${MM.border}`,
+              background: MM.surface,
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+            }}
+          >
+            <span
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: '#F3BA2F',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: 14,
+                color: '#0f172a',
+                flexShrink: 0,
+              }}
+              aria-hidden
+            >
+              MC
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: MM.text }}>
+                Internal FDA · MC Wallet
+              </div>
+              <div style={{ fontSize: 12, color: MM.textSecondary, marginTop: 2 }}>
+                P2P offers use your internal balance, not on-chain swaps
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="section-header">
         <h2 className="section-title" style={{ padding: '0.5rem 1rem' }}>P2P Trading</h2>
         <p className="section-subtitle" style={{ padding: '0.5rem 1rem' }}>
@@ -758,5 +847,6 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
         </>
       )}
     </div>
+    </>
   );
 };
