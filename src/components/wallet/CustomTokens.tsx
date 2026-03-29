@@ -42,7 +42,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   const tableCustomStyles = {
     table: {
       style: {
-        minWidth: "100%",
+        width: "100%",
       },
     },
     headCells: {
@@ -71,11 +71,12 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
   const columns = [
     {
       name: "Token",
-      selector: (row: any) => row.symbol,
+      selector: (row: CustomToken) => row.symbol,
       sortable: true,
-      minWidth: "200px",
-      grow: 2,
-      cell: (row: any) => (
+      style: {
+        minWidth: "160px",
+      },
+      cell: (row: CustomToken) => (
         <div
           className="token-table-token-row"
           style={{
@@ -111,9 +112,13 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
     },
     {
       name: "Balance",
-      minWidth: "120px",
-      grow: 1,
-      cell: (row: any) => {
+      selector: (row: CustomToken) =>
+        customTokenBalances[row.address.toLowerCase()] ?? "0",
+      sortable: true,
+      style: {
+        minWidth: "100px",
+      },
+      cell: (row: CustomToken) => {
         const balance =
           customTokenBalances[row.address.toLowerCase()];
         const balanceNum = balance ? parseFloat(balance) : 0;
@@ -127,42 +132,45 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
         );
       },
     },
-{
-  name: "Status",
-  minWidth: "88px",
-  grow: 0,
-  cell: (row: any) => {
+    {
+      name: "Status",
+      selector: (row: CustomToken) => (row.status || "").toUpperCase(),
+      sortable: true,
+      style: {
+        minWidth: "88px",
+      },
+      cell: (row: CustomToken) => {
+        const status = (row.status || "").toUpperCase();
+        const isGlobal = status === "GLOBAL";
+        const isEnabled = status === "ON";
 
-    const status = (row.status || "").toUpperCase();
-    const isGlobal = status === "GLOBAL";
-    const isEnabled = status === "ON";
+        if (isGlobal) {
+          return (
+            <span style={{ fontSize: "12px", color: "#888" }}>
+              GLOBAL
+            </span>
+          );
+        }
 
-    if (isGlobal) {
-      return (
-        <span style={{ fontSize: "12px", color: "#888" }}>
-          GLOBAL
-        </span>
-      );
-    }
-
-    return (
-      <button
-        onClick={() => onToggleToken(row.address)}
-        style={{
-          padding: "4px 12px",
-          borderRadius: "6px",
-          fontSize: "12px",
-          border: "none",
-          cursor: "pointer",
-          backgroundColor: isEnabled ? "#f7a712" : "#000000",
-          color: isEnabled ? "#000000" : "#ffffff",
-        }}
-      >
-        {isEnabled ? "ON" : "OFF"}
-      </button>
-    );
-  },
-}
+        return (
+          <button
+            type="button"
+            onClick={() => onToggleToken(row.address)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "6px",
+              fontSize: "12px",
+              border: "none",
+              cursor: "pointer",
+              backgroundColor: isEnabled ? "#f7a712" : "#000000",
+              color: isEnabled ? "#000000" : "#ffffff",
+            }}
+          >
+            {isEnabled ? "ON" : "OFF"}
+          </button>
+        );
+      },
+    },
   ];
 
   return (

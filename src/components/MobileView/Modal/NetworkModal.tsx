@@ -266,7 +266,6 @@ const NetworkModal: React.FC<NetworkModalProps> = ({
                     cursor: "pointer",
                     fontSize: 12,
                     fontWeight: 600,
-                    border: "none",
                     borderRadius: 999,
                     background: networkTab === net ? MM.accent : MM.surface,
                     color: networkTab === net ? "#fff" : MM.textSecondary,

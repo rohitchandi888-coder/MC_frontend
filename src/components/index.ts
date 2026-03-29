@@ -40,4 +40,4 @@ export { TradingChart } from './charts/TradingChart';
 
 // Types and constants
 export type { Tab, AuthState } from './types';
-export { AUTH_KEY, DEFAULT_RPC_URL, FDA_TOKEN_ADDRESS, ERC20_ABI } from './types';
+export { AUTH_KEY, DEFAULT_RPC_URL, ETHEREUM_RPC_URL, FDA_TOKEN_ADDRESS, ERC20_ABI } from './types';

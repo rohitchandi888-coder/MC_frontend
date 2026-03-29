@@ -1062,6 +1062,9 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         auth={auth}
         userTokens={userTokens}
         onAdded={fetchUserTokens}
+        initialImportNetwork={
+          selectedNetwork === "All" ? "BNB" : selectedNetwork
+        }
       />
     </>
   );

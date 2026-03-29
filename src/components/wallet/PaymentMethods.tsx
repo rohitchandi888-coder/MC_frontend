@@ -385,7 +385,7 @@ const handleAdd = async () => {
       </div>
 
       <div className="card-dark mb-4">
-        <label className="text-xs text-slate-400 mb-1 block">
+        <label className="text-sm text-slate-300 mb-1.5 block font-medium">
           Select Payment Methods Currency
         </label>
 
@@ -406,7 +406,7 @@ const handleAdd = async () => {
           <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Payment Type</label>
+              <label className="text-sm text-slate-300 mb-1.5 block font-medium">Payment Type</label>
 
               <div className="flex gap-4">
                 <label className="flex items-center gap-2">
@@ -436,7 +436,7 @@ const handleAdd = async () => {
               </div>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">
+              <label className="text-sm text-slate-300 mb-1.5 block font-medium">
                 Name (example: Personal UPI)
               </label>
               <input
@@ -449,7 +449,7 @@ const handleAdd = async () => {
             </div>
             {paymentType === 'UPI' && (
               <div style={{ marginBlock: 10 }}>
-                <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
+                <label className="text-sm text-slate-300 mb-1.5 block font-medium">UPI ID</label>
                 <input
                   type="text"
                   className="form-input-dark w-full"
@@ -467,7 +467,7 @@ const handleAdd = async () => {
             )}
             {paymentType === 'QR' && (
               <div style={{ display: 'flex', flexDirection: 'column', marginBlock: 10 }}>
-                <label className="text-xs text-slate-400 mb-1 block">
+                <label className="text-sm text-slate-300 mb-1.5 block font-medium">
                   Upload QR Screenshot
                 </label>
 
@@ -488,7 +488,7 @@ const handleAdd = async () => {
               </div>
             )}
             {/* <div>
-            <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
+            <label className="text-sm text-slate-300 mb-1.5 block font-medium">UPI ID</label>
             <input
               type="text"
               className="form-input-dark w-full"
@@ -507,7 +507,7 @@ const handleAdd = async () => {
             ) }
           </div> */}
             {/* <div>
-            <label className="text-xs text-slate-400 mb-1 block">QR Code Image</label>
+            <label className="text-sm text-slate-300 mb-1.5 block font-medium">QR Code Image</label>
             <input
               type="file"
               accept="image/*"
@@ -628,7 +628,7 @@ const handleAdd = async () => {
               {editingId === method.id ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Method Name</label>
+                    <label className="text-sm text-slate-300 mb-1.5 block font-medium">Method Name</label>
                     <input
                       type="text"
                       className="form-input-dark w-full"
@@ -640,7 +640,7 @@ const handleAdd = async () => {
 
                   {editType === 'UPI' ? (
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">UPI ID</label>
+                      <label className="text-sm text-slate-300 mb-1.5 block font-medium">UPI ID</label>
                       <input
                         type="text"
                         className="form-input-dark w-full"
@@ -654,7 +654,7 @@ const handleAdd = async () => {
                     </div>
                   ) : (
                     <div>
-                      <label className="text-xs text-slate-400 mb-1 block">QR Code (naya upload karo agar change karna ho)</label>
+                      <label className="text-sm text-slate-300 mb-1.5 block font-medium">QR Code (naya upload karo agar change karna ho)</label>
                       <input
                         type="file"
                         accept="image/*"

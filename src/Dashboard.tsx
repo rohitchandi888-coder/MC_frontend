@@ -4084,6 +4084,7 @@ export const Dashboard: React.FC = () => {
               estimatedGas={estimatedGas}
               estimatingGas={estimatingGas}
               nativeBalance={nativeBalance}
+              fdaBalance={fdaBalance}
               internalFdaBalance={internalFdaBalance}
               recipientFdaWallet={recipientFdaWallet}
               unlockedPrivateKeyRef={unlockedPrivateKeyRef}
@@ -4091,6 +4092,10 @@ export const Dashboard: React.FC = () => {
               handleMaxAmount={handleMaxAmount}
               registerRecipientWallet={registerRecipientWallet}
               goto={() => setActiveTab('unlock')}
+              customTokens={customTokens}
+              customTokenBalances={customTokenBalances}
+              fdaPrice={fdaPrice}
+              onExit={() => setActiveTab('dashboard')}
             />
           )}
 
@@ -4175,6 +4180,7 @@ export const Dashboard: React.FC = () => {
           {activeTab === 'p2p' && (
             <P2PTrading
               inMobileShell={isMobile}
+              chainLabel={selectedNetwork}
               auth={auth}
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
@@ -4415,20 +4421,21 @@ export const Dashboard: React.FC = () => {
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                <span
+                <svg
+                  width={28}
+                  height={28}
+                  viewBox="0 0 24 24"
                   aria-hidden
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 300,
-                    lineHeight: 1,
-                    color: "inherit",
-                    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-                    display: "block",
-                    marginTop: -2,
-                  }}
+                  style={{ display: "block" }}
                 >
-                  +
-                </span>
+                  <path
+                    d="M12 5v14M5 12h14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.25}
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
               <span
                 style={{

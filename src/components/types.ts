@@ -14,6 +14,8 @@ export type AuthState = {
 
 export const AUTH_KEY = 'fda_auth';
 export const DEFAULT_RPC_URL = 'https://bsc-dataseed.binance.org';
+/** Used to resolve ERC-20 metadata on Ethereum (e.g. WBTC when “Bitcoin” tab maps to Ethereum). */
+export const ETHEREUM_RPC_URL = 'https://cloudflare-eth.com';
 export const FDA_TOKEN_ADDRESS = '0xDBFb9e215ba9C31d87F4e0a6673f57072aCf45Ff';
 
 export const ERC20_ABI = [

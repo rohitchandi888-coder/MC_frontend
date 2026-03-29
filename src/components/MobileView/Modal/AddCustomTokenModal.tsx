@@ -1,9 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ethers } from "ethers";
-import { fetchPopularPairsForTab } from "../../../utils/dexPopularTokens";
+import {
+  fetchPopularPairsForTab,
+  type NetworkTabKey,
+} from "../../../utils/dexPopularTokens";
 import { MM } from "../../../theme/metaMaskShell";
 import { getApiUrl } from "../../../config";
-import { DEFAULT_RPC_URL } from "../../types";
+import { DEFAULT_RPC_URL, ETHEREUM_RPC_URL } from "../../types";
 
 type TokenRow = {
   address: string;
@@ -53,6 +62,103 @@ const BNB_TOKEN_LIST_FALLBACK: TokenRow[] = [
   },
 ];
 
+const ETH_TOKEN_LIST_FALLBACK: TokenRow[] = [
+  {
+    address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    symbol: "WETH",
+    name: "Wrapped Ether",
+  },
+  {
+    address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    symbol: "USDT",
+    name: "Tether USD",
+  },
+  {
+    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    symbol: "USDC",
+    name: "USD Coin",
+  },
+  {
+    address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    symbol: "WBTC",
+    name: "Wrapped BTC",
+  },
+  {
+    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    symbol: "DAI",
+    name: "Dai Stablecoin",
+  },
+  {
+    address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+    symbol: "LINK",
+    name: "ChainLink Token",
+  },
+];
+
+const BTC_TAB_FALLBACK: TokenRow[] = [
+  {
+    address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    symbol: "WBTC",
+    name: "Wrapped BTC",
+  },
+];
+
+const TRON_TOKEN_LIST_FALLBACK: TokenRow[] = [
+  {
+    address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+    symbol: "USDT",
+    name: "Tether USD (TRC20)",
+  },
+];
+
+const TOKEN_FALLBACK_BY_NETWORK: Record<NetworkTabKey, TokenRow[]> = {
+  BNB: BNB_TOKEN_LIST_FALLBACK,
+  ETH: ETH_TOKEN_LIST_FALLBACK,
+  BTC: BTC_TAB_FALLBACK,
+  TRON: TRON_TOKEN_LIST_FALLBACK,
+};
+
+const IMPORT_NETWORK_COPY: Record<
+  NetworkTabKey,
+  { title: string; subtitle: string; explorerHost: string; explorerLabel: string }
+> = {
+  BNB: {
+    title: "BNB Chain",
+    subtitle: "BNB Smart Chain · Search & custom import use this network",
+    explorerHost: "bscscan.com",
+    explorerLabel: "BscScan",
+  },
+  ETH: {
+    title: "Ethereum",
+    subtitle: "ERC-20 tokens on Ethereum mainnet",
+    explorerHost: "etherscan.io",
+    explorerLabel: "Etherscan",
+  },
+  BTC: {
+    title: "Bitcoin (WBTC)",
+    subtitle: "Wrapped BTC and related tokens on Ethereum (not native Bitcoin UTXO)",
+    explorerHost: "etherscan.io",
+    explorerLabel: "Etherscan",
+  },
+  TRON: {
+    title: "Tron",
+    subtitle: "TRC-20 tokens on Tron · custom import uses manual symbol/decimals",
+    explorerHost: "tronscan.org",
+    explorerLabel: "Tronscan",
+  },
+};
+
+const NETWORK_PICKER_ROWS: {
+  key: NetworkTabKey;
+  headline: string;
+  sub: string;
+}[] = [
+  { key: "BNB", headline: "BNB Chain", sub: "BNB Smart Chain" },
+  { key: "ETH", headline: "Ethereum", sub: "ERC-20 · Mainnet" },
+  { key: "BTC", headline: "Bitcoin", sub: "WBTC on Ethereum" },
+  { key: "TRON", headline: "Tron", sub: "TRC-20" },
+];
+
 const READ_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
@@ -63,7 +169,15 @@ const SYMBOL_BYTES32_ABI = [
   "function symbol() view returns (bytes32)",
 ];
 
-function BscChainIcon() {
+function NetworkImportGlyph({ tab }: { tab: NetworkTabKey }) {
+  const cfg =
+    tab === "BNB"
+      ? { bg: "#F3BA2F", fg: "#0f172a", ch: "B", fs: 13 }
+      : tab === "ETH"
+        ? { bg: "#627EEA", fg: "#fff", ch: "E", fs: 13 }
+        : tab === "BTC"
+          ? { bg: "#F7931A", fg: "#fff", ch: "₿", fs: 11 }
+          : { bg: "#FF0013", fg: "#fff", ch: "T", fs: 13 };
   return (
     <span
       aria-hidden
@@ -71,17 +185,18 @@ function BscChainIcon() {
         width: 28,
         height: 28,
         borderRadius: 8,
-        background: "#F3BA2F",
+        background: cfg.bg,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         fontWeight: 800,
-        fontSize: 13,
-        color: "#0f172a",
+        fontSize: cfg.fs,
+        color: cfg.fg,
         flexShrink: 0,
+        lineHeight: 1,
       }}
     >
-      B
+      {cfg.ch}
     </span>
   );
 }
@@ -120,6 +235,8 @@ interface AddCustomTokenModalProps {
   auth: { token: string } | null;
   userTokens: { address: string; status?: string; token_symbol?: string }[];
   onAdded: () => void;
+  /** Matches the token list chip (BTC = WBTC-style tokens on Ethereum per DEX config). */
+  initialImportNetwork?: NetworkTabKey;
 }
 
 const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
@@ -128,8 +245,11 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
   auth,
   userTokens,
   onAdded,
+  initialImportNetwork = "BNB",
 }) => {
   const [mainTab, setMainTab] = useState<TabKey>("search");
+  const [importNetwork, setImportNetwork] =
+    useState<NetworkTabKey>(initialImportNetwork);
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [selected, setSelected] = useState<TokenRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -142,23 +262,40 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
   const [customDecimals, setCustomDecimals] = useState("");
   const [metaLoading, setMetaLoading] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [networkPickerOpen, setNetworkPickerOpen] = useState(false);
+  const networkPickerRef = useRef<HTMLDivElement>(null);
+
+  const evmRpcUrl =
+    importNetwork === "BNB"
+      ? DEFAULT_RPC_URL
+      : importNetwork === "ETH" || importNetwork === "BTC"
+        ? ETHEREUM_RPC_URL
+        : null;
 
   const provider = useMemo(
-    () => new ethers.JsonRpcProvider(DEFAULT_RPC_URL),
-    [],
+    () => (evmRpcUrl ? new ethers.JsonRpcProvider(evmRpcUrl) : null),
+    [evmRpcUrl],
   );
+
+  const networkCopy = IMPORT_NETWORK_COPY[importNetwork];
 
   const norm = (a: string) => (a || "").toLowerCase();
 
   const isAlreadyAdded = (addr: string) =>
-    userTokens.some(
-      (t) => norm(t.address) === norm(addr) && t.status === "ON",
-    );
+    userTokens.some((t) => {
+      if (t.status !== "ON") return false;
+      const ta = t.address || "";
+      const a = addr || "";
+      if (a.startsWith("0x") || ta.startsWith("0x")) {
+        return norm(ta) === norm(a);
+      }
+      return ta === a;
+    });
 
-  const fetchBscTokens = async () => {
+  const fetchTokensForNetwork = useCallback(async (tab: NetworkTabKey) => {
     try {
       setLoading(true);
-      const pairs = await fetchPopularPairsForTab("BNB");
+      const pairs = await fetchPopularPairsForTab(tab);
       const rows: TokenRow[] = pairs
         .map((p: Record<string, unknown>) => {
           const base = p.baseToken as Record<string, string> | undefined;
@@ -180,14 +317,30 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
         return true;
       });
 
-      setTokens(deduped.length > 0 ? deduped : BNB_TOKEN_LIST_FALLBACK);
+      const fallback = TOKEN_FALLBACK_BY_NETWORK[tab];
+      setTokens(deduped.length > 0 ? deduped : fallback);
     } catch (err) {
       console.error(err);
-      setTokens(BNB_TOKEN_LIST_FALLBACK);
+      setTokens(TOKEN_FALLBACK_BY_NETWORK[tab]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const selectImportNetwork = useCallback(
+    (next: NetworkTabKey) => {
+      setImportNetwork(next);
+      setSelected([]);
+      setCustomError(null);
+      setCustomAddress("");
+      setCustomSymbol("");
+      setCustomName("");
+      setCustomDecimals("");
+      setNetworkPickerOpen(false);
+      void fetchTokensForNetwork(next);
+    },
+    [fetchTokensForNetwork],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -199,8 +352,30 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
     setCustomSymbol("");
     setCustomName("");
     setCustomDecimals("");
-    void fetchBscTokens();
+    setNetworkPickerOpen(false);
+    setImportNetwork(initialImportNetwork);
+    void fetchTokensForNetwork(initialImportNetwork);
+  }, [isOpen, initialImportNetwork, fetchTokensForNetwork]);
+
+  useEffect(() => {
+    if (!isOpen) setNetworkPickerOpen(false);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!networkPickerOpen || !isOpen) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      const el = networkPickerRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setNetworkPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("touchstart", close, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("touchstart", close);
+    };
+  }, [networkPickerOpen, isOpen]);
 
   const filteredTokens = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -285,41 +460,68 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
       setCustomDecimals("");
       return;
     }
+
+    if (importNetwork === "TRON") {
+      if (!/^T[A-Za-z1-9]{33}$/.test(raw)) {
+        setCustomError(
+          "Enter a valid TRC-20 address (starts with T, 34 characters)",
+        );
+        return;
+      }
+      if (isAlreadyAdded(raw)) {
+        setCustomError("This token is already in your wallet");
+        return;
+      }
+      return;
+    }
+
     let addr = raw;
     if (!addr.startsWith("0x")) {
       addr = `0x${addr}`;
     }
     if (!ethers.isAddress(addr)) {
-      setCustomError("Enter a valid BSC contract address");
+      setCustomError(
+        importNetwork === "BNB"
+          ? "Enter a valid BSC contract address"
+          : "Enter a valid Ethereum contract address",
+      );
       return;
     }
     const checksummed = ethers.getAddress(addr);
-    const alreadyIn = userTokens.some(
-      (t) => norm(t.address) === norm(checksummed) && t.status === "ON",
-    );
-    if (alreadyIn) {
+    if (isAlreadyAdded(checksummed)) {
       setCustomError("This token is already in your wallet");
+      return;
+    }
+    const p = provider;
+    if (!p) {
+      setCustomError("No RPC configured for this network");
       return;
     }
     setMetaLoading(true);
     try {
-      const code = await provider.getCode(checksummed);
+      const code = await p.getCode(checksummed);
       if (!code || code === "0x") {
-        setCustomError("No contract at this address on BNB Chain");
+        setCustomError(
+          importNetwork === "BNB"
+            ? "No contract at this address on BNB Chain"
+            : "No contract at this address on Ethereum",
+        );
         setCustomSymbol("");
         setCustomName("");
         setCustomDecimals("");
         return;
       }
-      const meta = await fetchErc20Meta(checksummed, provider);
+      const meta = await fetchErc20Meta(checksummed, p);
       setCustomAddress(checksummed);
       setCustomSymbol(meta.symbol);
       setCustomName(meta.name);
       setCustomDecimals(String(meta.decimals));
     } catch (e) {
       console.error(e);
+      const chainHint =
+        importNetwork === "BNB" ? "BNB Chain" : "Ethereum mainnet";
       setCustomError(
-        "Could not read token. Check the address is an ERC-20 on BNB Chain.",
+        `Could not read token. Check the address is an ERC-20 on ${chainHint}.`,
       );
       setCustomSymbol("");
       setCustomName("");
@@ -327,7 +529,7 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
     } finally {
       setMetaLoading(false);
     }
-  }, [customAddress, provider, userTokens]);
+  }, [customAddress, importNetwork, provider, userTokens]);
 
   useEffect(() => {
     if (!isOpen || mainTab !== "custom") return;
@@ -345,12 +547,66 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
       return;
     }
     setCustomError(null);
-    const addr = customAddress.trim();
-    if (!addr || !ethers.isAddress(addr)) {
+    const trimmed = customAddress.trim();
+
+    if (importNetwork === "TRON") {
+      if (!/^T[A-Za-z1-9]{33}$/.test(trimmed)) {
+        setCustomError("Enter a valid TRC-20 contract address");
+        return;
+      }
+      if (isAlreadyAdded(trimmed)) {
+        setCustomError("This token is already in your wallet");
+        return;
+      }
+      if (!customSymbol.trim()) {
+        setCustomError("Token symbol is required (enter manually for Tron)");
+        return;
+      }
+      const decStr = customDecimals.trim();
+      let dec = 18;
+      if (decStr !== "") {
+        dec = Number(decStr);
+        if (
+          !Number.isFinite(dec) ||
+          dec < 0 ||
+          dec > 36 ||
+          !Number.isInteger(dec)
+        ) {
+          setCustomError("Decimals must be a whole number from 0 to 36");
+          return;
+        }
+      }
+      setSubmitting(true);
+      try {
+        const ok = await postToken({
+          address: trimmed,
+          symbol: customSymbol.trim().toUpperCase(),
+          name: customName.trim() || customSymbol.trim(),
+        });
+        if (!ok) {
+          window.alert("Failed to add token");
+          return;
+        }
+        onAdded();
+        onClose();
+      } catch (err) {
+        console.error(err);
+        window.alert("Failed to add");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    let evmAddr = trimmed;
+    if (!evmAddr.startsWith("0x")) {
+      evmAddr = `0x${evmAddr}`;
+    }
+    if (!ethers.isAddress(evmAddr)) {
       setCustomError("Enter a valid contract address");
       return;
     }
-    const checksummed = ethers.getAddress(addr);
+    const checksummed = ethers.getAddress(evmAddr);
     if (isAlreadyAdded(checksummed)) {
       setCustomError("This token is already in your wallet");
       return;
@@ -457,8 +713,9 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
         role="dialog"
         aria-labelledby="import-tokens-title"
       >
-        {/* Network first (matches “network on top” expectation) */}
+        {/* Custom network picker — avoids native OS menu */}
         <div
+          ref={networkPickerRef}
           style={{
             padding: "16px 16px 12px",
             flexShrink: 0,
@@ -468,17 +725,39 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
         >
           <div
             style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: MM.textSecondary,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: 8,
+            }}
+          >
+            Network
+          </div>
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={networkPickerOpen}
+            aria-label="Choose network for import"
+            onClick={() => setNetworkPickerOpen((o) => !o)}
+            style={{
               display: "flex",
               alignItems: "center",
               gap: 12,
+              width: "100%",
               padding: "14px 16px",
               borderRadius: MM.radius,
               border: `1px solid ${MM.border}`,
               background: MM.surface,
               boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            <BscChainIcon />
+            <NetworkImportGlyph tab={importNetwork} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 style={{
@@ -488,23 +767,137 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
                   letterSpacing: "-0.02em",
                 }}
               >
-                BNB Chain
+                {networkCopy.title}
               </div>
-              <div style={{ fontSize: 12, color: MM.textSecondary, marginTop: 4 }}>
-                BNB Smart Chain · Search & custom import use this network
+              <div
+                style={{
+                  fontSize: 12,
+                  color: MM.textMuted,
+                  marginTop: 2,
+                }}
+              >
+                {networkPickerOpen ? "Tap an option below" : "Tap to change network"}
               </div>
             </div>
-            <span
-              style={{
-                color: MM.textSecondary,
-                fontSize: 18,
-                lineHeight: 1,
-                flexShrink: 0,
-              }}
+            <svg
+              width={20}
+              height={20}
+              viewBox="0 0 24 24"
               aria-hidden
+              style={{
+                flexShrink: 0,
+                color: MM.textSecondary,
+                transform: networkPickerOpen
+                  ? "rotate(180deg)"
+                  : "rotate(0deg)",
+                transition: "transform 0.2s ease",
+              }}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              ▾
-            </span>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          {networkPickerOpen && (
+            <div
+              role="listbox"
+              aria-label="Networks"
+              style={{
+                marginTop: 10,
+                borderRadius: MM.radius,
+                border: `1px solid ${MM.borderLight}`,
+                background: MM.surface,
+                overflow: "hidden",
+                boxShadow: "0 4px 16px rgba(15,23,42,0.08)",
+              }}
+            >
+              {NETWORK_PICKER_ROWS.map((row, i) => {
+                const active = importNetwork === row.key;
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => selectImportNetwork(row.key)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      width: "100%",
+                      padding: "14px 16px",
+                      border: "none",
+                      borderBottom:
+                        i < NETWORK_PICKER_ROWS.length - 1
+                          ? `1px solid ${MM.borderLight}`
+                          : "none",
+                      background: active ? MM.accentMuted : MM.surface,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "inherit",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >
+                    <NetworkImportGlyph tab={row.key} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          fontSize: 15,
+                          color: MM.text,
+                        }}
+                      >
+                        {row.headline}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: MM.textSecondary,
+                          marginTop: 2,
+                        }}
+                      >
+                        {row.sub}
+                      </div>
+                    </div>
+                    {active && (
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: MM.accent,
+                          color: "#fff",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 13,
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div
+            style={{
+              fontSize: 12,
+              color: MM.textSecondary,
+              marginTop: 10,
+              lineHeight: 1.45,
+            }}
+          >
+            {networkCopy.subtitle}
           </div>
         </div>
 
@@ -761,8 +1154,9 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
                   lineHeight: 1.45,
                 }}
               >
-                Popular BNB Chain tokens from DEX pairs. Already-enabled tokens
-                show &quot;In wallet&quot;. Only new selections are added.
+                Popular tokens for <strong>{networkCopy.title}</strong> from DEX
+                data. Already-enabled tokens show &quot;In wallet&quot;. Only new
+                selections are added.
               </p>
             </>
           )}
@@ -795,12 +1189,12 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
                   Anyone can create a token, including fake versions of real
                   ones. Only paste addresses you trust. Verify on{" "}
                   <a
-                    href="https://bscscan.com"
+                    href={`https://${networkCopy.explorerHost}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ color: "#2563eb", fontWeight: 600 }}
                   >
-                    BscScan
+                    {networkCopy.explorerLabel}
                   </a>
                   .
                 </p>
@@ -820,7 +1214,11 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
                 value={customAddress}
                 onChange={(e) => setCustomAddress(e.target.value)}
                 onBlur={() => void resolveCustomAddress()}
-                placeholder="0x…"
+                placeholder={
+                  importNetwork === "TRON"
+                    ? "T… (TRC-20 contract)"
+                    : "0x…"
+                }
                 autoComplete="off"
                 spellCheck={false}
                 style={{

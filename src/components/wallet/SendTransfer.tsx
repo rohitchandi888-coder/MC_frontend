@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
-import { FDA_TOKEN_ADDRESS, ERC20_ABI, type AuthState } from "../types";
-import type { WalletMeta } from "../../../walletStorage";
+import { FDA_TOKEN_ADDRESS, type AuthState } from "../types";
+import type { CustomToken, WalletMeta } from "../../walletStorage";
+import { SendTransferMobile } from "./SendTransferMobile";
 
 interface SendTransferProps {
   storedMeta: WalletMeta | null;
@@ -10,7 +11,7 @@ interface SendTransferProps {
   sendTo: string;
   setSendTo: (address: string) => void;
   sendAmount: string;
-  setSendAmount: (amount: string) => void;
+  setSendAmount: React.Dispatch<React.SetStateAction<string>>;
   assetType: "native" | "token";
   setAssetType: (type: "native" | "token") => void;
   tokenAddress: string;
@@ -20,13 +21,18 @@ interface SendTransferProps {
   estimatedGas: string | null;
   estimatingGas: boolean;
   nativeBalance: string | null;
+  fdaBalance: string | null;
   internalFdaBalance: number | null;
   recipientFdaWallet: any;
   unlockedPrivateKeyRef: React.MutableRefObject<string | null>;
   handleSend: () => Promise<void>;
   handleMaxAmount: () => Promise<void>;
-  registerRecipientWallet: (address: string, label?: string) => Promise<void>;
+  registerRecipientWallet: (address: string, label?: string) => Promise<boolean | void>;
   goto: () => void;
+  customTokens?: CustomToken[];
+  customTokenBalances?: Record<string, string>;
+  fdaPrice?: number | null;
+  onExit?: () => void;
 }
 
 export const SendTransfer: React.FC<SendTransferProps> = ({
@@ -46,13 +52,18 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   estimatedGas,
   estimatingGas,
   nativeBalance,
+  fdaBalance,
   internalFdaBalance,
   recipientFdaWallet,
   unlockedPrivateKeyRef,
   handleSend,
   handleMaxAmount,
   registerRecipientWallet,
-  goto
+  goto,
+  customTokens = [],
+  customTokenBalances = {},
+  fdaPrice = null,
+  onExit = () => {},
 }) => {
 
     const [isMobile, setIsMobile] = useState(false);
@@ -67,6 +78,42 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   
       return () => window.removeEventListener("resize", checkScreen);
     }, []);
+
+  if (isMobile) {
+    return (
+      <SendTransferMobile
+        storedMeta={storedMeta}
+        allWallets={allWallets}
+        auth={auth}
+        sendTo={sendTo}
+        setSendTo={setSendTo}
+        sendAmount={sendAmount}
+        setSendAmount={setSendAmount}
+        assetType={assetType}
+        setAssetType={setAssetType}
+        tokenAddress={tokenAddress}
+        setTokenAddress={setTokenAddress}
+        transferType={transferType}
+        setTransferType={setTransferType}
+        estimatedGas={estimatedGas}
+        estimatingGas={estimatingGas}
+        nativeBalance={nativeBalance}
+        fdaBalance={fdaBalance ?? null}
+        internalFdaBalance={internalFdaBalance}
+        recipientFdaWallet={recipientFdaWallet}
+        customTokens={customTokens}
+        customTokenBalances={customTokenBalances}
+        fdaPrice={fdaPrice}
+        unlockedPrivateKeyRef={unlockedPrivateKeyRef}
+        handleSend={handleSend}
+        handleMaxAmount={handleMaxAmount}
+        registerRecipientWallet={registerRecipientWallet}
+        onUnlock={goto}
+        onExit={onExit}
+      />
+    );
+  }
+
   if (!unlockedPrivateKeyRef.current) {
   return (
     <>
@@ -86,11 +133,6 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
         <strong> Custom 13th word</strong> to send transactions.
       </p>
     </div>
-    {isMobile && (
-      <div style={{width: '100%'}}>
-      <button onClick={() => goto()} style={{width: '100%',fontSize: 14, fontWeight: 600}}>Unlock Wallet</button>
-    </div>
-    )}
     </>
   );
 }

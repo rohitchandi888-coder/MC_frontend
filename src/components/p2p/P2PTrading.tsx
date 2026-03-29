@@ -7,6 +7,8 @@ import { MM } from '../../theme/metaMaskShell';
 interface P2PTradingProps {
   /** Light MetaMask-style cards/inputs on mobile (matches app shell). */
   inMobileShell?: boolean;
+  /** Blockchain context from app (informational; P2P settles on internal FDA). */
+  chainLabel?: string;
   auth: AuthState | null;
   internalFdaBalance: number | null;
   internalFdaLocked: number | null;
@@ -52,6 +54,7 @@ interface PaymentMethod {
 
 export const P2PTrading: React.FC<P2PTradingProps> = ({
   inMobileShell = false,
+  chainLabel = "BNB Chain",
   auth,
   internalFdaBalance,
   internalFdaLocked,
@@ -204,6 +207,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             background: ${MM.surface} !important;
             border: 1px solid ${MM.borderLight} !important;
             box-shadow: 0 1px 3px rgba(15,23,42,0.06) !important;
+            overflow-x: hidden !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
           }
           [data-p2p-mm="1"] .action-card-header { border-bottom-color: ${MM.borderLight} !important; }
           [data-p2p-mm="1"] .action-card-title { color: ${MM.text} !important; }
@@ -212,6 +218,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             background: ${MM.surface} !important;
             color: ${MM.text} !important;
             border: 1px solid ${MM.border} !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            min-height: 48px !important;
+            padding-top: 12px !important;
+            padding-bottom: 12px !important;
           }
           [data-p2p-mm="1"] .p2p-subheading { color: #374151 !important; }
           [data-p2p-mm="1"] .card-dark {
@@ -259,10 +271,10 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: MM.text }}>
-                Internal FDA · MC Wallet
+                {chainLabel} · MC Wallet
               </div>
               <div style={{ fontSize: 12, color: MM.textSecondary, marginTop: 2 }}>
-                P2P offers use your internal balance, not on-chain swaps
+                Internal FDA · P2P uses custodial balance, not on-chain swaps
               </div>
             </div>
           </div>
@@ -329,34 +341,81 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               </p>
             </div>
 
-            {/* BUY/SELL Dropdown */}
+            {/* Offer type — segmented control (no native OS dropdown) */}
             <div className="mb-4">
               <p className="text-xs text-white mb-2 font-semibold p2p-subheading">Offer Type</p>
-              <select
-                className="form-select-dark w-full py-3"
-                value={offerType}
-                onChange={(e) => {
-                  const newType = e.target.value as 'BUY' | 'SELL';
-                  console.log('[P2PTrading] ========================================');
-                  console.log('[P2PTrading] 🎯 DROPDOWN CHANGED 🎯');
-                  console.log('[P2PTrading] Old type:', offerType);
-                  console.log('[P2PTrading] New type from event:', newType);
-                  console.log('[P2PTrading] Event target value:', e.target.value);
-                  console.log('[P2PTrading] Calling setOfferType with:', newType);
-                  setOfferType(newType);
-                  // Verify state was updated after a short delay
-                  setTimeout(() => {
-                    console.log('[P2PTrading] ⚠️ State should be updated now. Check parent component state.');
-                  }, 100);
-                  console.log('[P2PTrading] ========================================');
+              <div
+                role="group"
+                aria-label="Offer type"
+                style={{
+                  display: "flex",
+                  gap: inMobileShell ? 10 : 8,
+                  padding: 4,
+                  borderRadius: MM.radius,
+                  background: inMobileShell ? MM.pageBg : "rgba(15,23,42,0.5)",
+                  border: `1px solid ${inMobileShell ? MM.border : "#475569"}`,
+                  boxSizing: "border-box",
                 }}
               >
-                <option value="BUY">📥 BUY (Looking to Buy)</option>
-                <option value="SELL">📤 SELL (Looking to Sell)</option>
-              </select>
-              <p className="text-xs text-slate-300 mt-1">
-                Current selection: <strong className={offerType === 'BUY' ? 'text-green-400' : 'text-yellow-400'}>{offerType}</strong>
-              </p>
+                {(
+                  [
+                    { key: "BUY" as const, title: "Buy", short: "You buy FDA" },
+                    { key: "SELL" as const, title: "Sell", short: "You sell FDA" },
+                  ]
+                ).map(({ key, title, short }) => {
+                  const active = offerType === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setOfferType(key)}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        padding: "12px 10px",
+                        borderRadius: MM.radius - 2,
+                        border: "none",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        background: active
+                          ? MM.accent
+                          : inMobileShell
+                            ? MM.surface
+                            : "#0f172a",
+                        color: active ? "#fff" : inMobileShell ? MM.text : "#e2e8f0",
+                        boxShadow: active
+                          ? "0 2px 8px rgba(37, 99, 235, 0.35)"
+                          : "none",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "block",
+                          fontWeight: 800,
+                          fontSize: 15,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {title}
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          opacity: active ? 0.95 : 0.75,
+                          lineHeight: 1.3,
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {short}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mb-4">
@@ -375,8 +434,14 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+            <div
+              className={
+                inMobileShell
+                  ? "flex flex-col gap-4 mb-4"
+                  : "grid grid-cols-2 gap-4 mb-4"
+              }
+            >
+              <div style={{ minWidth: 0 }}>
                 <p className="text-xs  mb-2 font-semibold p2p-subheading">
                   Amount (FDA) {offerType === 'SELL' && internalFdaBalance !== null && (
                     <span className="text-slate-200" style={{ fontSize: '0.7rem' }}>
@@ -389,31 +454,92 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                     </span>
                   )}
                 </p>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="any"
-                    className="form-input-dark form-input-dark-focus flex-1 py-3"
-                    placeholder="0.00"
-                    value={offerAmount}
-                    onChange={(e) => setOfferAmount(e.target.value)}
-                  />
-                  {offerType === 'SELL' && internalFdaBalance !== null && (
-                    <button
-                      className="btn btn-yellow text-xs py-3 px-4"
-                      onClick={() => setOfferAmount(internalFdaBalance.toFixed(2))}
-                      style={{ whiteSpace: 'nowrap' }}
-                    >
-                      MAX
-                    </button>
-                  )}
-                </div>
+                {inMobileShell ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      width: "100%",
+                      maxWidth: "100%",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      className="form-input-dark form-input-dark-focus py-3 w-full"
+                      placeholder="0.00"
+                      value={offerAmount}
+                      onChange={(e) => setOfferAmount(e.target.value)}
+                      style={{
+                        width: "100%",
+                        maxWidth: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    {offerType === "SELL" && internalFdaBalance !== null && (
+                      <button
+                        type="button"
+                        className="btn btn-yellow text-sm py-3 w-full"
+                        onClick={() =>
+                          setOfferAmount(internalFdaBalance.toFixed(2))
+                        }
+                        style={{
+                          boxSizing: "border-box",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        Use max ({internalFdaBalance.toFixed(2)} FDA)
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="flex gap-2 items-stretch"
+                    style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}
+                  >
+                    <input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      className="form-input-dark form-input-dark-focus py-3"
+                      placeholder="0.00"
+                      value={offerAmount}
+                      onChange={(e) => setOfferAmount(e.target.value)}
+                      style={{
+                        flex: "1 1 0%",
+                        minWidth: 0,
+                        width: "auto",
+                        maxWidth: "100%",
+                      }}
+                    />
+                    {offerType === "SELL" && internalFdaBalance !== null && (
+                      <button
+                        type="button"
+                        className="btn btn-yellow text-xs py-3 px-4"
+                        onClick={() =>
+                          setOfferAmount(internalFdaBalance.toFixed(2))
+                        }
+                        style={{
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                          alignSelf: "stretch",
+                        }}
+                      >
+                        MAX
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <p className="text-xs  mb-2 font-semibold p2p-subheading">Price per FDA</p>
                 <input
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   className="form-input-dark form-input-dark-focus w-full py-3"
                   placeholder="0.00"
                   value={offerPrice}
@@ -422,12 +548,19 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+            <div
+              className={
+                inMobileShell
+                  ? "flex flex-col gap-4 mb-4"
+                  : "grid grid-cols-2 gap-4 mb-4"
+              }
+            >
+              <div style={{ minWidth: 0 }}>
                 <p className="text-xs mb-2 font-semibold p2p-subheading">Min Limit ({offerFiatCurrency})</p>
                 <input
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   className="form-input-dark w-full py-3"
                   placeholder="Auto-calculated"
                   value={offerMinLimit}
@@ -439,11 +572,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   <p className="text-xs text-slate-400 mt-1">Auto: 1 FDA × {offerPrice} = {offerMinLimit}</p>
                 )}
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <p className="text-xs  mb-2 font-semibold p2p-subheading">Max Limit ({offerFiatCurrency})</p>
                 <input
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   className="form-input-dark w-full py-3"
                   placeholder="Auto-calculated"
                   value={offerMaxLimit}

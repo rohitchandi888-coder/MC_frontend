@@ -208,6 +208,8 @@ export type CustomToken = {
   symbol: string;
   name?: string;
   enabled?: boolean; // Default to true if not specified
+  /** When set by API, "ON" means the token is active in the send list */
+  status?: string;
 };
 
 const CUSTOM_TOKENS_KEY = 'fda_custom_tokens';
