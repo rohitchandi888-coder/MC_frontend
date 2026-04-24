@@ -17,6 +17,7 @@ export { CustomTokens } from './wallet/CustomTokens';
 export { ManageWallets } from './wallet/ManageWallets';
 export { SendTransfer } from './wallet/SendTransfer';
 export { FDAWallets } from './wallet/FDAWallets';
+export { HoldFdaProgram } from './wallet/HoldFdaProgram';
 export { PaymentMethods } from './wallet/PaymentMethods';
 export { ViewPhrases } from './wallet/ViewPhrases';
 export { MetaMaskConnect } from './wallet/MetaMaskConnect';

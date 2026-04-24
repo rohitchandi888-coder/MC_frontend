@@ -202,6 +202,7 @@ import {
   ManageWallets,
   SendTransfer,
   FDAWallets,
+  HoldFdaProgram,
   PaymentMethods,
   ViewPhrases,
   MetaMaskConnect,
@@ -4153,6 +4154,18 @@ export const Dashboard: React.FC = () => {
               registeringWallet={registeringWallet}
               handleCreateAndRegisterFdaWallet={handleCreateAndRegisterFdaWallet}
               registerRecipientWallet={registerRecipientWallet}
+            />
+          )}
+
+          {activeTab === 'hold-fda' && (
+            <HoldFdaProgram
+              auth={auth}
+              walletAddress={storedMeta?.address || null}
+              onHoldingStarted={() => {
+                if (storedMeta?.address) {
+                  void fetchInternalBalance(storedMeta.address);
+                }
+              }}
             />
           )}
 

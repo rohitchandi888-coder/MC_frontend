@@ -65,6 +65,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [adminTradesPage, setAdminTradesPage] = useState(1);
   const [fdaPrice, setFdaPrice] = useState("");
   const [updatingFdaPrice, setUpdatingFdaPrice] = useState(false);
+  const [rewardRate, setRewardRate] = useState('5');
+  const [rewardMinAmount, setRewardMinAmount] = useState('25');
+  const [rewardPeriodMonths, setRewardPeriodMonths] = useState('12');
+  const [savingRewardSettings, setSavingRewardSettings] = useState(false);
   const totalAdminTradesPages = Math.max(1, Math.ceil(adminTrades.length / ADMIN_TRADES_PER_PAGE));
   const paginatedAdminTrades = adminTrades.slice(
     (adminTradesPage - 1) * ADMIN_TRADES_PER_PAGE,
@@ -183,6 +187,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 useEffect(() =>{
 loadFdaPrice()
 },[])
+
+  const loadRewardSettings = async () => {
+    try {
+      const res = await fetch(getApiUrl('settings/holding-reward'));
+      if (!res.ok) return;
+      const data = await res.json();
+      setRewardRate(String(data?.rewardRate ?? 5));
+      setRewardMinAmount(String(data?.rewardMinAmount ?? 25));
+      setRewardPeriodMonths(String(data?.rewardPeriodMonths ?? 12));
+    } catch (err) {
+      console.error('Failed to load reward settings:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadRewardSettings();
+  }, []);
+
+  const saveRewardSetting = async (key: string, value: string, description: string) => {
+    const res = await fetch(getApiUrl(`admin/settings/${key}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${auth?.token}`,
+      },
+      body: JSON.stringify({ value, description }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'Failed to save reward setting');
+  };
+
+  const updateRewardSettings = async () => {
+    try {
+      const rate = parseFloat(rewardRate);
+      const minAmount = parseFloat(rewardMinAmount);
+      const period = parseInt(rewardPeriodMonths, 10);
+
+      if (!Number.isFinite(rate) || rate < 5 || rate > 10) {
+        alert('Reward rate must be between 5 and 10.');
+        return;
+      }
+      if (!Number.isFinite(minAmount) || minAmount < 25) {
+        alert('Minimum hold amount must be at least 25 FDA.');
+        return;
+      }
+      if (!Number.isFinite(period) || period <= 0) {
+        alert('Hold period must be a positive month value.');
+        return;
+      }
+
+      setSavingRewardSettings(true);
+      await saveRewardSetting('holding_reward_rate', String(rate), 'FDA holding reward percentage');
+      await saveRewardSetting('holding_reward_min_amount', String(minAmount), 'Minimum FDA amount eligible for holding reward');
+      await saveRewardSetting('holding_reward_period_months', String(period), 'Holding reward lock period in months');
+      await loadRewardSettings();
+      alert('Holding reward settings updated.');
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || 'Failed to update reward settings');
+    } finally {
+      setSavingRewardSettings(false);
+    }
+  };
+
   return (
     <>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -380,6 +448,56 @@ loadFdaPrice()
               </button>
             </div>
           )}
+        </div>
+
+        <div className="mb-6 p-4 rounded-lg border border-yellow-200 bg-yellow-50">
+          <label className="modal-label">FDA Hold Reward Rules</label>
+          <p className="text-xs text-gray-700 mb-3">
+            Users must keep funds unused until expiry to earn reward. Example: 25 FDA with 5% reward becomes 26.25 FDA after claim.
+          </p>
+          <div className="grid md:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Reward Rate (%)</label>
+              <input
+                type="number"
+                min="5"
+                max="10"
+                step="0.01"
+                className="form-input w-full"
+                value={rewardRate}
+                onChange={(e) => setRewardRate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Minimum Hold (FDA)</label>
+              <input
+                type="number"
+                min="25"
+                step="0.000000000000000001"
+                className="form-input w-full"
+                value={rewardMinAmount}
+                onChange={(e) => setRewardMinAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Hold Period (Months)</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="form-input w-full"
+                value={rewardPeriodMonths}
+                onChange={(e) => setRewardPeriodMonths(e.target.value)}
+              />
+            </div>
+          </div>
+          <button
+            className={`btn btn-yellow ${savingRewardSettings ? 'opacity-60 cursor-not-allowed' : ''}`}
+            disabled={savingRewardSettings}
+            onClick={updateRewardSettings}
+          >
+            {savingRewardSettings ? 'Saving...' : 'Save Hold Reward Settings'}
+          </button>
         </div>
       </div>
 
