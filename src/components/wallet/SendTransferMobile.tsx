@@ -191,24 +191,22 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
     [auth, recipientFdaWallet, sendTo, setAssetType, setTokenAddress, setTransferType],
   );
 
+  const isFdaToken =
+    assetType === "token" &&
+    tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase();
+  const hasValidRecipient = !!sendTo.trim() && ethers.isAddress(sendTo.trim());
+  const canUseInternalTransfer =
+    !!auth &&
+    hasValidRecipient &&
+    !!recipientFdaWallet &&
+    Object.keys(recipientFdaWallet).length > 0;
+
   useEffect(() => {
-    if (step !== "asset" && step !== "amount" && step !== "review") return;
-    if (assetType !== "token") return;
-    if (tokenAddress.toLowerCase() !== FDA_TOKEN_ADDRESS.toLowerCase()) return;
-    if (!auth) return;
-    const to = sendTo.trim();
-    if (!to || !ethers.isAddress(to)) return;
-    const isMc = recipientFdaWallet && Object.keys(recipientFdaWallet).length;
-    setTransferType(isMc ? "internal" : "onchain");
-  }, [
-    step,
-    assetType,
-    tokenAddress,
-    auth,
-    sendTo,
-    recipientFdaWallet,
-    setTransferType,
-  ]);
+    if (!isFdaToken) return;
+    if (transferType === "internal" && !canUseInternalTransfer) {
+      setTransferType("onchain");
+    }
+  }, [isFdaToken, transferType, canUseInternalTransfer, setTransferType]);
 
   const selectedSymbol = useMemo(() => {
     if (assetType === "native") return "BNB";
@@ -830,6 +828,63 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 </button>
               ))}
             </div>
+            {isFdaToken && (
+              <div style={{ marginBottom: 14 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                    padding: 4,
+                    borderRadius: MM.radius,
+                    border: `1px solid ${MM.borderLight}`,
+                    background: MM.pageBg,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTransferType("onchain")}
+                    style={{
+                      padding: "10px 8px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: transferType === "onchain" ? MM.accent : MM.surface,
+                      color: transferType === "onchain" ? "#fff" : MM.text,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⛓️ On-Chain
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canUseInternalTransfer}
+                    onClick={() => {
+                      if (canUseInternalTransfer) setTransferType("internal");
+                    }}
+                    style={{
+                      padding: "10px 8px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: transferType === "internal" ? "#10b981" : MM.surface,
+                      color: transferType === "internal" ? "#fff" : MM.text,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: canUseInternalTransfer ? "pointer" : "not-allowed",
+                      opacity: canUseInternalTransfer ? 1 : 0.5,
+                    }}
+                  >
+                    ⚡ Internal
+                  </button>
+                </div>
+                <p style={{ marginTop: 8, fontSize: 12, color: MM.textSecondary }}>
+                  {canUseInternalTransfer
+                    ? "Choose transfer mode for FDA: on-chain (gas fee) or internal (instant)."
+                    : "Internal option is available only when recipient is a registered MC wallet."}
+                </p>
+              </div>
+            )}
             <div
               style={{
                 display: "grid",
@@ -976,6 +1031,24 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 BNB Chain
               </span>
             </div>
+            {transferType === "onchain" &&
+              assetType === "token" &&
+              tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase() && (
+                <div
+                  style={{
+                    background: "#fff7ed",
+                    border: "1px solid #fed7aa",
+                    borderRadius: MM.radius,
+                    padding: 12,
+                    marginBottom: 12,
+                    fontSize: 13,
+                    color: "#9a3412",
+                    fontWeight: 600,
+                  }}
+                >
+                  ⛓️ On-Chain Transfer (Gas Fee Required)
+                </div>
+              )}
             {transferType === "onchain" && (
               <div
                 style={{

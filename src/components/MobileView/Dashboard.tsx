@@ -252,6 +252,16 @@ function formatUsd(n: number): string {
   }).format(n);
 }
 
+function formatInr(n: number): string {
+  if (!Number.isFinite(n)) return "INR.V 0.00";
+  const amount = new Intl.NumberFormat("en-IN", {
+    style: "decimal",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+  return `INR.V ${amount}`;
+}
+
 const MobileDashboard: React.FC<MobileDashboardProps> = ({
   auth,
   price,
@@ -296,7 +306,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
       symbol: string;
       name: string;
       amountStr: string;
-      valueUsd: number;
+      value: number;
+      quoteCurrency: "USD" | "INR";
       changePct: number | null;
       mainIcon: string;
       subIcon?: string;
@@ -310,7 +321,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         symbol: "BNB",
         name: "BNB",
         amountStr: nb.toFixed(5),
-        valueUsd: nb * bnbPx,
+        value: nb * bnbPx,
+        quoteCurrency: "USD",
         changePct: null,
         mainIcon: BNB,
         subIcon: Radium,
@@ -330,7 +342,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         symbol: "FDA",
         name: "Future Digi Assets",
         amountStr: fb.toFixed(5),
-        valueUsd: fb * fdaPx,
+        value: fb * fdaPx,
+        quoteCurrency: "USD",
         changePct: null,
         mainIcon: ETH,
         subIcon: pancakeswap,
@@ -344,7 +357,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         symbol: "FDA",
         name: "FDA (custodial)",
         amountStr: intFda.toFixed(5),
-        valueUsd: intFda * (fdaPx || 0),
+        value: intFda * (price != null ? Number(price) : 0),
+        quoteCurrency: "INR",
         changePct: null,
         mainIcon: ETH,
         subIcon: hydro,
@@ -370,7 +384,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         symbol: sym,
         name: t.name || sym,
         amountStr: bal > 1 ? bal.toFixed(4) : bal.toFixed(8),
-        valueUsd: bal * px,
+        value: bal * px,
+        quoteCurrency: "USD",
         changePct: null,
         mainIcon,
         subIcon: osmo,
@@ -388,8 +403,16 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
     price,
   ]);
 
-  const portfolioUsd = useMemo(
-    () => holdingRows.reduce((s, r) => s + r.valueUsd, 0),
+  const portfolioTotals = useMemo(
+    () =>
+      holdingRows.reduce(
+        (acc, r) => {
+          if (r.quoteCurrency === "INR") acc.inr += r.value;
+          else acc.usd += r.value;
+          return acc;
+        },
+        { usd: 0, inr: 0 },
+      ),
     [holdingRows],
   );
 
@@ -594,13 +617,18 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
               letterSpacing: "-0.02em",
             }}
           >
-            {formatUsd(portfolioUsd)}
+            {portfolioTotals.inr > 0 ? formatInr(portfolioTotals.inr) : formatUsd(portfolioTotals.usd)}
           </span>
           <span
             style={{ color: MM.textSecondary, fontWeight: 500, fontSize: 13 }}
           >
             Total balance
           </span>
+          {portfolioTotals.inr > 0 && portfolioTotals.usd > 0 && (
+            <span style={{ color: MM.textSecondary, fontWeight: 500, fontSize: 12 }}>
+              + {formatUsd(portfolioTotals.usd)} in USD assets
+            </span>
+          )}
           <span
             style={{
               fontSize: 13,
@@ -922,7 +950,9 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                             fontSize: 15,
                           }}
                         >
-                          {formatUsd(row.valueUsd)}
+                          {row.quoteCurrency === "INR"
+                            ? formatInr(row.value)
+                            : formatUsd(row.value)}
                         </div>
                         <div style={{ fontSize: 12, color: "#64748b" }}>
                           {row.amountStr} {row.symbol}

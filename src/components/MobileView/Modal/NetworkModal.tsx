@@ -28,6 +28,20 @@ function normalizeAddr(a: string | undefined): string {
   return (a || "").toLowerCase();
 }
 
+function networkChipStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: "0 0 auto",
+    padding: "8px 14px",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 999,
+    background: active ? MM.accent : MM.surface,
+    color: active ? "#fff" : MM.textSecondary,
+    border: `1px solid ${active ? MM.accent : MM.borderLight}`,
+  };
+}
+
 const NetworkModal: React.FC<NetworkModalProps> = ({
   auth,
   isOpen,
@@ -260,17 +274,7 @@ const NetworkModal: React.FC<NetworkModalProps> = ({
                   key={net}
                   type="button"
                   onClick={() => setNetworkTab(net)}
-                  style={{
-                    flex: "0 0 auto",
-                    padding: "8px 14px",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    borderRadius: 999,
-                    background: networkTab === net ? MM.accent : MM.surface,
-                    color: networkTab === net ? "#fff" : MM.textSecondary,
-                    border: `1px solid ${networkTab === net ? MM.accent : MM.borderLight}`,
-                  }}
+                  style={networkChipStyle(networkTab === net)}
                 >
                   {net}
                 </button>

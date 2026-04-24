@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react-swc';
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    /** Main bundle ~1MB+; suppress Rollup “500 kB” hint until route-level code-splitting is added */
+    chunkSizeWarningLimit: 1600,
+  },
   server: {
     port: 5173,
     // Polymarket does not send CORS headers — browser blocks direct calls from localhost.

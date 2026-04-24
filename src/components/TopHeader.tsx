@@ -129,12 +129,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const loadFdaPrice = async () => {
     try {
       const res = await fetch(getApiUrl("fdaPrice"));
-
+      if (!res.ok) return;
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) return;
       const data = await res.json();
 
-      if (!res.ok) return;
-
-      setFdaPrice(data.price);
+      const nextPrice = Number(data?.data ?? data?.price ?? 0);
+      if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
+      setFdaPrice(nextPrice);
     } catch (err) {
       console.error("Failed to load FDA price:", err);
     }
