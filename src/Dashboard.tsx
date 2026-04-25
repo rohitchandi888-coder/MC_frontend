@@ -403,6 +403,8 @@ export const Dashboard: React.FC = () => {
   const unlockedPrivateKeyRef = useRef<string | null>(null);
   /** Avoid multiple redirects when several API calls return 401 together. */
   const authFailureHandledRef = useRef(false);
+  /** Prevent duplicate auto wallet-registration in StrictMode/re-renders. */
+  const autoRegisterKeyRef = useRef<string | null>(null);
   const navigate = useNavigate();
 
 
@@ -710,6 +712,12 @@ export const Dashboard: React.FC = () => {
         },
         body: JSON.stringify({ address, label, encryptedData, network, password }),
       });
+
+      if (res.status === 401) {
+        console.warn('[registerWalletAddress] Unauthorized (401). Forcing sign-out flow.');
+        onUnauthorizedApi();
+        return false;
+      }
 
       if (res.ok) {
         const data = await res.json();
@@ -1193,13 +1201,23 @@ export const Dashboard: React.FC = () => {
       fetchBalances(storedMeta.address);
       if (auth) {
         fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
-        // Register wallet address if not already registered
-        registerWalletAddress(storedMeta.address, storedMeta.label);
+        // Register wallet address once per (user,address) pair to avoid duplicate calls.
+        const registerKey = `${auth.user.id}:${storedMeta.address.toLowerCase()}`;
+        if (autoRegisterKeyRef.current !== registerKey) {
+          autoRegisterKeyRef.current = registerKey;
+          registerWalletAddress(storedMeta.address, storedMeta.label).catch((err) => {
+            console.error('[registerWalletAddress] Auto-register failed:', err);
+          });
+        }
         // Fetch P2P fee rate on login/load
         fetchP2PFeeRate();
       }
     }
   }, [storedMeta?.address, auth]);
+
+  useEffect(() => {
+    if (!auth?.token) autoRegisterKeyRef.current = null;
+  }, [auth?.token]);
 
   useEffect(() => {
     if (activeTab === 'wallets') {
