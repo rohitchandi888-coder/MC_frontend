@@ -3737,7 +3737,10 @@ export const Dashboard: React.FC = () => {
 
     const loadFdaPrice = async () => {
     try {
-      const res = await fetch(getApiUrl("fdaPrice"));
+      const priceUrl = getApiUrl("fdaPrice");
+      // Remote production API currently does not expose /fdaPrice; skip call to avoid 404 noise.
+      if (priceUrl.includes('merchantcoinwallet.com/api/fdaPrice')) return;
+      const res = await fetch(priceUrl);
       if (!res.ok) return;
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) return;
@@ -4166,6 +4169,8 @@ export const Dashboard: React.FC = () => {
                   void fetchInternalBalance(storedMeta.address);
                 }
               }}
+              onShowSuccessModal={showSuccessModal}
+              onShowErrorModal={showErrorModal}
             />
           )}
 
@@ -4294,6 +4299,8 @@ export const Dashboard: React.FC = () => {
               onFetchTokenInfo={fetchTokenInfo}
               tokenInfoLoading={tokenInfoLoading}
               newTokenName={newTokenName}
+              onShowSuccessModal={showSuccessModal}
+              onShowErrorModal={showErrorModal}
             />
           )}
 

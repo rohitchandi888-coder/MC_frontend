@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '../../config';
 import type { AuthState } from '../types';
 
@@ -6,6 +6,8 @@ interface HoldFdaProgramProps {
   auth: AuthState | null;
   walletAddress: string | null;
   onHoldingStarted?: () => void;
+  onShowSuccessModal?: (message: string) => void;
+  onShowErrorModal?: (message: string) => void;
 }
 
 type RewardStatusRow = {
@@ -20,22 +22,79 @@ type RewardStatusRow = {
   rewardRate: number;
   rewardAmount: number;
   projectedTotal: number;
+  breakRequestStatus?: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  breakRequestNote?: string | null;
+  breakRequestedAt?: string | null;
+  breakDecidedAt?: string | null;
 };
 
-export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddress, onHoldingStarted }) => {
+export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
+  auth,
+  walletAddress,
+  onHoldingStarted,
+  onShowSuccessModal,
+  onShowErrorModal,
+}) => {
   const [amount, setAmount] = useState('25');
-  const [settings, setSettings] = useState({ rewardRate: 5, rewardMinAmount: 25, rewardPeriodMonths: 12 });
+  const [settings, setSettings] = useState({ rewardRate: 5, rewardMinAmount: 25, rewardPeriodMonths: 12, fdaPrice: 0 });
   const [holdings, setHoldings] = useState<RewardStatusRow[]>([]);
   const [pendingReward, setPendingReward] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [requestingBreakId, setRequestingBreakId] = useState<number | null>(null);
+  const [breakFlow, setBreakFlow] = useState<{
+    open: boolean;
+    holdingId: number | null;
+    step: 1 | 2 | 3;
+    note: string;
+  }>({ open: false, holdingId: null, step: 1, note: '' });
+  const pushSuccess = (text: string) => {
+    if (onShowSuccessModal) onShowSuccessModal(text);
+    else alert(text);
+  };
+  const pushError = (text: string) => {
+    if (onShowErrorModal) onShowErrorModal(text);
+    else alert(text);
+  };
 
   const estimatedReward = useMemo(() => {
     const parsedAmount = parseFloat(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return 0;
-    return Number(((parsedAmount * settings.rewardRate) / 100).toFixed(8));
-  }, [amount, settings.rewardRate]);
+    const holdValue = settings.fdaPrice > 0 ? parsedAmount * settings.fdaPrice : 0;
+    const rewardValue = holdValue > 0 ? (holdValue * settings.rewardRate) / 100 : 0;
+    const rewardInFda = settings.fdaPrice > 0 ? rewardValue / settings.fdaPrice : (parsedAmount * settings.rewardRate) / 100;
+    return Number(rewardInFda.toFixed(8));
+  }, [amount, settings.rewardRate, settings.fdaPrice]);
+
+  const resolveFdaPrice = useCallback(async (): Promise<number> => {
+    if (auth?.token) {
+      try {
+        const res = await fetch(getApiUrl('auth/profile'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        if (res.ok) {
+          const d = (await res.json().catch(() => ({}))) as { fda_price?: number };
+          const p = Number(d?.fda_price);
+          if (Number.isFinite(p) && p > 0) return p;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      const res = await fetch(getApiUrl('fdaPrice'));
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (res.ok && ct.includes('application/json')) {
+        const d = (await res.json().catch(() => ({}))) as { data?: number; price?: number; fda_price?: number };
+        const p = Number(d.data ?? d.price ?? d.fda_price);
+        if (Number.isFinite(p) && p > 0) return p;
+      }
+    } catch {
+      // ignore
+    }
+    return 0;
+  }, [auth?.token]);
 
   const loadRewardStatus = async () => {
     if (!auth?.token) return;
@@ -46,15 +105,18 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to load holding status');
+      let fdaPrice = Number(data?.settings?.fdaPrice ?? 0);
+      if (!fdaPrice) fdaPrice = await resolveFdaPrice();
       setSettings({
         rewardRate: Number(data?.settings?.rewardRate ?? 5),
         rewardMinAmount: Number(data?.settings?.rewardMinAmount ?? 25),
         rewardPeriodMonths: Number(data?.settings?.rewardPeriodMonths ?? 12),
+        fdaPrice,
       });
       setPendingReward(Number(data?.pendingReward ?? 0));
       setHoldings(Array.isArray(data?.holdings) ? data.holdings : []);
     } catch (err: any) {
-      alert(err?.message || 'Failed to load holding status');
+      pushError(err?.message || 'Failed to load holding status');
     } finally {
       setLoading(false);
     }
@@ -68,11 +130,11 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
   const startHolding = async () => {
     const parsedAmount = parseFloat(amount);
     if (!walletAddress) {
-      alert('Please select an active wallet first.');
+      pushError('Please select an active wallet first.');
       return;
     }
     if (!Number.isFinite(parsedAmount) || parsedAmount < settings.rewardMinAmount) {
-      alert(`Minimum hold amount is ${settings.rewardMinAmount} FDA.`);
+      pushError(`Minimum hold amount is ${settings.rewardMinAmount} FDA.`);
       return;
     }
 
@@ -91,12 +153,12 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to start holding');
-      alert(`Holding started. Estimated maturity total: ${data?.holding?.estimatedTotalAfterMaturity ?? 0} FDA`);
+      pushSuccess(`✅ Holding started. Estimated maturity total: ${data?.holding?.estimatedTotalAfterMaturity ?? 0} FDA`);
       setAmount(String(settings.rewardMinAmount));
       await loadRewardStatus();
       onHoldingStarted?.();
     } catch (err: any) {
-      alert(err?.message || 'Failed to start holding');
+      pushError(err?.message || 'Failed to start holding');
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +166,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
 
   const claimRewards = async () => {
     if (!walletAddress) {
-      alert('Please select an active wallet first.');
+      pushError('Please select an active wallet first.');
       return;
     }
     setClaiming(true);
@@ -119,13 +181,46 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to claim rewards');
-      alert(data?.message || 'Rewards claimed successfully');
+      pushSuccess(data?.message || '✅ Rewards claimed successfully');
       await loadRewardStatus();
       onHoldingStarted?.();
     } catch (err: any) {
-      alert(err?.message || 'Failed to claim rewards');
+      pushError(err?.message || 'Failed to claim rewards');
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const openBreakFlow = (holdingId: number) => {
+    if (!auth?.token) return;
+    setBreakFlow({ open: true, holdingId, step: 1, note: '' });
+  };
+
+  const closeBreakFlow = () => {
+    setBreakFlow({ open: false, holdingId: null, step: 1, note: '' });
+  };
+
+  const requestBreakHolding = async (holdingId: number, note: string) => {
+    if (!auth?.token) return;
+    setRequestingBreakId(holdingId);
+    try {
+      const res = await fetch(getApiUrl(`internal/holdings/${holdingId}/break-request`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({ note: note.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to create break request');
+      pushSuccess(data?.message || '✅ Break request submitted to admin');
+      closeBreakFlow();
+      await loadRewardStatus();
+    } catch (err: any) {
+      pushError(err?.message || 'Failed to create break request');
+    } finally {
+      setRequestingBreakId(null);
     }
   };
 
@@ -136,7 +231,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
         <p className="text-sm text-gray-700 mb-3">
           Hold starts only when user submits this form. It is not automatic for all users.
         </p>
-        <div className="grid md:grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Reward Rate</div>
             <div className="font-semibold">{settings.rewardRate}%</div>
@@ -148,6 +243,10 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Lock Period</div>
             <div className="font-semibold">{settings.rewardPeriodMonths} months</div>
+          </div>
+          <div className="card-dark p-3 text-sm">
+            <div className="text-xs text-slate-500 mb-1">Current FDA Price</div>
+            <div className="font-semibold">{settings.fdaPrice > 0 ? settings.fdaPrice : 'Not set'}</div>
           </div>
         </div>
 
@@ -168,8 +267,14 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
           />
           <p className="text-xs text-gray-600 mt-1">
             Estimated on maturity: {Number(parseFloat(amount || '0') + estimatedReward).toFixed(8)} FDA
-            (example: 25 + 1.25 = 26.25 at 5%)
           </p>
+          {Number.isFinite(parseFloat(amount)) && parseFloat(amount) > 0 && settings.fdaPrice > 0 && (
+            <p className="text-xs text-gray-600 mt-1">
+              Value formula: {parseFloat(amount)} * {settings.fdaPrice} = {(parseFloat(amount) * settings.fdaPrice).toFixed(4)}.
+              Reward value ({settings.rewardRate}%): {((parseFloat(amount) * settings.fdaPrice * settings.rewardRate) / 100).toFixed(4)}.
+              Reward in FDA: {estimatedReward.toFixed(8)}.
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2">
@@ -201,11 +306,107 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({ auth, walletAddr
                 <div className="text-slate-500 mt-1">
                   Reward {h.rewardRate}% = {h.rewardAmount} FDA · Total {h.projectedTotal} FDA
                 </div>
+                <div className="text-slate-500 mt-1">
+                  Break request: {h.breakRequestStatus || 'NONE'}
+                  {h.breakRequestedAt ? ` · Requested: ${new Date(h.breakRequestedAt).toLocaleString()}` : ''}
+                  {h.breakDecidedAt ? ` · Decided: ${new Date(h.breakDecidedAt).toLocaleString()}` : ''}
+                </div>
+                {h.breakRequestNote ? (
+                  <div className="text-slate-500 mt-1">Note: {h.breakRequestNote}</div>
+                ) : null}
+                {h.breakRequestStatus !== 'PENDING' && h.breakRequestStatus !== 'APPROVED' && !h.eligible && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      className={`btn btn-red ${requestingBreakId === h.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      disabled={requestingBreakId === h.id}
+                      onClick={() => openBreakFlow(h.id)}
+                    >
+                      {requestingBreakId === h.id ? 'Requesting...' : 'Request Early Unlock'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {breakFlow.open && breakFlow.holdingId != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="break-flow-title">
+          <div className="card-dark p-4 max-w-md w-full text-sm text-gray-200 shadow-lg border border-slate-600">
+            <h3 id="break-flow-title" className="text-lg font-semibold text-white mb-2">
+              Request early unlock
+            </h3>
+            {breakFlow.step === 1 && (
+              <div className="space-y-3">
+                <p>
+                  This sends a request to an admin. Early unlock is not guaranteed; someone must review and approve
+                  it.
+                </p>
+                <p className="text-slate-400 text-xs">Step 1 of 3</p>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" className="btn btn-secondary" onClick={closeBreakFlow}>
+                    Cancel
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))}>
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            {breakFlow.step === 2 && (
+              <div className="space-y-3">
+                <label className="block text-xs text-slate-400" htmlFor="break-note">Optional reason for the admin (optional)</label>
+                <textarea
+                  id="break-note"
+                  className="form-input w-full min-h-[88px] text-gray-900"
+                  value={breakFlow.note}
+                  onChange={(e) => setBreakFlow((b) => ({ ...b, note: e.target.value }))}
+                  placeholder="e.g. need liquidity for…"
+                />
+                <p className="text-slate-400 text-xs">Step 2 of 3</p>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" className="btn btn-secondary" onClick={() => setBreakFlow((b) => ({ ...b, step: 1 }))}>
+                    Back
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => setBreakFlow((b) => ({ ...b, step: 3 }))}>
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            {breakFlow.step === 3 && (
+              <div className="space-y-3">
+                <p>
+                  You are about to submit a break request for holding <strong>#{breakFlow.holdingId}</strong>.
+                </p>
+                {breakFlow.note.trim() ? (
+                  <p className="text-slate-300 text-xs whitespace-pre-wrap border border-slate-600 rounded p-2">{breakFlow.note}</p>
+                ) : (
+                  <p className="text-slate-400 text-xs">No extra note was added.</p>
+                )}
+                <p className="text-slate-400 text-xs">Step 3 of 3 — confirm to send</p>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" className="btn btn-secondary" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))} disabled={requestingBreakId === breakFlow.holdingId}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-red"
+                    disabled={requestingBreakId === breakFlow.holdingId}
+                    onClick={() => {
+                      if (breakFlow.holdingId != null) void requestBreakHolding(breakFlow.holdingId, breakFlow.note);
+                    }}
+                  >
+                    {requestingBreakId === breakFlow.holdingId ? 'Submitting...' : 'Submit request'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -31,6 +31,8 @@ interface AdminPanelProps {
   updateFeeRate: () => Promise<void>;
   updateHoldingFda: () => Promise<void>;
   loadAdminData: () => Promise<void>;
+  onShowSuccessModal?: (message: string) => void;
+  onShowErrorModal?: (message: string) => void;
 }
 
 // https://merchantcoinwallet.com/admin/addGlobalWallet
@@ -61,6 +63,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   updateFeeRate,
   updateHoldingFda,
   loadAdminData,
+  onShowSuccessModal,
+  onShowErrorModal,
 }) => {
   const [adminTradesPage, setAdminTradesPage] = useState(1);
   const [fdaPrice, setFdaPrice] = useState("");
@@ -69,6 +73,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [rewardMinAmount, setRewardMinAmount] = useState('25');
   const [rewardPeriodMonths, setRewardPeriodMonths] = useState('12');
   const [savingRewardSettings, setSavingRewardSettings] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [breakRequests, setBreakRequests] = useState<any[]>([]);
+  const [loadingBreakRequests, setLoadingBreakRequests] = useState(false);
+  const [decidingBreakId, setDecidingBreakId] = useState<number | null>(null);
+  const pushSuccess = (text: string) => {
+    if (onShowSuccessModal) onShowSuccessModal(text);
+    else setNotice({ type: 'success', text });
+  };
+  const pushError = (text: string) => {
+    if (onShowErrorModal) onShowErrorModal(text);
+    else setNotice({ type: 'error', text });
+  };
   const totalAdminTradesPages = Math.max(1, Math.ceil(adminTrades.length / ADMIN_TRADES_PER_PAGE));
   const paginatedAdminTrades = adminTrades.slice(
     (adminTradesPage - 1) * ADMIN_TRADES_PER_PAGE,
@@ -117,15 +133,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const data = await res.json();
 
       if (!data.success) {
-        alert(data.message);
+        setNotice({ type: 'error', text: data.message || 'Failed to add token.' });
         return;
       }
 
-      alert("Token Added Successfully");
+      setNotice({ type: 'success', text: 'Token added successfully.' });
 
     } catch (err) {
       console.error(err);
-      alert("Failed to add token");
+      setNotice({ type: 'error', text: 'Failed to add token.' });
     }
   };
 
@@ -133,60 +149,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     try {
 
       if (!fdaPrice || isNaN(Number(fdaPrice))) {
-        alert("Enter valid price");
+        setNotice({ type: 'error', text: 'Enter valid price.' });
         return;
       }
 
       setUpdatingFdaPrice(true);
 
-      const res = await fetch(getApiUrl("admin/setFdaPrice"), {
-        method: "POST",
+      const res = await fetch(getApiUrl("admin/settings/fda_price"), {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth?.token}`
         },
         body: JSON.stringify({
-          price: Number(fdaPrice)
+          value: String(Number(fdaPrice)),
+          description: "FDA Price (manual admin override)"
         })
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error);
+      const raw = await res.text();
+      let data: any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { error: raw || "Non-JSON response from server" };
       }
 
-      alert("FDA Price Updated");
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to update FDA price (${res.status})`);
+      }
+
+      await loadFdaPrice();
+      setNotice({ type: 'success', text: 'FDA price updated.' });
 
     } catch (err: any) {
       console.error(err);
-      alert(err.message);
+      setNotice({ type: 'error', text: err?.message || 'Failed to update FDA price.' });
     } finally {
       setUpdatingFdaPrice(false);
     }
   };
 
   const loadFdaPrice = async () => {
-  try {
-    const res = await fetch(getApiUrl("fdaPrice"));
-    if (!res.ok) return;
-    const contentType = res.headers.get("content-type") || "";
-    if (!contentType.includes("application/json")) return;
-    const data = await res.json();
+    try {
+      const res = await fetch(getApiUrl("admin/settings"), {
+        headers: {
+          Authorization: `Bearer ${auth?.token}`
+        }
+      });
+      if (!res.ok) return;
+      const settings = await res.json().catch(() => []);
+      const fdaPriceSetting = Array.isArray(settings)
+        ? settings.find((s: any) => s?.key === 'fda_price')
+        : null;
+      if (!fdaPriceSetting?.value) return;
+      const nextPrice = Number(fdaPriceSetting.value);
+      if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
+      setFdaPrice(nextPrice.toString());
+    } catch (err) {
+      console.error("Failed to load FDA price:", err);
+    }
+  };
 
-    // 👇 set existing price into input
-    const nextPrice = Number(data?.data ?? data?.price ?? 0);
-    if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
-    setFdaPrice(nextPrice.toString());
-
-  } catch (err) {
-    console.error("Failed to load FDA price:", err);
-  }
-};
-
-useEffect(() =>{
-loadFdaPrice()
-},[])
+  useEffect(() => {
+    loadFdaPrice();
+  }, [auth?.token]);
 
   const loadRewardSettings = async () => {
     try {
@@ -224,16 +251,16 @@ loadFdaPrice()
       const minAmount = parseFloat(rewardMinAmount);
       const period = parseInt(rewardPeriodMonths, 10);
 
-      if (!Number.isFinite(rate) || rate < 5 || rate > 10) {
-        alert('Reward rate must be between 5 and 10.');
+      if (!Number.isFinite(rate) || rate < 0) {
+        pushError('Reward rate must be a valid non-negative number.');
         return;
       }
-      if (!Number.isFinite(minAmount) || minAmount < 25) {
-        alert('Minimum hold amount must be at least 25 FDA.');
+      if (!Number.isFinite(minAmount) || minAmount < 0) {
+        pushError('Minimum hold amount must be a valid non-negative number.');
         return;
       }
       if (!Number.isFinite(period) || period <= 0) {
-        alert('Hold period must be a positive month value.');
+        pushError('Hold period must be a positive month value.');
         return;
       }
 
@@ -242,20 +269,92 @@ loadFdaPrice()
       await saveRewardSetting('holding_reward_min_amount', String(minAmount), 'Minimum FDA amount eligible for holding reward');
       await saveRewardSetting('holding_reward_period_months', String(period), 'Holding reward lock period in months');
       await loadRewardSettings();
-      alert('Holding reward settings updated.');
+      pushSuccess(`✅ Holding reward settings updated.`);
     } catch (err: any) {
       console.error(err);
-      alert(err?.message || 'Failed to update reward settings');
+      pushError(err?.message || 'Failed to update reward settings');
     } finally {
       setSavingRewardSettings(false);
     }
   };
+
+  const loadBreakRequests = async () => {
+    if (!auth?.token) return;
+    setLoadingBreakRequests(true);
+    try {
+      const res = await fetch(getApiUrl('admin/holdings/break-requests'), {
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+        },
+      });
+      const data = await res.json().catch(() => []);
+      if (!res.ok) throw new Error(data?.error || 'Failed to load break requests');
+      setBreakRequests(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      pushError(err?.message || 'Failed to load break requests');
+    } finally {
+      setLoadingBreakRequests(false);
+    }
+  };
+
+  const decideBreakRequest = async (holdingId: number, decision: 'APPROVE' | 'REJECT') => {
+    if (!auth?.token) return;
+    const note = window.prompt(
+      decision === 'APPROVE'
+        ? 'Optional admin note for approval'
+        : 'Optional admin note for rejection',
+      '',
+    ) ?? '';
+    setDecidingBreakId(holdingId);
+    try {
+      const res = await fetch(getApiUrl(`admin/holdings/${holdingId}/break-decision`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({ decision, note }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to update break request');
+      pushSuccess(data?.message || `Break request ${decision.toLowerCase()}d`);
+      await loadBreakRequests();
+    } catch (err: any) {
+      pushError(err?.message || 'Failed to update break request');
+    } finally {
+      setDecidingBreakId(null);
+    }
+  };
+
+  useEffect(() => {
+    loadBreakRequests();
+  }, [auth?.token]);
 
   return (
     <>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">
         🛡️ Admin Panel
       </h2>
+      {notice && (
+        <div
+          className={`mb-4 rounded-md border px-4 py-3 text-sm ${
+            notice.type === 'success'
+              ? 'border-green-300 bg-green-50 text-green-800'
+              : 'border-red-300 bg-red-50 text-red-800'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span>{notice.text}</span>
+            <button
+              type="button"
+              className="text-xs underline opacity-80 hover:opacity-100"
+              onClick={() => setNotice(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex gap-2 mb-2">
@@ -286,6 +385,7 @@ loadFdaPrice()
             className="form-input-dark text-xs"
             placeholder="Token symbol (e.g. USDT)"
             value={newTokenSymbol}
+            readOnly
           // onChange={(e) => onSymbolChange(e.target.value)}
           />
           <input
@@ -293,6 +393,7 @@ loadFdaPrice()
             className="form-input-dark text-xs"
             placeholder="Token name (optional)"
             value={newTokenName}
+            readOnly
           // onChange={(e) => onNameChange(e.target.value)}
           />
         </div>
@@ -498,6 +599,63 @@ loadFdaPrice()
           >
             {savingRewardSettings ? 'Saving...' : 'Save Hold Reward Settings'}
           </button>
+        </div>
+
+        <div className="mb-6 p-4 rounded-lg border border-rose-200 bg-rose-50">
+          <div className="flex items-center justify-between mb-3">
+            <label className="modal-label mb-0">Holding Break Requests</label>
+            <button
+              type="button"
+              className={`btn btn-secondary ${loadingBreakRequests ? 'opacity-60 cursor-not-allowed' : ''}`}
+              onClick={loadBreakRequests}
+              disabled={loadingBreakRequests}
+            >
+              {loadingBreakRequests ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+          {breakRequests.length === 0 ? (
+            <p className="text-xs text-gray-700">No break requests found.</p>
+          ) : (
+            <div className="space-y-2">
+              {breakRequests.map((req) => (
+                <div key={req.id} className="card-dark p-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      #{req.id} · {req.amount} FDA · {req.user?.fullName || req.user?.email || req.user?.phone || `User ${req.userId}`}
+                    </span>
+                    <span>{req.breakRequestStatus}</span>
+                  </div>
+                  <div className="text-slate-500 mt-1">
+                    Hold: {req.holdingPeriod} · Expires: {req.expiresAt ? new Date(req.expiresAt).toLocaleString() : '-'}
+                  </div>
+                  <div className="text-slate-500 mt-1">
+                    Requested: {req.breakRequestedAt ? new Date(req.breakRequestedAt).toLocaleString() : '-'}
+                  </div>
+                  {req.breakRequestNote ? <div className="text-slate-500 mt-1">Note: {req.breakRequestNote}</div> : null}
+                  {req.breakRequestStatus === 'PENDING' && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        className={`btn btn-success ${decidingBreakId === req.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        onClick={() => decideBreakRequest(req.id, 'APPROVE')}
+                        disabled={decidingBreakId === req.id}
+                      >
+                        Approve Unlock
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-red ${decidingBreakId === req.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        onClick={() => decideBreakRequest(req.id, 'REJECT')}
+                        disabled={decidingBreakId === req.id}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -55,6 +55,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       console.log({ data });
 
       setUserData(data);
+      const profilePrice = Number(data?.fda_price ?? 0);
+      if (Number.isFinite(profilePrice) && profilePrice > 0) {
+        setFdaPrice(profilePrice);
+      }
     } catch (err: any) {
       console.error('Failed to load profile:', err);
       // setError('Unable to load profile. Please try again.');
@@ -126,24 +130,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     return Array.from(registeredMap.values());
   }, [registeredFdaWallets, allWallets]);
 
-  const loadFdaPrice = async () => {
-    try {
-      const res = await fetch(getApiUrl("fdaPrice"));
-      if (!res.ok) return;
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) return;
-      const data = await res.json();
-
-      const nextPrice = Number(data?.data ?? data?.price ?? 0);
-      if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
-      setFdaPrice(nextPrice);
-    } catch (err) {
-      console.error("Failed to load FDA price:", err);
-    }
-  };
-  useEffect(() => {
-    loadFdaPrice();
-  }, []);
   return (
     <header className="top-header" style={{ position: 'sticky', top: 0, bottom: 0, borderBottomLeftRadius: '10px', borderBottomRightRadius: '10px', zIndex: 9999 }}>
       <div className="top-header-left" >
