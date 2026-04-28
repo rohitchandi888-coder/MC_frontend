@@ -71,6 +71,14 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   openReleaseConfirmModal,
 }) => {
   const [myTradesSearch, setMyTradesSearch] = useState('');
+  const [isCompactMobile, setIsCompactMobile] = useState<boolean>(
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false,
+  );
+  useEffect(() => {
+    const onResize = () => setIsCompactMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   // const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   // Helper function to check if buyer can create dispute (within 2 hours of payment upload)
   const canBuyerCreateDispute = (trade: any) => {
@@ -450,6 +458,49 @@ const renderPaymentMethod = (methods: any) => {
               <p className="text-sm text-gray-600 mb-1" style={{ padding: '0.5rem 1rem' }}>No trades yet.</p>
             ) : (
               <>
+                {isCompactMobile ? (
+                  <div className="space-y-3">
+                    {paginatedMyTrades.map((trade) => {
+                      const isBuyer = trade.buyer_id === auth?.user.id;
+                      const isSeller = trade.seller_id === auth?.user.id;
+                      const feeAmount = parseFloat(trade.fee_amount) || 0;
+                      const amountReceived = parseFloat(trade.amount) - feeAmount;
+                      return (
+                        <div key={trade.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <strong style={{ color: '#111827', fontSize: 14 }}>#{trade.id}</strong>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: isBuyer ? '#dbeafe' : '#fee2e2', color: isBuyer ? '#1d4ed8' : '#b91c1c' }}>
+                              {isBuyer ? 'BUY' : 'SELL'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12 }}>
+                            <span style={{ color: '#6b7280' }}>Amount</span><span style={{ color: '#111827', textAlign: 'right' }}>{parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}</span>
+                            <span style={{ color: '#6b7280' }}>Price</span><span style={{ color: '#111827', textAlign: 'right' }}>{parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}</span>
+                            <span style={{ color: '#6b7280' }}>Total</span><span style={{ color: '#111827', textAlign: 'right', fontWeight: 700 }}>{(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}</span>
+                            <span style={{ color: '#6b7280' }}>Status</span><span style={{ color: '#334155', textAlign: 'right' }}>{trade.status}</span>
+                          </div>
+                          <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                            {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
+                              <button className="btn btn-yellow w-full text-xs py-2" onClick={() => { setSelectedTradeForPayment(trade); setPaymentScreenshot(null); setShowPaymentModal(true); }} disabled={markingAsPaid === trade.id}>
+                                {markingAsPaid === trade.id ? '...' : '✅ Pay'}
+                              </button>
+                            )}
+                            {isSeller && trade.status === 'PAID_PENDING_RELEASE' && (
+                              <button className="btn w-full text-xs py-2" style={{ background: releasingTokens === trade.id ? '#d1d5db' : '#10b981', color: '#fff' }} onClick={() => openReleaseConfirmModal(trade)} disabled={releasingTokens === trade.id}>
+                                {releasingTokens === trade.id ? '...' : '🚀 Release'}
+                              </button>
+                            )}
+                            {trade.status === 'COMPLETED' && (
+                              <span style={{ fontSize: 12, color: '#059669', fontWeight: 600, textAlign: 'center' }}>
+                                ✅ Received {feeAmount > 0 ? `${amountReceived.toFixed(4)} FDA` : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', background: '#ffffff' }}>
                     <thead>
@@ -736,6 +787,7 @@ const renderPaymentMethod = (methods: any) => {
                     </tbody>
                   </table>
                 </div>
+                )}
                 <div className="trade-listing-pagination-wrap">
                   <SitePagination
                     id="my-trades-pagination"

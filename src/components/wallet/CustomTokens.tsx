@@ -181,10 +181,10 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
 
       <div className="add-token-form">
         <p className="text-xs font-semibold text-slate-300 mb-2">Add Custom Token</p>
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
           <input
             type="text"
-            className="form-input-dark flex-1 text-xs"
+            className="form-input-dark flex-1 text-xs text-slate-100 placeholder-slate-400"
             placeholder="Token contract address (0x...)"
             value={newTokenAddress}
             onChange={(e) => onAddressChange(e.target.value)}
@@ -195,7 +195,7 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
             }}
           />
           <button
-            className={`btn btn-yellow text-xs py-2 px-3 ${tokenInfoLoading || !newTokenAddress.trim() ? 'opacity-60 cursor-not-allowed' : ''}`}
+            className={`btn btn-yellow text-xs py-2 px-3 w-full sm:w-auto ${tokenInfoLoading || !newTokenAddress.trim() ? 'opacity-60 cursor-not-allowed' : ''}`}
             onClick={() => onFetchTokenInfo(newTokenAddress)}
             disabled={tokenInfoLoading || !newTokenAddress.trim()}
             style={{ whiteSpace: 'nowrap' }}
@@ -206,14 +206,14 @@ export const CustomTokens: React.FC<CustomTokensProps> = ({
         <div className="grid grid-cols-2 gap-2 mb-2">
           <input
             type="text"
-            className="form-input-dark text-xs"
+            className="form-input-dark text-xs text-slate-100 placeholder-slate-400"
             placeholder="Token symbol (e.g. USDT)"
             value={newTokenSymbol}
             onChange={(e) => onSymbolChange(e.target.value)}
           />
           <input
             type="text"
-            className="form-input-dark text-xs"
+            className="form-input-dark text-xs text-slate-100 placeholder-slate-400"
             placeholder="Token name (optional)"
             value={newTokenName}
             onChange={(e) => onNameChange(e.target.value)}

@@ -188,6 +188,40 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
     
   }, [selectedPaymentMethodIds, paymentMethods]);
 
+  const activePaymentMethodIds = paymentMethods
+    .filter((pm) => pm.is_active)
+    .map((pm) => pm.id);
+  const selectedActivePaymentMethodCount = selectedPaymentMethodIds.filter((id) =>
+    activePaymentMethodIds.includes(id),
+  ).length;
+  const isCreateOfferDisabled =
+    creatingOffer ||
+    !offerAmount ||
+    !offerPrice ||
+    ((offerType === 'SELL' && selectedActivePaymentMethodCount === 0) ||
+      (offerType === 'BUY' && !offerPaymentMethods.trim()));
+  const createOfferDisabledReason =
+    !offerAmount
+      ? 'Enter FDA amount.'
+      : !offerPrice
+        ? 'Enter price per FDA.'
+        : offerType === 'SELL' && selectedActivePaymentMethodCount === 0
+          ? 'Select at least one active payment method.'
+          : offerType === 'BUY' && !offerPaymentMethods.trim()
+            ? 'Enter payment method details.'
+            : '';
+
+  // UX: when SELL has active methods but nothing selected, preselect first one.
+  React.useEffect(() => {
+    if (offerType !== 'SELL') return;
+    if (activePaymentMethodIds.length === 0) return;
+    if (selectedActivePaymentMethodCount > 0) return;
+    setSelectedPaymentMethodIds((prev) => {
+      const hasActiveSelection = prev.some((id) => activePaymentMethodIds.includes(id));
+      return hasActiveSelection ? prev : [activePaymentMethodIds[0]];
+    });
+  }, [offerType, activePaymentMethodIds.join(','), selectedActivePaymentMethodCount]);
+
   const handlePaymentMethodToggle = (id: number) => {
     setSelectedPaymentMethodIds((prev) => {
       if (prev.includes(id)) {
@@ -335,8 +369,8 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
           }
           [data-p2p-mm="1"] .p2p-payment-option[data-selected="true"] {
             border: 1px solid ${MM.border} !important;
-            border-left: 4px solid ${MM.accent} !important;
-            background: ${MM.accentMuted} !important;
+            background: #f8fafc !important;
+            border-left: 1px solid ${MM.border} !important;
           }
           [data-p2p-mm="1"] .p2p-payment-option[data-selected="false"]:hover {
             background: #f9fafb !important;
@@ -649,7 +683,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 Choose how buyers will pay you (UPI / QR saved under Profile → Payment Methods). Tap a row to select.
                 Each row has a switch to show or hide that method&apos;s UPI / QR preview.
               </p>
-              {selectedPaymentMethodIds.length === 0 && (
+              {selectedActivePaymentMethodCount === 0 && (
                 <p className="text-xs mt-1 mb-2 font-medium" style={{ color: '#b45309' }}>⚠️ Select at least one payment method to create a sell offer.</p>
               )}
 
@@ -682,30 +716,48 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                           return (
                             <div
                               key={method.id}
-                              data-selected={selected ? 'true' : 'false'}
                               className={`p2p-payment-option rounded-xl border p-3 transition-colors ${
-                                inMobileShell
-                                  ? ''
-                                  : selected
-                                    ? 'border-slate-600 border-l-4 border-l-blue-500 bg-blue-500/10'
-                                    : 'border-slate-700 hover:bg-slate-800/60'
+                                inMobileShell ? '' : selected ? '' : 'hover:bg-slate-800/60'
                               }`}
+                              style={
+                                selected
+                                  ? inMobileShell
+                                    ? { borderColor: MM.border, background: '#f8fafc', borderLeft: `1px solid ${MM.border}` }
+                                    : { borderColor: '#475569', background: 'rgba(241,245,249,0.7)', borderLeft: '1px solid #475569' }
+                                  : undefined
+                              }
                             >
                               <div className="flex items-start gap-2">
                                 <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
                                   <input
                                     type="checkbox"
-                                    className="sr-only"
+                                    style={{
+                                      position: 'absolute',
+                                      opacity: 0,
+                                      pointerEvents: 'none',
+                                      width: 1,
+                                      height: 1,
+                                    }}
                                     checked={selected}
                                     onChange={() => handlePaymentMethodToggle(method.id)}
                                     aria-label={`Select payment method ${getPaymentMethodLabel(method)}`}
                                   />
                                   <span
-                                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-slate-400 bg-white"
+                                    className="mt-0.5 flex shrink-0 items-center justify-center rounded border-2 bg-white"
                                     style={
                                       selected
-                                        ? { borderColor: MM.accent, backgroundColor: MM.accent }
-                                        : undefined
+                                        ? {
+                                            width: 18,
+                                            height: 18,
+                                            borderColor: '#475569',
+                                            backgroundColor: '#ffffff',
+                                          }
+                                        : {
+                                            width: 18,
+                                            height: 18,
+                                            borderColor: '#94a3b8',
+                                            backgroundColor: '#ffffff',
+                                          }
                                     }
                                     aria-hidden
                                   >
@@ -713,7 +765,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
                                         <path
                                           d="M2 6l2.5 2.5L10 3"
-                                          stroke="#fff"
+                                          stroke="#334155"
                                           strokeWidth="2"
                                           strokeLinecap="round"
                                           strokeLinejoin="round"
@@ -776,7 +828,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                         height: 28,
                                         borderRadius: 999,
                                         border: `1px solid ${inMobileShell ? MM.border : '#64748b'}`,
-                                        background: revealed ? MM.accent : inMobileShell ? MM.chipBg : '#334155',
+                                        background: revealed ? '#64748b' : inMobileShell ? MM.chipBg : '#334155',
                                         position: 'relative',
                                         flexShrink: 0,
                                         transition: 'background 0.2s',
@@ -840,27 +892,18 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             )}
 
             <button
-              className={`btn btn-yellow w-full ${(creatingOffer ||
-                !offerAmount ||
-                !offerPrice ||
-                selectedPaymentMethodIds.length === 0
-                // (offerFiatCurrency === 'INR' && paymentMethods.filter(pm => pm.is_active).length === 0) ||
-                // (offerFiatCurrency === 'INR' && selectedPaymentMethodIds.length === 0)
-              ) ? 'opacity-60 cursor-not-allowed' : ''
+              className={`btn btn-yellow w-full ${isCreateOfferDisabled ? 'opacity-60 cursor-not-allowed' : ''
                 }`}
               onClick={createOffer}
-              disabled={
-                creatingOffer ||
-                !offerAmount ||
-                !offerPrice ||
-                (
-                  (offerType === 'SELL' && selectedPaymentMethodIds.length === 0) ||
-                  (offerType === 'BUY' && !offerPaymentMethods.trim())
-                )
-              }
+              disabled={isCreateOfferDisabled}
             >
               {creatingOffer ? 'Creating...' : offerType === 'BUY' ? '📥 Create Buy Offer' : '📤 Create Sell Offer'}
             </button>
+            {isCreateOfferDisabled && !creatingOffer && createOfferDisabledReason && (
+              <p className="text-xs mt-2 text-center" style={{ color: '#b45309' }}>
+                {createOfferDisabledReason}
+              </p>
+            )}
           </div>
 
           {/* My Trades */}

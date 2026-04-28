@@ -26,6 +26,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onProfileClick,
   onSwitchWallet,
 }) => {
+  const normalizeWalletNetwork = (raw?: string) => {
+    const n = String(raw || '').trim().toLowerCase();
+    if (!n) return 'BNB Chain';
+    if (n.includes('ethereum') || n.includes('evm') || n === 'eth') return 'BNB Chain';
+    if (n.includes('bnb')) return 'BNB Chain';
+    if (n.includes('tron') || n === 'trx') return 'Tron';
+    if (n.includes('bitcoin') || n === 'btc') return 'Bitcoin';
+    if (n.includes('solana') || n === 'sol') return 'Solana';
+    return raw || 'BNB Chain';
+  };
   const [copied, setCopied] = useState<string | null>(null);
   const [showWalletsDropdown, setShowWalletsDropdown] = useState(false);
   const [userData, setUserData] = useState<any>(null);
@@ -111,7 +121,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           id: wallet.id?.toString() || `db-${wallet.address.slice(0, 10)}`,
           address: wallet.address,
           label: wallet.label || `Wallet ${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`,
-          network: wallet.network || 'Ethereum/EVM',
+          network: normalizeWalletNetwork(wallet.network),
           source: 'database',
         });
       }
@@ -122,6 +132,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       if (wallet.address && !registeredMap.has(wallet.address.toLowerCase())) {
         registeredMap.set(wallet.address.toLowerCase(), {
           ...wallet,
+          network: normalizeWalletNetwork(wallet.network),
           source: 'local',
         });
       }

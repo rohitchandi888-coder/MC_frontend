@@ -46,7 +46,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           pm.qr_code.startsWith('http'));
 
       return (
-        <div key={index} style={{}}>
+        <div key={index} style={{ marginBottom: 8 }}>
 
           <p style={{ fontSize: '13px', fontWeight: '600', color: "#fff" }}>
             {/* {pm.paymentname} */}
@@ -54,7 +54,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </p>
 
           {pm.upi_id && (
-            <span style={{ fontSize: '12px', display: 'block' }}>
+            <span style={{ fontSize: '12px', display: 'block', color: '#e2e8f0', marginTop: 2 }}>
               {pm.upi_id}
             </span>
           )}
@@ -148,7 +148,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             Amount: <strong>{trade.amount} {trade.asset_symbol}</strong>
           </p>
           <div style={{ marginTop: '10px', marginBottom: '10px' }}>
-            <p style={{ fontWeight: '600' }}>💳 Seller Payment Details:</p>
+            <p style={{ fontWeight: '600', color: '#e2e8f0', marginBottom: 6 }}>💳 Seller Payment Details:</p>
             {renderPaymentMethod(trade.seller_payment_methods)}
           </div>
           <label className="modal-label">
