@@ -219,6 +219,7 @@ interface MobileDashboardProps {
   tokenPrices?: Record<string, number>;
   customTokens?: CustomToken[];
   customTokenBalances?: Record<string, string>;
+  onFdaClick?: () => void;
 }
 
 const allTabs: Tab[] = [
@@ -276,6 +277,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
   tokens = [],
   customTokens = [],
   customTokenBalances = {},
+  onFdaClick,
 }) => {
   const [showNetworkModal, setShowNetworkModal] = useState(false);
   const [networkData, setNetworkData] = useState<any>({});
@@ -908,12 +910,16 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                 ? holdingRows.map((row) => (
                     <div
                       key={row.key}
+                      onClick={() => {
+                        if (row.symbol === "FDA" && onFdaClick) onFdaClick();
+                      }}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
                         padding: "12px 10px",
                         borderRadius: 10,
+                        cursor: row.symbol === "FDA" ? "pointer" : "default",
                       }}
                     >
                       <div style={{ display: "flex", gap: 12, minWidth: 0 }}>

@@ -775,11 +775,11 @@ useEffect(() => {
     //   return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     // }
     if (coin === 'FDA') {
-  return `₹${value.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+      return `INR.V ${value.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    }
     return `$${value.toFixed(6)}`;
   };
 

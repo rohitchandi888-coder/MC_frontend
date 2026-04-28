@@ -12,6 +12,7 @@ interface HoldFdaProgramProps {
 
 type RewardStatusRow = {
   id: number;
+  plan?: 'standard' | 'merchant_buy';
   amount: number;
   holdingPeriod: string;
   createdAt: string;
@@ -28,6 +29,17 @@ type RewardStatusRow = {
   breakDecidedAt?: string | null;
 };
 
+type HoldPlan = 'standard' | 'merchant_buy';
+type HoldingSettings = {
+  rewardRate: number;
+  rewardMinAmount: number;
+  rewardPeriodMonths: number;
+  merchantBuyRewardRate: number;
+  merchantBuyRewardMinAmount: number;
+  merchantBuyRewardPeriodMonths: number;
+  fdaPrice: number;
+};
+
 export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   auth,
   walletAddress,
@@ -36,7 +48,16 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   onShowErrorModal,
 }) => {
   const [amount, setAmount] = useState('25');
-  const [settings, setSettings] = useState({ rewardRate: 5, rewardMinAmount: 25, rewardPeriodMonths: 12, fdaPrice: 0 });
+  const [holdPlan, setHoldPlan] = useState<HoldPlan>('standard');
+  const [settings, setSettings] = useState<HoldingSettings>({
+    rewardRate: 5,
+    rewardMinAmount: 25,
+    rewardPeriodMonths: 12,
+    merchantBuyRewardRate: 2,
+    merchantBuyRewardMinAmount: 10,
+    merchantBuyRewardPeriodMonths: 12,
+    fdaPrice: 0,
+  });
   const [holdings, setHoldings] = useState<RewardStatusRow[]>([]);
   const [pendingReward, setPendingReward] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -57,15 +78,23 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     if (onShowErrorModal) onShowErrorModal(text);
     else alert(text);
   };
+  const pushInfo = (text: string) => {
+    if (onShowErrorModal) onShowErrorModal(text);
+    else alert(text);
+  };
+
+  const activeRewardRate = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardRate : settings.rewardRate;
+  const activeMinAmount = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardMinAmount : settings.rewardMinAmount;
+  const activePeriodMonths = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardPeriodMonths : settings.rewardPeriodMonths;
 
   const estimatedReward = useMemo(() => {
     const parsedAmount = parseFloat(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return 0;
     const holdValue = settings.fdaPrice > 0 ? parsedAmount * settings.fdaPrice : 0;
-    const rewardValue = holdValue > 0 ? (holdValue * settings.rewardRate) / 100 : 0;
-    const rewardInFda = settings.fdaPrice > 0 ? rewardValue / settings.fdaPrice : (parsedAmount * settings.rewardRate) / 100;
+    const rewardValue = holdValue > 0 ? (holdValue * activeRewardRate) / 100 : 0;
+    const rewardInFda = settings.fdaPrice > 0 ? rewardValue / settings.fdaPrice : (parsedAmount * activeRewardRate) / 100;
     return Number(rewardInFda.toFixed(8));
-  }, [amount, settings.rewardRate, settings.fdaPrice]);
+  }, [amount, activeRewardRate, settings.fdaPrice]);
 
   const resolveFdaPrice = useCallback(async (): Promise<number> => {
     if (auth?.token) {
@@ -111,6 +140,9 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         rewardRate: Number(data?.settings?.rewardRate ?? 5),
         rewardMinAmount: Number(data?.settings?.rewardMinAmount ?? 25),
         rewardPeriodMonths: Number(data?.settings?.rewardPeriodMonths ?? 12),
+        merchantBuyRewardRate: Number(data?.settings?.merchantBuyRewardRate ?? 2),
+        merchantBuyRewardMinAmount: Math.max(10, Number(data?.settings?.merchantBuyRewardMinAmount ?? 10)),
+        merchantBuyRewardPeriodMonths: Math.max(12, Number(data?.settings?.merchantBuyRewardPeriodMonths ?? 12)),
         fdaPrice,
       });
       setPendingReward(Number(data?.pendingReward ?? 0));
@@ -133,8 +165,8 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       pushError('Please select an active wallet first.');
       return;
     }
-    if (!Number.isFinite(parsedAmount) || parsedAmount < settings.rewardMinAmount) {
-      pushError(`Minimum hold amount is ${settings.rewardMinAmount} FDA.`);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < activeMinAmount) {
+      pushError(`⚠️ Minimum hold amount for ${holdPlan === 'merchant_buy' ? 'Merchant Buy' : 'Standard'} plan is ${activeMinAmount} FDA.`);
       return;
     }
 
@@ -149,12 +181,13 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         body: JSON.stringify({
           wallet_address: walletAddress,
           amount: parsedAmount,
+          plan: holdPlan,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to start holding');
       pushSuccess(`✅ Holding started. Estimated maturity total: ${data?.holding?.estimatedTotalAfterMaturity ?? 0} FDA`);
-      setAmount(String(settings.rewardMinAmount));
+      setAmount(String(activeMinAmount));
       await loadRewardStatus();
       onHoldingStarted?.();
     } catch (err: any) {
@@ -180,7 +213,14 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         body: JSON.stringify({ wallet_address: walletAddress }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to claim rewards');
+      if (!res.ok) {
+        const msg = String(data?.error || 'Failed to claim rewards');
+        if (res.status === 400 && msg.toLowerCase().includes('no eligible holding reward')) {
+          pushInfo(`ℹ️ ${msg}`);
+          return;
+        }
+        throw new Error(msg);
+      }
       pushSuccess(data?.message || '✅ Rewards claimed successfully');
       await loadRewardStatus();
       onHoldingStarted?.();
@@ -234,15 +274,15 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Reward Rate</div>
-            <div className="font-semibold">{settings.rewardRate}%</div>
+            <div className="font-semibold">{activeRewardRate}%</div>
           </div>
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Minimum Hold</div>
-            <div className="font-semibold">{settings.rewardMinAmount} FDA</div>
+            <div className="font-semibold">{activeMinAmount} FDA</div>
           </div>
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Lock Period</div>
-            <div className="font-semibold">{settings.rewardPeriodMonths} months</div>
+            <div className="font-semibold">{activePeriodMonths} months</div>
           </div>
           <div className="card-dark p-3 text-sm">
             <div className="text-xs text-slate-500 mb-1">Current FDA Price</div>
@@ -256,10 +296,33 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         </div>
 
         <div className="mb-3">
+          <label className="modal-label">Hold Plan</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={`btn ${holdPlan === 'standard' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setHoldPlan('standard')}
+            >
+              Standard ({settings.rewardRate}% / {settings.rewardPeriodMonths}m, min {settings.rewardMinAmount})
+            </button>
+            <button
+              type="button"
+              className={`btn ${holdPlan === 'merchant_buy' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setHoldPlan('merchant_buy')}
+            >
+              Merchant Buy (2% monthly, min 10, min 1 year)
+            </button>
+          </div>
+          <p className="text-xs text-gray-600 mt-1">
+            Use Merchant Buy plan when FDA was bought inside MerchantCoinWallet.
+          </p>
+        </div>
+
+        <div className="mb-3">
           <label className="modal-label">Hold Amount (FDA)</label>
           <input
             type="number"
-            min={settings.rewardMinAmount}
+            min={activeMinAmount}
             step="0.000000000000000001"
             className="form-input w-full"
             value={amount}
@@ -271,7 +334,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
           {Number.isFinite(parseFloat(amount)) && parseFloat(amount) > 0 && settings.fdaPrice > 0 && (
             <p className="text-xs text-gray-600 mt-1">
               Value formula: {parseFloat(amount)} * {settings.fdaPrice} = {(parseFloat(amount) * settings.fdaPrice).toFixed(4)}.
-              Reward value ({settings.rewardRate}%): {((parseFloat(amount) * settings.fdaPrice * settings.rewardRate) / 100).toFixed(4)}.
+              Reward value ({activeRewardRate}%): {((parseFloat(amount) * settings.fdaPrice * activeRewardRate) / 100).toFixed(4)}.
               Reward in FDA: {estimatedReward.toFixed(8)}.
             </p>
           )}
@@ -281,7 +344,11 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
           <button className={`btn btn-primary ${submitting ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={startHolding} disabled={submitting}>
             {submitting ? 'Starting...' : 'Start Holding'}
           </button>
-          <button className={`btn btn-yellow ${claiming ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={claimRewards} disabled={claiming}>
+          <button
+            className={`btn btn-yellow ${(claiming || pendingReward <= 0) ? 'opacity-60 cursor-not-allowed' : ''}`}
+            onClick={claimRewards}
+            disabled={claiming || pendingReward <= 0}
+          >
             {claiming ? 'Claiming...' : 'Claim Rewards'}
           </button>
           <button className={`btn btn-secondary ${loading ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={loadRewardStatus} disabled={loading}>
@@ -300,7 +367,9 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
             {holdings.map((h) => (
               <div key={h.id} className="card-dark p-3 text-xs">
                 <div className="flex justify-between">
-                  <span>#{h.id} · {h.amount} FDA · {h.holdingPeriod}</span>
+                  <span>
+                    #{h.id} · {h.amount} FDA · {h.holdingPeriod} · {h.plan === 'merchant_buy' ? 'Merchant Buy' : 'Standard'}
+                  </span>
                   <span>{h.eligible ? '✅ Eligible' : '⏳ Locked'}</span>
                 </div>
                 <div className="text-slate-500 mt-1">
@@ -333,23 +402,26 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       </div>
 
       {breakFlow.open && breakFlow.holdingId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="break-flow-title">
-          <div className="card-dark p-4 max-w-md w-full text-sm text-gray-200 shadow-lg border border-slate-600">
-            <h3 id="break-flow-title" className="text-lg font-semibold text-white mb-2">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="break-flow-title">
+          <div className="card-dark p-3 sm:p-4 max-w-md w-full text-sm text-gray-200 shadow-lg border border-slate-600 rounded-xl max-h-[88vh] overflow-y-auto">
+            <h3 id="break-flow-title" className="text-base sm:text-lg font-semibold text-white mb-1">
               Request early unlock
             </h3>
+            <p className="text-[11px] sm:text-xs text-slate-400 mb-2">
+              Holding #{breakFlow.holdingId}
+            </p>
             {breakFlow.step === 1 && (
               <div className="space-y-3">
-                <p>
+                <p className="text-sm leading-5">
                   This sends a request to an admin. Early unlock is not guaranteed; someone must review and approve
                   it.
                 </p>
-                <p className="text-slate-400 text-xs">Step 1 of 3</p>
-                <div className="flex gap-2 justify-end">
-                  <button type="button" className="btn btn-secondary" onClick={closeBreakFlow}>
+                <p className="text-slate-400 text-[11px] sm:text-xs">Step 1 of 3</p>
+                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={closeBreakFlow}>
                     Cancel
                   </button>
-                  <button type="button" className="btn btn-primary" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))}>
+                  <button type="button" className="btn btn-primary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))}>
                     Next
                   </button>
                 </div>
@@ -357,20 +429,20 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
             )}
             {breakFlow.step === 2 && (
               <div className="space-y-3">
-                <label className="block text-xs text-slate-400" htmlFor="break-note">Optional reason for the admin (optional)</label>
+                <label className="block text-xs text-slate-400" htmlFor="break-note">Optional reason for admin</label>
                 <textarea
                   id="break-note"
-                  className="form-input w-full min-h-[88px] text-gray-900"
+                  className="form-input w-full min-h-[100px] text-gray-900"
                   value={breakFlow.note}
                   onChange={(e) => setBreakFlow((b) => ({ ...b, note: e.target.value }))}
                   placeholder="e.g. need liquidity for…"
                 />
-                <p className="text-slate-400 text-xs">Step 2 of 3</p>
-                <div className="flex gap-2 justify-end">
-                  <button type="button" className="btn btn-secondary" onClick={() => setBreakFlow((b) => ({ ...b, step: 1 }))}>
+                <p className="text-slate-400 text-[11px] sm:text-xs">Step 2 of 3</p>
+                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 1 }))}>
                     Back
                   </button>
-                  <button type="button" className="btn btn-primary" onClick={() => setBreakFlow((b) => ({ ...b, step: 3 }))}>
+                  <button type="button" className="btn btn-primary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 3 }))}>
                     Next
                   </button>
                 </div>
@@ -378,22 +450,22 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
             )}
             {breakFlow.step === 3 && (
               <div className="space-y-3">
-                <p>
+                <p className="text-sm leading-5">
                   You are about to submit a break request for holding <strong>#{breakFlow.holdingId}</strong>.
                 </p>
                 {breakFlow.note.trim() ? (
-                  <p className="text-slate-300 text-xs whitespace-pre-wrap border border-slate-600 rounded p-2">{breakFlow.note}</p>
+                  <p className="text-slate-300 text-xs whitespace-pre-wrap border border-slate-600 rounded p-2 bg-slate-900/40">{breakFlow.note}</p>
                 ) : (
                   <p className="text-slate-400 text-xs">No extra note was added.</p>
                 )}
-                <p className="text-slate-400 text-xs">Step 3 of 3 — confirm to send</p>
-                <div className="flex gap-2 justify-end">
-                  <button type="button" className="btn btn-secondary" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))} disabled={requestingBreakId === breakFlow.holdingId}>
+                <p className="text-slate-400 text-[11px] sm:text-xs">Step 3 of 3 - Confirm and submit</p>
+                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))} disabled={requestingBreakId === breakFlow.holdingId}>
                     Back
                   </button>
                   <button
                     type="button"
-                    className="btn btn-red"
+                    className="btn btn-red w-full sm:w-auto min-h-10"
                     disabled={requestingBreakId === breakFlow.holdingId}
                     onClick={() => {
                       if (breakFlow.holdingId != null) void requestBreakHolding(breakFlow.holdingId, breakFlow.note);

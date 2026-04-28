@@ -230,14 +230,14 @@ const handleAdd = async () => {
     if (!auth || !editType) return;
 
     if (!editName.trim()) {
-      alert("Method name daalna zaroori hai");
+      alert("Method name is required");
       return;
     }
 
     const isUpi = editType === 'UPI';
 
     if (isUpi && !isValidUpiId(editUpiId)) {
-      alert("Valid UPI ID daalo please");
+      alert("Please enter a valid UPI ID");
       return;
     }
 
@@ -256,7 +256,7 @@ const handleAdd = async () => {
         payload.qr_code = null;
       } else {
         payload.upi_id = null;
-        payload.qr_code = editQrCode || undefined;  // naya nahi to purana rahega
+        payload.qr_code = editQrCode || undefined;
       }
 
       const res = await fetch(getApiUrl(`payment-methods/${id}`), {
@@ -376,7 +376,7 @@ const handleAdd = async () => {
   }
 
   return (
-    <div>
+    <div className="pb-32 md:pb-6">
       <div className="section-header">
         <h2 className="section-title">Payment Methods</h2>
         <p className="section-subtitle">
@@ -384,9 +384,9 @@ const handleAdd = async () => {
         </p>
       </div>
 
-      <div className="card-dark mb-4">
+      <div className="card-dark mb-3 md:mb-4">
         <label className="text-sm text-slate-300 mb-1.5 block font-medium">
-          Select Payment Methods Currency
+          Payment Currency
         </label>
 
         <select
@@ -401,38 +401,46 @@ const handleAdd = async () => {
         </select>
       </div>
       {/* Add New Payment Method */}
-      {selectedFiat === 'INR' && (
-        <div className="card-dark mb-6">
-          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+      <div className="card-dark mb-4 md:mb-6">
+        <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
+        {selectedFiat !== 'INR' ? (
+          <p className="text-sm text-amber-300">
+            Payment methods for {selectedFiat} will be added soon.
+          </p>
+        ) : (
           <div className="space-y-3">
             <div>
               <label className="text-sm text-slate-300 mb-1.5 block font-medium">Payment Type</label>
-
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={paymentType === 'UPI'}
-                    onChange={() => {
-                      setPaymentType("UPI");
-                      setNewQrCode("");
-                      setNewQrPreview(null);
-                    }}
-                  />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`min-h-10 rounded-lg border text-sm font-medium transition-colors ${
+                    paymentType === 'UPI'
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-200'
+                      : 'bg-slate-800/60 border-slate-600 text-slate-300'
+                  }`}
+                  onClick={() => {
+                    setPaymentType("UPI");
+                    setNewQrCode("");
+                    setNewQrPreview(null);
+                  }}
+                >
                   UPI ID
-                </label>
-
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    checked={paymentType === 'QR'}
-                    onChange={() => {
-                      setPaymentType("QR");
-                      setNewUpiId("");
-                    }}
-                  />
+                </button>
+                <button
+                  type="button"
+                  className={`min-h-10 rounded-lg border text-sm font-medium transition-colors ${
+                    paymentType === 'QR'
+                      ? 'bg-blue-600/20 border-blue-500 text-blue-200'
+                      : 'bg-slate-800/60 border-slate-600 text-slate-300'
+                  }`}
+                  onClick={() => {
+                    setPaymentType("QR");
+                    setNewUpiId("");
+                  }}
+                >
                   QR Screenshot
-                </label>
+                </button>
               </div>
             </div>
             <div>
@@ -457,11 +465,8 @@ const handleAdd = async () => {
                   onChange={(e) => setNewUpiId(e.target.value)}
                   placeholder="yourname@upi"
                 />
-
                 {newUpiId && !isValidUpiId(newUpiId) && (
-                  <p style={{ color: '#ff0000' }}>
-                    Invalid UPI ID
-                  </p>
+                  <p style={{ color: '#ff0000' }}>Invalid UPI ID</p>
                 )}
               </div>
             )}
@@ -470,76 +475,24 @@ const handleAdd = async () => {
                 <label className="text-sm text-slate-300 mb-1.5 block font-medium">
                   Upload QR Screenshot
                 </label>
-
                 <input
                   type="file"
                   accept="image/*"
+                  className="form-input-dark w-full text-xs"
                   onChange={(e) =>
                     handleQrFileChange(e.target.files?.[0] || null)
                   }
                 />
-
                 {newQrPreview && (
                   <img
                     src={newQrPreview}
-                    className="max-w-32 mt-2"
+                    className="w-full max-w-44 mt-2 rounded border border-slate-600 object-contain"
                   />
                 )}
               </div>
             )}
-            {/* <div>
-            <label className="text-sm text-slate-300 mb-1.5 block font-medium">UPI ID</label>
-            <input
-              type="text"
-              className="form-input-dark w-full"
-              placeholder="e.g., yourname@paytm, yourname@phonepe"
-              value={newUpiId}
-              // onChange={(e) => setNewUpiId(e.target.value)}
-              onChange={(e) => {
-                const value = e.target.value;
-                setNewUpiId(value);
-              }}
-            />
-            {newUpiId && !isValidUpiId(newUpiId) &&  (
-              <p style={{color: '#ff0000'}}>
-                Invalid UPI ID format
-              </p>
-            ) }
-          </div> */}
-            {/* <div>
-            <label className="text-sm text-slate-300 mb-1.5 block font-medium">QR Code Image</label>
-            <input
-              type="file"
-              accept="image/*"
-              className="form-input-dark w-full text-xs"
-              onChange={(e) => handleQrFileChange(e.target.files?.[0] || null, false)}
-            />
-            {newQrPreview && (
-              <div className="mt-2">
-                <img
-                  src={newQrPreview}
-                  alt="QR Code Preview"
-                  className="max-w-32 max-h-32 border border-slate-600 rounded"
-                />
-                <button
-                  type="button"
-                  className="text-xs text-red-400 mt-1"
-                  onClick={() => handleQrFileChange(null, false)}
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-          </div> */}
-            {/* <button
-            className="btn btn-primary w-full"
-            onClick={handleAdd}
-            disabled={saving || !newUpiId.trim()}
-          >
-            {saving ? 'Adding...' : 'Add Payment Method'}
-          </button> */}
             <button
-              className="btn btn-primary w-full"
+              className="btn btn-primary w-full min-h-11"
               onClick={handleAdd}
               disabled={
                 saving ||
@@ -551,80 +504,17 @@ const handleAdd = async () => {
               {saving ? "Adding..." : "Add Payment Method"}
             </button>
           </div>
-        </div>
-      )}
-      {selectedFiat === 'USD' && (
-        <div className="card-dark mb-6">
-          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
-          <div className="space-y-3">
-
-            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
-            <button
-              className="btn btn-primary w-full"
-              onClick={handleAdd}
-              disabled={
-                saving ||
-                !newName.trim() ||
-                (paymentType === "UPI" && !newUpiId.trim()) ||
-                (paymentType === "QR" && !newQrCode)
-              }
-            >
-              {saving ? "Adding..." : "Add Payment Method"}
-            </button>
-          </div>
-        </div>
-      )}
-      {selectedFiat === 'GBP' && (
-        <div className="card-dark mb-6">
-          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
-          <div className="space-y-3">
-
-            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
-            <button
-              className="btn btn-primary w-full"
-              onClick={handleAdd}
-              disabled={
-                saving ||
-                !newName.trim() ||
-                (paymentType === "UPI" && !newUpiId.trim()) ||
-                (paymentType === "QR" && !newQrCode)
-              }
-            >
-              {saving ? "Adding..." : "Add Payment Method"}
-            </button>
-          </div>
-        </div>
-      )}
-      {selectedFiat === 'EUR' && (
-        <div className="card-dark mb-6">
-          <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
-          <div className="space-y-3">
-
-            <p style={{ fontSize: 18, textAlign: 'center' }}><span style={{ background: '#696767', paddingInline: 10, borderRadius: 10, color: '#fff' }}>This will Added Soon</span></p>
-            <button
-              className="btn btn-primary w-full"
-              onClick={handleAdd}
-              disabled={
-                saving ||
-                !newName.trim() ||
-                (paymentType === "UPI" && !newUpiId.trim()) ||
-                (paymentType === "QR" && !newQrCode)
-              }
-            >
-              {saving ? "Adding..." : "Add Payment Method"}
-            </button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Payment Methods List */}
       {loading ? (
         <p className="text-center text-slate-400">Loading...</p>
       ) : paymentMethods.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           {paymentMethods.map((method) => (
 
-            <div key={method.id} className="card-dark">
+            <div key={method.id} className="card-dark p-3 md:p-4">
               {editingId === method.id ? (
                 <div className="space-y-4">
                   <div>
@@ -634,7 +524,7 @@ const handleAdd = async () => {
                       className="form-input-dark w-full"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Jaise: Personal PhonePe"
+                      placeholder="Example: Personal PhonePe"
                     />
                   </div>
 
@@ -654,7 +544,7 @@ const handleAdd = async () => {
                     </div>
                   ) : (
                     <div>
-                      <label className="text-sm text-slate-300 mb-1.5 block font-medium">QR Code (naya upload karo agar change karna ho)</label>
+                      <label className="text-sm text-slate-300 mb-1.5 block font-medium">QR Code (upload new image to replace)</label>
                       <input
                         type="file"
                         accept="image/*"
@@ -662,7 +552,7 @@ const handleAdd = async () => {
                       />
                       {editQrPreview ? (
                         <div className="mt-3 relative inline-block">
-                          <img src={editQrPreview} alt="Naya QR" className="max-w-40 rounded border border-slate-600" />
+                          <img src={editQrPreview} alt="New QR" className="w-full max-w-44 rounded border border-slate-600 object-contain" />
                           <button
                             type="button"
                             className="absolute top-1 right-1 
@@ -678,23 +568,23 @@ const handleAdd = async () => {
                         </div>
                       ) : method.qr_code ? (
                         <div className="mt-3">
-                          <p className="text-xs text-slate-400 mb-1">Purana QR:</p>
-                          <img src={method.qr_code} alt="Purana QR" className="max-w-40 rounded border border-slate-600" />
+                          <p className="text-xs text-slate-400 mb-1">Current QR:</p>
+                          <img src={method.qr_code} alt="Current QR" className="w-full max-w-44 rounded border border-slate-600 object-contain" />
                         </div>
                       ) : null}
                     </div>
                   )}
 
-                  <div className="flex gap-3 mt-4">
+                  <div className="flex gap-2 md:gap-3 mt-4">
                     <button
-                      className="btn btn-yellow flex-1"
+                      className="btn btn-yellow flex-1 min-h-10"
                       onClick={() => handleUpdate(method.id!)}
                       disabled={saving}
                     >
                       Save
                     </button>
                     <button
-                      className="btn btn-gray flex-1"
+                      className="btn btn-gray flex-1 min-h-10"
                       onClick={cancelEdit}
                       disabled={saving}
                     >
@@ -704,10 +594,9 @@ const handleAdd = async () => {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-start justify-between mb-2 gap-3">
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-50">{method.paymentName}</p>
-                      <p>{method.paymentname?.split('|')[1] || method.paymentname}</p>
+                      <p className="text-sm font-semibold text-slate-50 break-words">{method.paymentname?.split('|')[1] || method.paymentname}</p>
                       {method.upi_id && (
                         <p className="text-xs text-slate-400">{method.upi_id}</p>
                       )}
@@ -717,7 +606,7 @@ const handleAdd = async () => {
                             <img
                               src={method.qr_code}
                               alt="QR Code"
-                              className="max-w-32 max-h-32 border border-slate-600 rounded"
+                              className="w-full max-w-36 max-h-36 border border-slate-600 rounded object-contain"
                             />
                           ) : (
                             <p className="text-xs text-slate-400">QR Code: {method.qr_code.substring(0, 50)}...</p>
@@ -725,29 +614,30 @@ const handleAdd = async () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={method.is_active}
-                          onChange={() => handleToggleActive(method.id!, method.is_active)}
-                          className="radio-toggle"
-                        />
-                        <span className="text-xs text-slate-300">
-                          {method.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </label>
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(method.id!, method.is_active)}
+                        className={`min-h-8 px-2.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                          method.is_active
+                            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
+                            : 'bg-slate-700/60 border-slate-500 text-slate-300'
+                        }`}
+                        aria-label={method.is_active ? 'Set inactive' : 'Set active'}
+                      >
+                        {method.is_active ? 'Active' : 'Inactive'}
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
-                      className="btn btn-yellow flex-1 text-xs"
+                      className="btn btn-yellow text-xs min-h-10"
                       onClick={() => startEdit(method)}
                     >
                       Edit
                     </button>
                     <button
-                      className="btn btn-red flex-1 text-xs"
+                      className="btn btn-red text-xs min-h-10"
                       onClick={() => handleDelete(method.id!)}
                     >
                       Delete

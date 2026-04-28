@@ -42,7 +42,7 @@ const popularTokens = [
   },
 ];
 
-type NavTabGlyph = "home" | "explore" | "activity" | "rewards";
+type NavTabGlyph = "home" | "explore" | "activity" | "profile";
 
 /** Inline SVGs — avoids Font Awesome webfont failures (broken “image” placeholders in some browsers). */
 const NavTabIcon: React.FC<{ name: NavTabGlyph }> = ({ name }) => {
@@ -78,14 +78,11 @@ const NavTabIcon: React.FC<{ name: NavTabGlyph }> = ({ name }) => {
           <polyline points="12 6 12 12 16 14" />
         </svg>
       );
-    case "rewards":
+    case "profile":
       return (
         <svg {...s} aria-hidden>
-          <polyline points="20 12 20 22 4 22 4 12" />
-          <rect x="2" y="7" width="20" height="5" rx="1" />
-          <line x1="12" y1="22" x2="12" y2="7" />
-          <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
-          <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+          <path d="M20 21a8 8 0 1 0-16 0" />
+          <circle cx="12" cy="8" r="4" />
         </svg>
       );
     default:
@@ -226,6 +223,7 @@ import SwapWalletModal from './components/MobileView/Modal/Swap';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [unlockReturnTab, setUnlockReturnTab] = useState<Tab>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mnemonic12, setMnemonic12] = useState<string | null>(null);
   const [extraWord, setExtraWord] = useState('');
@@ -406,6 +404,11 @@ export const Dashboard: React.FC = () => {
   /** Prevent duplicate auto wallet-registration in StrictMode/re-renders. */
   const autoRegisterKeyRef = useRef<string | null>(null);
   const navigate = useNavigate();
+
+  const openUnlockTab = useCallback((returnTab?: Tab) => {
+    setUnlockReturnTab(returnTab || activeTab);
+    setActiveTab('unlock');
+  }, [activeTab]);
 
 
   useEffect(() => {
@@ -745,8 +748,11 @@ export const Dashboard: React.FC = () => {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (res.ok) {
-        return await res.json();
+        const data = await res.json();
+        if (data?.found === false || data?.isRegisteredMcWallet === false) return null;
+        return data;
       }
+      if (res.status === 404) return null;
     } catch (err) {
       console.error('Failed to check MC wallet:', err);
     }
@@ -1839,6 +1845,7 @@ export const Dashboard: React.FC = () => {
             showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
             setUnlockPassword('');
             setUnlockExtraWord('');
+            setActiveTab(unlockReturnTab || 'dashboard');
             return; // Success! Exit early
           }
         } catch (decryptErr: any) {
@@ -1936,6 +1943,7 @@ export const Dashboard: React.FC = () => {
                     showSuccessModal(`✅ Wallet restored from database and unlocked! Address: ${walletAddressFromPhrase}`);
                     setUnlockPassword('');
                     setUnlockExtraWord('');
+                    setActiveTab(unlockReturnTab || 'dashboard');
                     return; // Success! Exit early
                   }
                 } else {
@@ -1995,6 +2003,7 @@ export const Dashboard: React.FC = () => {
                   showSuccessModal(`✅ Wallet unlocked from database! Address: ${selectedWallet.address}`);
                   setUnlockPassword('');
                   setUnlockExtraWord('');
+                  setActiveTab(unlockReturnTab || 'dashboard');
                   return;
                 }
               } catch (decryptErr: any) {
@@ -2107,6 +2116,7 @@ export const Dashboard: React.FC = () => {
       if (allWallets.length > 0) {
         setSelectedUnlockWalletId(allWallets[0].id);
       }
+      setActiveTab(unlockReturnTab || 'dashboard');
     } catch {
       showErrorModal('⚠️ Failed to unlock wallet. Check your password and 13th word.');
     }
@@ -2218,7 +2228,7 @@ export const Dashboard: React.FC = () => {
     // Require 13th word for creating offers
     if (!unlockedPrivateKeyRef.current) {
       showErrorModal('⚠️ Please unlock your wallet first. You need to enter your Custom 13th word to create offers.');
-      setActiveTab('unlock');
+      openUnlockTab(activeTab);
       return;
     }
 
@@ -2768,6 +2778,15 @@ export const Dashboard: React.FC = () => {
   };
 
   const estimateGasAndMax = async () => {
+    // Internal FDA transfers are off-chain ledger moves; no chain gas estimate needed.
+    if (
+      transferType === 'internal' &&
+      assetType === 'token' &&
+      tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()
+    ) {
+      setEstimatedGas(null);
+      return;
+    }
     if (!unlockedPrivateKeyRef.current || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
       setEstimatedGas(null);
       return;
@@ -2779,6 +2798,11 @@ export const Dashboard: React.FC = () => {
       const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
       const senderBalance = await provider.getBalance(wallet.address);
       const balanceEth = parseFloat(ethers.formatEther(senderBalance));
+      if (!Number.isFinite(balanceEth) || balanceEth <= 0) {
+        // On-chain estimation requires native gas balance (BNB).
+        setEstimatedGas(null);
+        return;
+      }
 
       if (assetType === 'native') {
         // Estimate gas for a small native transfer
@@ -2800,14 +2824,25 @@ export const Dashboard: React.FC = () => {
         }
         const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, provider);
         const testAmount = ethers.parseUnits('1', await contract.decimals());
-        const gasEstimate = await contract.transfer.estimateGas(sendTo.trim(), testAmount);
+        // Estimate with self-recipient to avoid false reverts from recipient-specific token rules.
+        const gasEstimate = await contract.transfer.estimateGas(wallet.address, testAmount);
         const gasPrice = await provider.getFeeData();
         const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
         const gasCostEth = parseFloat(ethers.formatEther(gasCost));
         setEstimatedGas(gasCostEth.toFixed(6));
       }
     } catch (err) {
-      console.error('Gas estimation error:', err);
+      // Some tokens intentionally revert estimateGas for certain transfer paths.
+      // This should not block the send flow; keep UI quiet and continue.
+      const msg = String((err as any)?.message || '');
+      if (
+        !msg.includes('execution reverted') &&
+        !msg.includes('CALL_EXCEPTION') &&
+        !msg.includes('INSUFFICIENT_FUNDS') &&
+        !msg.toLowerCase().includes('insufficient funds')
+      ) {
+        console.error('Gas estimation error:', err);
+      }
       setEstimatedGas(null);
     } finally {
       setEstimatingGas(false);
@@ -3756,17 +3791,31 @@ export const Dashboard: React.FC = () => {
     const loadFdaPrice = async () => {
     try {
       const priceUrl = getApiUrl("fdaPrice");
-      // Remote production API currently does not expose /fdaPrice; skip call to avoid 404 noise.
-      if (priceUrl.includes('merchantcoinwallet.com/api/fdaPrice')) return;
       const res = await fetch(priceUrl);
-      if (!res.ok) return;
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) return;
-      const data = await res.json();
-  
-      const nextPrice = Number(data?.data ?? data?.price ?? 0);
-      if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
-      setFdaPrice(nextPrice);
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await res.json();
+          const nextPrice = Number(data?.data ?? data?.price ?? data?.fda_price ?? 0);
+          if (Number.isFinite(nextPrice) && nextPrice > 0) {
+            setFdaPrice(nextPrice);
+            return;
+          }
+        }
+      }
+
+      // Fallback to profile price if /fdaPrice is unavailable or empty.
+      if (auth?.token) {
+        const profileRes = await fetch(getApiUrl("auth/profile"), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        if (!profileRes.ok) return;
+        const profile = await profileRes.json().catch(() => ({}));
+        const profilePrice = Number(profile?.fda_price ?? 0);
+        if (Number.isFinite(profilePrice) && profilePrice > 0) {
+          setFdaPrice(profilePrice);
+        }
+      }
   
     } catch (err) {
       console.error("Failed to load FDA price:", err);
@@ -3933,6 +3982,12 @@ export const Dashboard: React.FC = () => {
               indiAction={() => setActiveTab('tokens')}
               internalFdaBalance={internalFdaBalance}
               setActiveTab={handleChangeTab}
+              onFdaClick={() => {
+                setAssetType('token');
+                setTokenAddress(FDA_TOKEN_ADDRESS);
+                setTransferType('internal');
+                setActiveTab('send');
+              }}
             />
             </div>
           )}
@@ -4115,7 +4170,7 @@ export const Dashboard: React.FC = () => {
               handleSend={handleSend}
               handleMaxAmount={handleMaxAmount}
               registerRecipientWallet={registerRecipientWallet}
-              goto={() => setActiveTab('unlock')}
+              goto={() => openUnlockTab('send')}
               customTokens={customTokens}
               customTokenBalances={customTokenBalances}
               fdaPrice={fdaPrice}
@@ -4218,7 +4273,6 @@ export const Dashboard: React.FC = () => {
           {activeTab === 'p2p' && (
             <P2PTrading
               inMobileShell={isMobile}
-              chainLabel={selectedNetwork}
               auth={auth}
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
@@ -4513,8 +4567,8 @@ export const Dashboard: React.FC = () => {
               }}
             >
               <TabItem
-                glyph="rewards"
-                label="Rewards"
+                glyph="profile"
+                label="Profile"
                 active={activeTab === "profile"}
                 onClick={() => setActiveTab("profile")}
               />

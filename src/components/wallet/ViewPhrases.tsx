@@ -326,23 +326,14 @@ const handleDecrypt = async (phraseId: number) => {
               <div>
                 <div className="mb-3">
                   <div className="text-white mb-1">12-Word Phrase</div>
-
                   <div className="grid grid-cols-2 gap-2 bg-slate-800 p-3 rounded">
                     {decryptedPhrases[phrase.id]?.mnemonic12
-                      .split(" ")
+                      ?.split(" ")
                       .map((word, i) => (
                         <div key={i}>
                           {i + 1}. {word}
                         </div>
                       ))}
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <div className="text-white mb-1">13th Word</div>
-
-                  <div className="bg-slate-800 p-3 rounded">
-                    {decryptedPhrases[phrase.id]?.extraWord}
                   </div>
                 </div>
 

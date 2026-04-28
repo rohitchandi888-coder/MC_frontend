@@ -72,6 +72,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [rewardRate, setRewardRate] = useState('5');
   const [rewardMinAmount, setRewardMinAmount] = useState('25');
   const [rewardPeriodMonths, setRewardPeriodMonths] = useState('12');
+  const [merchantBuyRewardRate, setMerchantBuyRewardRate] = useState('2');
+  const [merchantBuyRewardMinAmount, setMerchantBuyRewardMinAmount] = useState('10');
+  const [merchantBuyRewardPeriodMonths, setMerchantBuyRewardPeriodMonths] = useState('12');
   const [savingRewardSettings, setSavingRewardSettings] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [breakRequests, setBreakRequests] = useState<any[]>([]);
@@ -223,6 +226,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setRewardRate(String(data?.rewardRate ?? 5));
       setRewardMinAmount(String(data?.rewardMinAmount ?? 25));
       setRewardPeriodMonths(String(data?.rewardPeriodMonths ?? 12));
+      setMerchantBuyRewardRate(String(data?.merchantBuyRewardRate ?? 2));
+      setMerchantBuyRewardMinAmount(String(data?.merchantBuyRewardMinAmount ?? 10));
+      setMerchantBuyRewardPeriodMonths(String(data?.merchantBuyRewardPeriodMonths ?? 12));
     } catch (err) {
       console.error('Failed to load reward settings:', err);
     }
@@ -250,6 +256,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const rate = parseFloat(rewardRate);
       const minAmount = parseFloat(rewardMinAmount);
       const period = parseInt(rewardPeriodMonths, 10);
+      const merchantRate = parseFloat(merchantBuyRewardRate);
+      const merchantMinAmount = parseFloat(merchantBuyRewardMinAmount);
+      const merchantPeriod = parseInt(merchantBuyRewardPeriodMonths, 10);
 
       if (!Number.isFinite(rate) || rate < 0) {
         pushError('Reward rate must be a valid non-negative number.');
@@ -263,11 +272,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         pushError('Hold period must be a positive month value.');
         return;
       }
+      if (!Number.isFinite(merchantRate) || merchantRate < 0) {
+        pushError('Merchant buy reward rate must be a valid non-negative number.');
+        return;
+      }
+      if (!Number.isFinite(merchantMinAmount) || merchantMinAmount < 10) {
+        pushError('Merchant buy minimum hold amount must be at least 10 FDA.');
+        return;
+      }
+      if (!Number.isFinite(merchantPeriod) || merchantPeriod < 12) {
+        pushError('Merchant buy hold period must be at least 12 months (1 year).');
+        return;
+      }
 
       setSavingRewardSettings(true);
       await saveRewardSetting('holding_reward_rate', String(rate), 'FDA holding reward percentage');
       await saveRewardSetting('holding_reward_min_amount', String(minAmount), 'Minimum FDA amount eligible for holding reward');
       await saveRewardSetting('holding_reward_period_months', String(period), 'Holding reward lock period in months');
+      await saveRewardSetting('holding_reward_rate_merchant_buy', String(merchantRate), 'Merchant buy hold reward percentage (monthly rate)');
+      await saveRewardSetting('holding_reward_min_amount_merchant_buy', String(merchantMinAmount), 'Minimum FDA amount eligible for merchant buy hold');
+      await saveRewardSetting('holding_reward_period_months_merchant_buy', String(merchantPeriod), 'Merchant buy hold lock period in months (minimum 12)');
       await loadRewardSettings();
       pushSuccess(`✅ Holding reward settings updated.`);
     } catch (err: any) {
@@ -589,6 +613,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 className="form-input w-full"
                 value={rewardPeriodMonths}
                 onChange={(e) => setRewardPeriodMonths(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Merchant Buy Reward Rate (% monthly)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-input w-full"
+                value={merchantBuyRewardRate}
+                onChange={(e) => setMerchantBuyRewardRate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Merchant Buy Minimum Hold (FDA, min 10)</label>
+              <input
+                type="number"
+                min="10"
+                step="0.000000000000000001"
+                className="form-input w-full"
+                value={merchantBuyRewardMinAmount}
+                onChange={(e) => setMerchantBuyRewardMinAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-700 block mb-1">Merchant Buy Hold Period (Months, min 12)</label>
+              <input
+                type="number"
+                min="12"
+                step="1"
+                className="form-input w-full"
+                value={merchantBuyRewardPeriodMonths}
+                onChange={(e) => setMerchantBuyRewardPeriodMonths(e.target.value)}
               />
             </div>
           </div>

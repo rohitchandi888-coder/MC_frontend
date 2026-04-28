@@ -178,11 +178,8 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
           (row.address || "").toLowerCase() ===
           FDA_TOKEN_ADDRESS.toLowerCase();
         if (isFda && auth) {
-          const to = sendTo.trim();
-          const valid = to && ethers.isAddress(to);
-          const isMc =
-            valid && recipientFdaWallet && Object.keys(recipientFdaWallet).length;
-          setTransferType(isMc ? "internal" : "onchain");
+          // Default FDA transfer mode to internal; user can still switch to on-chain.
+          setTransferType("internal");
         } else {
           setTransferType("onchain");
         }
@@ -202,11 +199,10 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
     Object.keys(recipientFdaWallet).length > 0;
 
   useEffect(() => {
-    if (!isFdaToken) return;
-    if (transferType === "internal" && !canUseInternalTransfer) {
+    if (!isFdaToken && transferType === "internal") {
       setTransferType("onchain");
     }
-  }, [isFdaToken, transferType, canUseInternalTransfer, setTransferType]);
+  }, [isFdaToken, transferType, setTransferType]);
 
   const selectedSymbol = useMemo(() => {
     if (assetType === "native") return "BNB";
@@ -648,14 +644,10 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
               } else if (
                 row.address?.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()
               ) {
-                const useInternal =
-                  auth &&
-                  internalFdaBalance != null &&
-                  recipientFdaWallet &&
-                  Object.keys(recipientFdaWallet).length > 0;
-                bal = useInternal
-                  ? String(internalFdaBalance)
-                  : fdaBalance ?? "0";
+                const onChainBal = parseFloat(fdaBalance ?? "0") || 0;
+                const custodialBal = internalFdaBalance ?? 0;
+                // Show whichever FDA balance is higher to avoid misleading "0 FDA" when custodial funds exist.
+                bal = String(Math.max(onChainBal, custodialBal));
               } else if (row.address) {
                 bal = customTokenBalances[row.address.toLowerCase()] ?? "0";
               } else {
@@ -859,10 +851,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   </button>
                   <button
                     type="button"
-                    disabled={!canUseInternalTransfer}
-                    onClick={() => {
-                      if (canUseInternalTransfer) setTransferType("internal");
-                    }}
+                    onClick={() => setTransferType("internal")}
                     style={{
                       padding: "10px 8px",
                       borderRadius: 10,
@@ -871,17 +860,17 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                       color: transferType === "internal" ? "#fff" : MM.text,
                       fontWeight: 700,
                       fontSize: 13,
-                      cursor: canUseInternalTransfer ? "pointer" : "not-allowed",
-                      opacity: canUseInternalTransfer ? 1 : 0.5,
+                      cursor: "pointer",
+                      opacity: 1,
                     }}
                   >
                     ⚡ Internal
                   </button>
                 </div>
                 <p style={{ marginTop: 8, fontSize: 12, color: MM.textSecondary }}>
-                  {canUseInternalTransfer
-                    ? "Choose transfer mode for FDA: on-chain (gas fee) or internal (instant)."
-                    : "Internal option is available only when recipient is a registered MC wallet."}
+                  {transferType === "internal" && !canUseInternalTransfer
+                    ? "Recipient is not a registered MC wallet yet. You can register recipient in the next step."
+                    : "Choose transfer mode for FDA: on-chain (gas fee) or internal (instant)."}
                 </p>
               </div>
             )}
