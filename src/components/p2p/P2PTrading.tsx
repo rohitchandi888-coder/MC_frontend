@@ -11,7 +11,7 @@ interface P2PTradingProps {
   internalFdaBalance: number | null;
   internalFdaLocked: number | null;
   p2pFeeRate: number;
-  p2pMinOfferAmount: number;
+  p2pMinPricePerFda: number;
   addFdaAmount: string;
   setAddFdaAmount: (amount: string) => void;
   addingFdaBalance: boolean;
@@ -73,7 +73,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   internalFdaBalance,
   internalFdaLocked,
   p2pFeeRate,
-  p2pMinOfferAmount,
+  p2pMinPricePerFda,
   addFdaAmount,
   setAddFdaAmount,
   addingFdaBalance,
@@ -202,17 +202,17 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const isCreateOfferDisabled =
     creatingOffer ||
     !offerAmount ||
-    Number(offerAmount) < p2pMinOfferAmount ||
     !offerPrice ||
+    Number(offerPrice) < p2pMinPricePerFda ||
     ((offerType === 'SELL' && selectedActivePaymentMethodCount === 0) ||
       (offerType === 'BUY' && !offerPaymentMethods.trim()));
   const createOfferDisabledReason =
     !offerAmount
       ? 'Enter FDA amount.'
-      : Number(offerAmount) < p2pMinOfferAmount
-        ? `Minimum offer amount is ${p2pMinOfferAmount} FDA.`
       : !offerPrice
         ? 'Enter price per FDA.'
+      : Number(offerPrice) < p2pMinPricePerFda
+        ? `Minimum price per FDA is ${p2pMinPricePerFda}.`
         : offerType === 'SELL' && selectedActivePaymentMethodCount === 0
           ? 'Select at least one active payment method.'
           : offerType === 'BUY' && !offerPaymentMethods.trim()
@@ -548,7 +548,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   )}
                 </p>
                 <p className="text-xs mb-2" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
-                  Minimum offer amount: {p2pMinOfferAmount} FDA
+                  Minimum price per FDA: {p2pMinPricePerFda}
                 </p>
                 {inMobileShell ? (
                   <div

@@ -290,7 +290,7 @@ export const Dashboard: React.FC = () => {
   const [adminTrades, setAdminTrades] = useState<any[]>([]);
   const [adminDisputes, setAdminDisputes] = useState<any[]>([]);
   const [p2pFeeRate, setP2pFeeRate] = useState<number>(1);
-  const [p2pMinOfferAmount, setP2pMinOfferAmount] = useState<number>(1);
+  const [p2pMinPricePerFda, setP2pMinPricePerFda] = useState<number>(1);
   const [editingFeeRate, setEditingFeeRate] = useState(false);
   const [newFeeRate, setNewFeeRate] = useState<string>('1');
   const [updatingFeeRate, setUpdatingFeeRate] = useState(false);
@@ -1259,12 +1259,12 @@ export const Dashboard: React.FC = () => {
 
   const fetchP2PMinOfferAmount = async () => {
     try {
-      const res = await fetch(getApiUrl('settings/min-offer-amount'));
+      const res = await fetch(getApiUrl('settings/min-price-per-fda'));
       if (!res.ok) return;
       const data = await res.json();
-      const minAmount = Number(data?.minOfferAmount ?? 1);
+      const minAmount = Number(data?.minPricePerFda ?? data?.minOfferAmount ?? 1);
       if (Number.isFinite(minAmount) && minAmount > 0) {
-        setP2pMinOfferAmount(minAmount);
+        setP2pMinPricePerFda(minAmount);
       }
     } catch (err) {
       console.error('Failed to fetch minimum offer amount:', err);
@@ -2254,8 +2254,8 @@ export const Dashboard: React.FC = () => {
       showErrorModal('Please enter a valid amount.');
       return;
     }
-    if (Number(offerAmount) < p2pMinOfferAmount) {
-      showErrorModal(`Minimum offer amount is ${p2pMinOfferAmount} FDA.`);
+    if (Number(offerPrice) < p2pMinPricePerFda) {
+      showErrorModal(`Minimum price per FDA is ${p2pMinPricePerFda}.`);
       return;
     }
     if (!offerPrice || Number(offerPrice) <= 0) {
@@ -3208,11 +3208,13 @@ export const Dashboard: React.FC = () => {
           setNewHoldingFda('0');
         }
 
-        const minOfferSetting = settingsData.find((s: any) => s.key === 'p2p_min_offer_amount');
+        const minOfferSetting =
+          settingsData.find((s: any) => s.key === 'p2p_min_price_per_fda') ||
+          settingsData.find((s: any) => s.key === 'p2p_min_offer_amount');
         if (minOfferSetting) {
           const minAmount = Number(minOfferSetting.value);
           if (Number.isFinite(minAmount) && minAmount > 0) {
-            setP2pMinOfferAmount(minAmount);
+            setP2pMinPricePerFda(minAmount);
           }
         } else {
           fetchP2PMinOfferAmount();
@@ -4310,7 +4312,7 @@ export const Dashboard: React.FC = () => {
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
               p2pFeeRate={p2pFeeRate}
-              p2pMinOfferAmount={p2pMinOfferAmount}
+              p2pMinPricePerFda={p2pMinPricePerFda}
               addFdaAmount={addFdaAmount}
               setAddFdaAmount={setAddFdaAmount}
               addingFdaBalance={addingFdaBalance}

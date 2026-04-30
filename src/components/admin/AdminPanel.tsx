@@ -209,7 +209,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         ? settings.find((s: any) => s?.key === 'fda_price')
         : null;
       const minOfferSetting = Array.isArray(settings)
-        ? settings.find((s: any) => s?.key === 'p2p_min_offer_amount')
+        ? (
+          settings.find((s: any) => s?.key === 'p2p_min_price_per_fda') ||
+          settings.find((s: any) => s?.key === 'p2p_min_offer_amount')
+        )
         : null;
       if (fdaPriceSetting?.value) {
         const nextPrice = Number(fdaPriceSetting.value);
@@ -232,17 +235,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const updateMinOfferSetting = async () => {
     const valueStr = String(minOfferAmount || '').trim();
     if (!/^\d+(\.\d{0,18})?$/.test(valueStr)) {
-      pushError('Minimum offer amount must be a decimal with up to 18 places.');
+      pushError('Minimum price per FDA must be a decimal with up to 18 places.');
       return;
     }
     const numeric = parseFloat(valueStr);
     if (!Number.isFinite(numeric) || numeric <= 0) {
-      pushError('Minimum offer amount must be greater than 0.');
+      pushError('Minimum price per FDA must be greater than 0.');
       return;
     }
     setUpdatingMinOfferAmount(true);
     try {
-      const res = await fetch(getApiUrl('admin/settings/p2p_min_offer_amount'), {
+      const res = await fetch(getApiUrl('admin/settings/p2p_min_price_per_fda'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -250,16 +253,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify({
           value: valueStr,
-          description: 'Minimum FDA amount required to create a P2P offer (BUY and SELL)',
+          description: 'Minimum price per FDA required to create a P2P offer (BUY and SELL)',
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Failed to update minimum offer amount');
+      if (!res.ok) throw new Error(data?.error || 'Failed to update minimum price per FDA');
       setMinOfferAmount(String(data?.value || valueStr));
       setEditingMinOfferAmount(false);
-      pushSuccess(`✅ Minimum offer amount updated to ${String(data?.value || valueStr)} FDA.`);
+      pushSuccess(`✅ Minimum price per FDA updated to ${String(data?.value || valueStr)}.`);
     } catch (err: any) {
-      pushError(err?.message || 'Failed to update minimum offer amount');
+      pushError(err?.message || 'Failed to update minimum price per FDA');
     } finally {
       setUpdatingMinOfferAmount(false);
     }
@@ -563,10 +566,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <div className="mb-6">
           <label className="modal-label">
-            Minimum Offer Amount (FDA)
+            Minimum Price per FDA
           </label>
           <p className="text-xs text-gray-600 mb-3">
-            Enforced for both BUY and SELL offers. Users cannot create offers below this FDA amount.
+            Enforced for both BUY and SELL offers. Users cannot create offers below this Price per FDA value.
           </p>
           {editingMinOfferAmount ? (
             <div className="flex gap-3 items-center">
@@ -582,7 +585,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   }
                 }}
               />
-              <span className="text-sm text-gray-600">FDA</span>
+              <span className="text-sm text-gray-600">Per FDA</span>
               <button
                 className={`btn btn-success ${updatingMinOfferAmount ? 'opacity-60 cursor-not-allowed' : ''}`}
                 onClick={updateMinOfferSetting}
@@ -604,7 +607,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ) : (
             <div className="flex gap-3 items-center">
               <div className="card-dark py-3 px-5 text-base font-semibold text-gray-900 min-w-24">
-                {minOfferAmount} FDA
+                {minOfferAmount}
               </div>
               <button
                 className="btn btn-blue"
