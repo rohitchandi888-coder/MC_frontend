@@ -290,6 +290,7 @@ export const Dashboard: React.FC = () => {
   const [adminTrades, setAdminTrades] = useState<any[]>([]);
   const [adminDisputes, setAdminDisputes] = useState<any[]>([]);
   const [p2pFeeRate, setP2pFeeRate] = useState<number>(1);
+  const [p2pMinOfferAmount, setP2pMinOfferAmount] = useState<number>(1);
   const [editingFeeRate, setEditingFeeRate] = useState(false);
   const [newFeeRate, setNewFeeRate] = useState<string>('1');
   const [updatingFeeRate, setUpdatingFeeRate] = useState(false);
@@ -1217,6 +1218,7 @@ export const Dashboard: React.FC = () => {
         }
         // Fetch P2P fee rate on login/load
         fetchP2PFeeRate();
+        fetchP2PMinOfferAmount();
       }
     }
   }, [storedMeta?.address, auth]);
@@ -1234,6 +1236,7 @@ export const Dashboard: React.FC = () => {
     }
     if (activeTab === 'p2p' || activeTab === 'trade-listing') {
       fetchP2PFeeRate();
+      fetchP2PMinOfferAmount();
     }
   }, [activeTab, auth]);
 
@@ -1251,6 +1254,20 @@ export const Dashboard: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch fee rate:', err);
       // Keep default 1% if fetch fails
+    }
+  };
+
+  const fetchP2PMinOfferAmount = async () => {
+    try {
+      const res = await fetch(getApiUrl('settings/min-offer-amount'));
+      if (!res.ok) return;
+      const data = await res.json();
+      const minAmount = Number(data?.minOfferAmount ?? 1);
+      if (Number.isFinite(minAmount) && minAmount > 0) {
+        setP2pMinOfferAmount(minAmount);
+      }
+    } catch (err) {
+      console.error('Failed to fetch minimum offer amount:', err);
     }
   };
 
@@ -1303,6 +1320,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (auth) {
       fetchP2PFeeRate();
+      fetchP2PMinOfferAmount();
       // Reload custom tokens for the logged-in user
       setCustomTokens(loadCustomTokens(auth.user.id));
       // Refresh user profile to get latest admin status on mount
@@ -2234,6 +2252,10 @@ export const Dashboard: React.FC = () => {
 
     if (!offerAmount || Number(offerAmount) <= 0) {
       showErrorModal('Please enter a valid amount.');
+      return;
+    }
+    if (Number(offerAmount) < p2pMinOfferAmount) {
+      showErrorModal(`Minimum offer amount is ${p2pMinOfferAmount} FDA.`);
       return;
     }
     if (!offerPrice || Number(offerPrice) <= 0) {
@@ -3185,9 +3207,20 @@ export const Dashboard: React.FC = () => {
           setHoldingFdaAmount('0');
           setNewHoldingFda('0');
         }
+
+        const minOfferSetting = settingsData.find((s: any) => s.key === 'p2p_min_offer_amount');
+        if (minOfferSetting) {
+          const minAmount = Number(minOfferSetting.value);
+          if (Number.isFinite(minAmount) && minAmount > 0) {
+            setP2pMinOfferAmount(minAmount);
+          }
+        } else {
+          fetchP2PMinOfferAmount();
+        }
       } else {
         // If admin settings fail, try public endpoint for fee rate
         fetchP2PFeeRate();
+        fetchP2PMinOfferAmount();
         // Try to fetch holding FDA amount from public endpoint
         try {
           const holdingRes = await fetch(getApiUrl('settings/holding-fda-amount'));
@@ -4277,6 +4310,7 @@ export const Dashboard: React.FC = () => {
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
               p2pFeeRate={p2pFeeRate}
+              p2pMinOfferAmount={p2pMinOfferAmount}
               addFdaAmount={addFdaAmount}
               setAddFdaAmount={setAddFdaAmount}
               addingFdaBalance={addingFdaBalance}
@@ -4404,6 +4438,7 @@ export const Dashboard: React.FC = () => {
             <TradingChart
               selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']}
               auth={auth}
+              fdaPrice={fdaPrice}
               inMobileShell={isMobile}
             />
           )}
@@ -4592,9 +4627,44 @@ export const Dashboard: React.FC = () => {
               <p className="modal-text">
                 Available: <strong>{selectedOffer.remaining || selectedOffer.available_amount || 0} FDA</strong>
               </p>
-              <p className="modal-text">
-                Payment: <strong>{selectedOffer.paymentMethods || selectedOffer.payment_method || 'Not specified'}</strong>
-              </p>
+              <div className="modal-text">
+                Payment:
+                {Array.isArray(selectedOffer.sellerPaymentMethods) && selectedOffer.sellerPaymentMethods.length > 0 ? (
+                  <div style={{ marginTop: 6, display: 'grid', gap: 8 }}>
+                    {selectedOffer.sellerPaymentMethods.map((pm: any, i: number) => (
+                      <div key={`${pm?.id ?? 'pm'}-${i}`} style={{ border: '1px solid #334155', borderRadius: 8, padding: 8 }}>
+                        <strong style={{ display: 'block' }}>
+                          {pm?.paymentname || pm?.upi_id || 'Payment method'}
+                        </strong>
+                        {pm?.upi_id && (
+                          <span style={{ display: 'block', marginTop: 2, color: '#cbd5e1' }}>
+                            {pm.upi_id}
+                          </span>
+                        )}
+                        {pm?.qr_code && (
+                          <img
+                            src={pm.qr_code}
+                            alt="Payment QR"
+                            style={{ marginTop: 6, width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 6 }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : String(selectedOffer.paymentMethods || selectedOffer.payment_method || '').trim() ? (
+                  <div style={{ marginTop: 6, display: 'grid', gap: 4 }}>
+                    {String(selectedOffer.paymentMethods || selectedOffer.payment_method || '')
+                      .split(',')
+                      .map((m) => m.trim())
+                      .filter(Boolean)
+                      .map((pm, i) => (
+                        <strong key={`${pm}-${i}`} style={{ display: 'block' }}>{pm}</strong>
+                      ))}
+                  </div>
+                ) : (
+                  <strong> Not specified</strong>
+                )}
+              </div>
               <label className="modal-label">
                 Amount to {selectedOffer.type === 'SELL' ? 'buy' : 'sell'} (FDA):
               </label>

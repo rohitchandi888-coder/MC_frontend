@@ -333,9 +333,10 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
           </p>
           {Number.isFinite(parseFloat(amount)) && parseFloat(amount) > 0 && settings.fdaPrice > 0 && (
             <p className="text-xs text-gray-600 mt-1">
-              Value formula: {parseFloat(amount)} * {settings.fdaPrice} = {(parseFloat(amount) * settings.fdaPrice).toFixed(4)}.
-              Reward value ({activeRewardRate}%): {((parseFloat(amount) * settings.fdaPrice * activeRewardRate) / 100).toFixed(4)}.
-              Reward in FDA: {estimatedReward.toFixed(8)}.
+              Value formula: {parseFloat(amount)} * {settings.fdaPrice} = {(parseFloat(amount) * settings.fdaPrice).toFixed(4)} INR.V.
+              Reward value ({activeRewardRate}%): {((parseFloat(amount) * settings.fdaPrice * activeRewardRate) / 100).toFixed(4)} INR.V (locked).
+              Estimated FDA at current price: {estimatedReward.toFixed(8)} FDA.
+              If FDA price changes at claim time, FDA quantity will change, but reward value stays fixed.
             </p>
           )}
         </div>

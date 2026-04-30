@@ -5,6 +5,7 @@ import type { CustomToken, WalletMeta } from "../../walletStorage";
 import { MM } from "../../theme/metaMaskShell";
 
 const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
+const FDA_LOGO_URL = "https://img.lightshot.app/Ge3AnFucTIyQQTmVErIWpw.png";
 
 export type SendStep = "recipient" | "asset" | "amount" | "review";
 
@@ -238,6 +239,20 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
   ]);
 
   const amountNum = parseFloat(sendAmount || "0") || 0;
+  const gasFeeNum = parseFloat(estimatedGas || "0") || 0;
+  const nativeBalNum = parseFloat(nativeBalance || "0") || 0;
+  const requiredBnbForOnChain =
+    transferType === "onchain"
+      ? assetType === "native"
+        ? amountNum + gasFeeNum
+        : gasFeeNum
+      : 0;
+  const hasInsufficientGasForOnChain =
+    transferType === "onchain" &&
+    !estimatingGas &&
+    !!estimatedGas &&
+    nativeBalance !== null &&
+    nativeBalNum < requiredBnbForOnChain;
   const fiatEstimate =
     selectedSymbol === "FDA" && fdaPrice != null && Number.isFinite(fdaPrice as number)
       ? amountNum * (fdaPrice as number)
@@ -678,22 +693,37 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ position: "relative", width: 44, height: 44 }}>
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: "50%",
-                          background: MM.chipBg,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 800,
-                          fontSize: 16,
-                          color: MM.text,
-                        }}
-                      >
-                        {row.symbol.slice(0, 2)}
-                      </div>
+                      {row.symbol.toUpperCase() === "FDA" ? (
+                        <img
+                          src={FDA_LOGO_URL}
+                          alt="FDA"
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            border: `1px solid ${MM.borderLight}`,
+                            display: "block",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: "50%",
+                            background: MM.chipBg,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 800,
+                            fontSize: 16,
+                            color: MM.text,
+                          }}
+                        >
+                          {row.symbol.slice(0, 2)}
+                        </div>
+                      )}
                       <span
                         style={{
                           position: "absolute",
@@ -768,7 +798,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 }}
               >
                 {showFiat && fiatEstimate != null
-                  ? `≈ $${fiatEstimate.toFixed(2)}`
+                  ? `≈ INR.V ${fiatEstimate.toFixed(2)}`
                   : `${amountNum.toFixed(4)} ${selectedSymbol}`}{" "}
                 <span aria-hidden>⇅</span>
               </button>
@@ -910,7 +940,11 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
           <div style={{ padding: 16 }}>
             <button
               type="button"
-              disabled={!sendAmount || Number(sendAmount) <= 0}
+              disabled={
+                !sendAmount ||
+                Number(sendAmount) <= 0 ||
+                hasInsufficientGasForOnChain
+              }
               onClick={() => setStep("review")}
               style={{
                 width: "100%",
@@ -918,16 +952,29 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 borderRadius: MM.radius,
                 border: "none",
                 background:
-                  sendAmount && Number(sendAmount) > 0 ? MM.text : MM.border,
+                  sendAmount &&
+                  Number(sendAmount) > 0 &&
+                  !hasInsufficientGasForOnChain
+                    ? MM.text
+                    : MM.border,
                 color: "#fff",
                 fontWeight: 700,
                 fontSize: 16,
                 cursor:
-                  sendAmount && Number(sendAmount) > 0 ? "pointer" : "not-allowed",
+                  sendAmount &&
+                  Number(sendAmount) > 0 &&
+                  !hasInsufficientGasForOnChain
+                    ? "pointer"
+                    : "not-allowed",
               }}
             >
               Review
             </button>
+            {hasInsufficientGasForOnChain && (
+              <p style={{ marginTop: 8, fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
+                You do not have required BNB for gas fee.
+              </p>
+            )}
           </div>
         </>
       )}
@@ -945,7 +992,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
               </p>
               {fiatEstimate != null && selectedSymbol === "FDA" && (
                 <p style={{ margin: 4, color: MM.textSecondary, fontSize: 15 }}>
-                  ≈ US${fiatEstimate.toFixed(2)}
+                  ≈ INR.V {fiatEstimate.toFixed(2)}
                 </p>
               )}
             </div>
@@ -1063,6 +1110,23 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   <span style={{ color: MM.textSecondary }}>Speed</span>
                   <span style={{ fontWeight: 500 }}>Market</span>
                 </div>
+                {hasInsufficientGasForOnChain && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      background: "#fef2f2",
+                      color: "#b91c1c",
+                      border: "1px solid #fecaca",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    You do not have required BNB for gas fee.
+                    {` Available: ${nativeBalNum.toFixed(6)} BNB · Required: ${requiredBnbForOnChain.toFixed(6)} BNB`}
+                  </div>
+                )}
               </div>
             )}
             {transferType === "internal" && (
@@ -1129,7 +1193,8 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
               disabled={
                 sending ||
                 (transferType === "onchain" && !unlockedPrivateKeyRef.current) ||
-                (transferType === "internal" && !auth)
+                (transferType === "internal" && !auth) ||
+                hasInsufficientGasForOnChain
               }
               onClick={async () => {
                 setSending(true);
@@ -1149,7 +1214,8 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 cursor: sending ? "wait" : "pointer",
                 opacity:
                   (transferType === "onchain" && !unlockedPrivateKeyRef.current) ||
-                  (transferType === "internal" && !auth)
+                  (transferType === "internal" && !auth) ||
+                  hasInsufficientGasForOnChain
                     ? 0.5
                     : 1,
               }}

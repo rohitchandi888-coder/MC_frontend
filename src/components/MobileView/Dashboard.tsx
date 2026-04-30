@@ -21,6 +21,8 @@ import sunswap from "/images/subpart/sunswap.png";
 import pumpswap from "/images/subpart/pumpswap.png";
 import pancakeswap from "/images/subpart/pancakeswap.png";
 
+const FDA_LOGO_URL = "https://img.lightshot.app/Ge3AnFucTIyQQTmVErIWpw.png";
+
 const HomePageImage = [
   { main: BNB, sub: Radium },
   { main: BNB, sub: Radium },
@@ -345,9 +347,9 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         name: "Future Digi Assets",
         amountStr: fb.toFixed(5),
         value: fb * fdaPx,
-        quoteCurrency: "USD",
+        quoteCurrency: "INR",
         changePct: null,
-        mainIcon: ETH,
+        mainIcon: FDA_LOGO_URL,
         subIcon: pancakeswap,
       });
     }
@@ -362,7 +364,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         value: intFda * (price != null ? Number(price) : 0),
         quoteCurrency: "INR",
         changePct: null,
-        mainIcon: ETH,
+        mainIcon: FDA_LOGO_URL,
         subIcon: hydro,
       });
     }

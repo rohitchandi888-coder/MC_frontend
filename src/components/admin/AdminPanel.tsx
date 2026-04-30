@@ -68,6 +68,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [adminTradesPage, setAdminTradesPage] = useState(1);
   const [fdaPrice, setFdaPrice] = useState("");
+  const [minOfferAmount, setMinOfferAmount] = useState('1');
+  const [editingMinOfferAmount, setEditingMinOfferAmount] = useState(false);
+  const [updatingMinOfferAmount, setUpdatingMinOfferAmount] = useState(false);
   const [updatingFdaPrice, setUpdatingFdaPrice] = useState(false);
   const [rewardRate, setRewardRate] = useState('5');
   const [rewardMinAmount, setRewardMinAmount] = useState('25');
@@ -205,10 +208,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const fdaPriceSetting = Array.isArray(settings)
         ? settings.find((s: any) => s?.key === 'fda_price')
         : null;
-      if (!fdaPriceSetting?.value) return;
-      const nextPrice = Number(fdaPriceSetting.value);
-      if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
-      setFdaPrice(nextPrice.toString());
+      const minOfferSetting = Array.isArray(settings)
+        ? settings.find((s: any) => s?.key === 'p2p_min_offer_amount')
+        : null;
+      if (fdaPriceSetting?.value) {
+        const nextPrice = Number(fdaPriceSetting.value);
+        if (Number.isFinite(nextPrice) && nextPrice > 0) {
+          setFdaPrice(nextPrice.toString());
+        }
+      }
+      if (minOfferSetting?.value) {
+        setMinOfferAmount(String(minOfferSetting.value));
+      }
     } catch (err) {
       console.error("Failed to load FDA price:", err);
     }
@@ -217,6 +228,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   useEffect(() => {
     loadFdaPrice();
   }, [auth?.token]);
+
+  const updateMinOfferSetting = async () => {
+    const valueStr = String(minOfferAmount || '').trim();
+    if (!/^\d+(\.\d{0,18})?$/.test(valueStr)) {
+      pushError('Minimum offer amount must be a decimal with up to 18 places.');
+      return;
+    }
+    const numeric = parseFloat(valueStr);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      pushError('Minimum offer amount must be greater than 0.');
+      return;
+    }
+    setUpdatingMinOfferAmount(true);
+    try {
+      const res = await fetch(getApiUrl('admin/settings/p2p_min_offer_amount'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth?.token}`,
+        },
+        body: JSON.stringify({
+          value: valueStr,
+          description: 'Minimum FDA amount required to create a P2P offer (BUY and SELL)',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to update minimum offer amount');
+      setMinOfferAmount(String(data?.value || valueStr));
+      setEditingMinOfferAmount(false);
+      pushSuccess(`✅ Minimum offer amount updated to ${String(data?.value || valueStr)} FDA.`);
+    } catch (err: any) {
+      pushError(err?.message || 'Failed to update minimum offer amount');
+    } finally {
+      setUpdatingMinOfferAmount(false);
+    }
+  };
 
   const loadRewardSettings = async () => {
     try {
@@ -507,6 +554,61 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <button
                 className="btn btn-blue"
                 onClick={() => setEditingFeeRate(true)}
+              >
+                ✏️ Edit
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-6">
+          <label className="modal-label">
+            Minimum Offer Amount (FDA)
+          </label>
+          <p className="text-xs text-gray-600 mb-3">
+            Enforced for both BUY and SELL offers. Users cannot create offers below this FDA amount.
+          </p>
+          {editingMinOfferAmount ? (
+            <div className="flex gap-3 items-center">
+              <input
+                type="text"
+                pattern="^\d+(\.\d{0,18})?$"
+                className="form-input flex-1 py-3 max-w-72"
+                value={minOfferAmount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || /^\d*\.?\d{0,18}$/.test(value)) {
+                    setMinOfferAmount(value);
+                  }
+                }}
+              />
+              <span className="text-sm text-gray-600">FDA</span>
+              <button
+                className={`btn btn-success ${updatingMinOfferAmount ? 'opacity-60 cursor-not-allowed' : ''}`}
+                onClick={updateMinOfferSetting}
+                disabled={updatingMinOfferAmount}
+              >
+                {updatingMinOfferAmount ? 'Saving...' : '✅ Save'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setEditingMinOfferAmount(false);
+                  loadFdaPrice();
+                }}
+                disabled={updatingMinOfferAmount}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3 items-center">
+              <div className="card-dark py-3 px-5 text-base font-semibold text-gray-900 min-w-24">
+                {minOfferAmount} FDA
+              </div>
+              <button
+                className="btn btn-blue"
+                onClick={() => setEditingMinOfferAmount(true)}
               >
                 ✏️ Edit
               </button>

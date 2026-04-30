@@ -77,31 +77,14 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
             {registeredFdaWallets.length > 0 ? (
               <div className="wallet-cards-grid">
                 {registeredFdaWallets.map((wallet: any) => {
-                  // Detect network from address format
-                  const isEthereum = /^0x[a-f0-9]{40}$/i.test(wallet.address);
-                  const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet.address);
-                  const isBitcoin = /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(wallet.address);
-                  const isTron = /^T[A-Za-z1-9]{33}$/.test(wallet.address);
-                  
-                  let network = 'Unknown';
-                  if (isEthereum) network = 'Ethereum/EVM';
-                  else if (isSolana) network = 'Solana';
-                  else if (isBitcoin) network = 'Bitcoin';
-                  else if (isTron) network = 'Tron';
-                  
                   return (
                   <div key={wallet.id} className="wallet-card">
                     <div className="wallet-card-header">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="mb-1">
                           <p className="wallet-card-label">
                             {wallet.label || `Wallet ${wallet.id}`}
                           </p>
-                          {network !== 'Unknown' && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-200 font-bold border border-blue-700">
-                              {network}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <p className="wallet-card-address flex-1">
@@ -164,31 +147,14 @@ export const FDAWallets: React.FC<FDAWalletsProps> = ({
               </div>
               <div className="wallet-cards-grid">
                 {unregisteredWallets.map((wallet: any) => {
-                  // Detect network from address format
-                  const isEthereum = /^0x[a-f0-9]{40}$/i.test(wallet.address);
-                  const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet.address);
-                  const isBitcoin = /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(wallet.address);
-                  const isTron = /^T[A-Za-z1-9]{33}$/.test(wallet.address);
-                  
-                  let network = 'Unknown';
-                  if (isEthereum) network = 'Ethereum/EVM';
-                  else if (isSolana) network = 'Solana';
-                  else if (isBitcoin) network = 'Bitcoin';
-                  else if (isTron) network = 'Tron';
-                  
                   return (
                     <div key={wallet.id} className="wallet-card" style={{ opacity: 0.8, border: '2px dashed #64748b' }}>
                       <div className="wallet-card-header">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="mb-1">
                             <p className="wallet-card-label">
                               {wallet.label || `Wallet ${wallet.id.slice(-6)}`}
                             </p>
-                            {network !== 'Unknown' && (
-                              <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-200 font-bold border border-blue-700">
-                                {network}
-                              </span>
-                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <p className="wallet-card-address flex-1">

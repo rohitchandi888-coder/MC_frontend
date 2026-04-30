@@ -20,6 +20,10 @@ export const AcceptOfferModal: React.FC<AcceptOfferModalProps> = ({
   onAccept,
 }) => {
   if (!show || !offer) return null;
+  const paymentRaw = String(offer.paymentMethods || offer.payment_method || '').trim();
+  const paymentList = paymentRaw
+    ? paymentRaw.split(',').map((m) => m.trim()).filter(Boolean)
+    : [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -34,9 +38,18 @@ export const AcceptOfferModal: React.FC<AcceptOfferModalProps> = ({
           <p className="modal-text">
             Available: <strong>{offer.remaining || offer.available_amount || 0} FDA</strong>
           </p>
-          <p className="modal-text">
-            Payment: <strong>{offer.paymentMethods || offer.payment_method || 'Not specified'}</strong>
-          </p>
+          <div className="modal-text">
+            Payment:
+            {paymentList.length > 0 ? (
+              <div style={{ marginTop: 6, display: 'grid', gap: 4 }}>
+                {paymentList.map((pm, i) => (
+                  <strong key={`${pm}-${i}`} style={{ display: 'block' }}>{pm}</strong>
+                ))}
+              </div>
+            ) : (
+              <strong> Not specified</strong>
+            )}
+          </div>
           <label className="modal-label">
             Amount to {offer.type === 'SELL' ? 'buy' : 'sell'} (FDA):
           </label>

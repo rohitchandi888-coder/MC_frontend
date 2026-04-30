@@ -11,6 +11,7 @@ interface P2PTradingProps {
   internalFdaBalance: number | null;
   internalFdaLocked: number | null;
   p2pFeeRate: number;
+  p2pMinOfferAmount: number;
   addFdaAmount: string;
   setAddFdaAmount: (amount: string) => void;
   addingFdaBalance: boolean;
@@ -72,6 +73,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   internalFdaBalance,
   internalFdaLocked,
   p2pFeeRate,
+  p2pMinOfferAmount,
   addFdaAmount,
   setAddFdaAmount,
   addingFdaBalance,
@@ -176,11 +178,14 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
       if (selectedPaymentMethodIds.length > 0) {
         const selectedMethods = paymentMethods
           .filter(pm => selectedPaymentMethodIds.includes(pm.id) && pm.is_active)
-        .map(pm => {
-          if (pm.upi_id) return pm.upi_id;
-          if (pm.qr_code) return `QR:${pm.id}`;
-          return pm.paymentname;
-        });
+          .flatMap(pm => {
+            const tokens: string[] = [];
+            // Keep UPI and QR as separate tokens so buyer modal can render both.
+            if (pm.upi_id) tokens.push(pm.upi_id);
+            if (pm.qr_code) tokens.push(`QR:${pm.id}`);
+            if (tokens.length === 0 && pm.paymentname) tokens.push(pm.paymentname);
+            return tokens;
+          });
         setOfferPaymentMethods(selectedMethods.join(', '));
       } else {
         setOfferPaymentMethods('');
@@ -197,12 +202,15 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const isCreateOfferDisabled =
     creatingOffer ||
     !offerAmount ||
+    Number(offerAmount) < p2pMinOfferAmount ||
     !offerPrice ||
     ((offerType === 'SELL' && selectedActivePaymentMethodCount === 0) ||
       (offerType === 'BUY' && !offerPaymentMethods.trim()));
   const createOfferDisabledReason =
     !offerAmount
       ? 'Enter FDA amount.'
+      : Number(offerAmount) < p2pMinOfferAmount
+        ? `Minimum offer amount is ${p2pMinOfferAmount} FDA.`
       : !offerPrice
         ? 'Enter price per FDA.'
         : offerType === 'SELL' && selectedActivePaymentMethodCount === 0
@@ -538,6 +546,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       (Amount you want to buy)
                     </span>
                   )}
+                </p>
+                <p className="text-xs mb-2" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
+                  Minimum offer amount: {p2pMinOfferAmount} FDA
                 </p>
                 {inMobileShell ? (
                   <div

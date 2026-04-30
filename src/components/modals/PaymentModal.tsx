@@ -26,19 +26,39 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [compressing, setCompressing] = useState(false);
 
 
-  const renderPaymentMethod = (methods: any) => {
+  const normalizePaymentMethods = (raw: any): any[] => {
+    if (!raw) return [];
+    let methods = raw;
 
     if (typeof methods === 'string') {
       try {
         methods = JSON.parse(methods);
       } catch {
-        return <span>{methods}</span>;
+        const value = methods.trim();
+        if (!value) return [];
+        // Comma-separated fallback like "upi1@ok, QR:12, upi2@ybl"
+        const parts = value
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return parts.map((p) =>
+          p.toUpperCase().startsWith('QR:')
+            ? { paymentname: p, payment_method: p }
+            : { paymentname: 'UPI', upi_id: p }
+        );
       }
     }
 
-    if (!methods || methods.length === 0) return 'Not available';
+    if (Array.isArray(methods)) return methods;
+    if (typeof methods === 'object') return [methods];
+    return [];
+  };
 
-    return methods.map((pm: any, index: number) => {
+  const renderPaymentMethod = (methods: any) => {
+    const normalized = normalizePaymentMethods(methods);
+    if (normalized.length === 0) return <span style={{ color: '#cbd5e1' }}>Not available</span>;
+
+    return normalized.map((pm: any, index: number) => {
 
       const isValidQR =
         pm.qr_code &&
@@ -53,9 +73,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             Pay to Seller
           </p>
 
-          {pm.upi_id && (
+          {(pm.upi_id || pm.payment_method || pm.paymentname) && (
             <span style={{ fontSize: '12px', display: 'block', color: '#e2e8f0', marginTop: 2 }}>
-              {pm.upi_id}
+              {pm.upi_id || pm.payment_method || pm.paymentname}
             </span>
           )}
 
@@ -149,7 +169,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </p>
           <div style={{ marginTop: '10px', marginBottom: '10px' }}>
             <p style={{ fontWeight: '600', color: '#e2e8f0', marginBottom: 6 }}>💳 Seller Payment Details:</p>
-            {renderPaymentMethod(trade.seller_payment_methods)}
+            {renderPaymentMethod(
+              trade.seller_payment_methods ||
+              trade.payment_method ||
+              trade.paymentMethods
+            )}
           </div>
           <label className="modal-label">
             Payment Screenshot (Max 10MB, will be compressed):

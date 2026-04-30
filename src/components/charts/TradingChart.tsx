@@ -34,6 +34,7 @@ interface OHLCData {
 interface TradingChartProps {
   selectedCoins: string[];
   auth?: { token: string } | null;
+  fdaPrice?: number | null;
   /** Light MetaMask-style chrome + chart theme (mobile Explore tab). */
   inMobileShell?: boolean;
 }
@@ -113,6 +114,7 @@ function buildChartOptions(shell: boolean, width: number, height: number) {
 export const TradingChart: React.FC<TradingChartProps> = ({
   selectedCoins,
   auth,
+  fdaPrice = null,
   inMobileShell = false,
 }) => {
   const [selectedCoin, setSelectedCoin] = useState<string>('FDA');
@@ -120,6 +122,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
   const [loading, setLoading] = useState(true);
   const [chartReady, setChartReady] = useState(false);
   const [livePrices, setLivePrices] = useState<Record<string, { price: number; change24h: number; volume24h: number }>>({});
+  const [fdaBasePrice, setFdaBasePrice] = useState<number>(0);
   const [ohlcData, setOhlcData] = useState<Record<string, OHLCData[]>>({});
   const [coinSearch, setCoinSearch] = useState<string>('');
   const [filteredCoins, setFilteredCoins] = useState<string[]>(['BTC', 'ETH', 'FDA', 'JIO']);
@@ -142,6 +145,27 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     FDA: 'FDA Token',
     JIO: 'Jio Marchand Coin',
   };
+
+  useEffect(() => {
+    const loadFdaBasePrice = async () => {
+      if (Number.isFinite(Number(fdaPrice)) && Number(fdaPrice) > 0) {
+        setFdaBasePrice(Number(fdaPrice));
+        return;
+      }
+      try {
+        const res = await fetch(getApiUrl('fdaPrice'));
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const p = Number(data?.data ?? data?.price ?? data?.fda_price ?? 0);
+        if (Number.isFinite(p) && p > 0) {
+          setFdaBasePrice(p);
+        }
+      } catch {
+        // ignore and keep fallback
+      }
+    };
+    loadFdaBasePrice();
+  }, [fdaPrice]);
 
   // Fetch live prices from CoinGecko API
   const fetchLivePrices = async () => {
@@ -229,7 +253,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
     const basePrices: Record<string, number> = {
       BTC: livePrices.BTC?.price || 82969.41, // Current Bitcoin price fallback
       ETH: livePrices.ETH?.price || 3500, // Current Ethereum price fallback
-      FDA: 3600, // FDA token starts at 2800 INR
+      FDA: fdaBasePrice > 0 ? fdaBasePrice : 3600,
       JIO: 0.02,
     };
 
@@ -282,7 +306,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       });
     }
 
-    // For FDA, ensure the last price ends exactly at base price (2800) for consistency
+    // For FDA, ensure the last price ends at configured FDA base price for consistency.
     if (coin === 'FDA' && data.length > 0) {
       const lastPrice = data[data.length - 1].close;
       const adjustment = basePrice - lastPrice;
@@ -294,7 +318,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
         point.low = Number((point.low + (adjustment * ratio)).toFixed(2));
         point.close = Number((point.close + (adjustment * ratio)).toFixed(2));
       });
-      // Force the very last price to be exactly 2800
+      // Force the very last price to be exactly configured base FDA price.
       const lastPoint = data[data.length - 1];
       const lastOpenBefore = lastPoint.open;
       lastPoint.close = basePrice;
@@ -552,29 +576,60 @@ useEffect(() => {
     }
 
     try {
-      const res = await fetch(getApiUrl('trades'), {
-        headers: {
-          Authorization: `Bearer ${auth.token}`,
-        },
-      });
+      const [tradesRes, internalTransfersRes] = await Promise.all([
+        fetch(getApiUrl('trades'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        }),
+        fetch(getApiUrl('internal/transfers'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        }),
+      ]);
 
-      if (!res.ok) {
+      if (!tradesRes.ok) {
         console.warn('Failed to fetch trades');
         return generateOHLCData('FDA', timeframe);
       }
 
-      const trades = await res.json();
+      const trades = await tradesRes.json();
+      const internalTransfers = internalTransfersRes.ok
+        ? await internalTransfersRes.json().catch(() => [])
+        : [];
       
-      // Filter only FDA trades and completed trades
-      const fdaTrades = trades.filter((t: any) => 
+      // Filter only FDA trades and completed trades.
+      const fdaTrades = trades.filter((t: any) =>
         t.asset_symbol === 'FDA' &&
         ['COMPLETED', 'PAID_PENDING_RELEASE', 'PENDING_PAYMENT'].includes(t.status)
       );
 
-     if (fdaTrades.length === 0) {
-      console.warn('No trades found → using mock data');
-      return generateOHLCData('FDA', timeframe);
-    }
+      // Internal FDA transfers (no explicit price) are mapped to slight price movements
+      // around the configured FDA base price so chart reflects transfer activity too.
+      const basePriceForTransfers = fdaBasePrice > 0 ? fdaBasePrice : 3600;
+      const transferAsTrades = Array.isArray(internalTransfers)
+        ? internalTransfers
+            .filter((tx: any) => Number(tx?.amount) > 0 && !!tx?.created_at)
+            .map((tx: any) => {
+              const amount = Number(tx.amount) || 0;
+              const txId = Number(tx.id) || 0;
+              const signedDirection = txId % 2 === 0 ? 1 : -1;
+              const impactPct = Math.min(0.02, Math.max(0.0005, amount * 0.00002));
+              const syntheticPrice = basePriceForTransfers * (1 + signedDirection * impactPct);
+              return {
+                created_at: tx.created_at,
+                price: syntheticPrice,
+                amount,
+                fiat_currency: 'INR',
+                asset_symbol: 'FDA',
+                status: 'COMPLETED',
+              };
+            })
+        : [];
+
+      const mergedEvents = [...fdaTrades, ...transferAsTrades];
+
+      if (mergedEvents.length === 0) {
+        console.warn('No FDA trades/transfers found → using mock data');
+        return generateOHLCData('FDA', timeframe);
+      }
 
       // Group trades by timeframe intervals
       const intervalMs = {
@@ -587,15 +642,15 @@ useEffect(() => {
         '1w': 604800000,
       }[timeframe] || 3600000;
 
-      // Sort trades by created_at
-      fdaTrades.sort((a: any, b: any) => 
+      // Sort events by created_at
+      mergedEvents.sort((a: any, b: any) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
 
       // Group into intervals and calculate OHLC
       const grouped: Record<string, { prices: number[]; volumes: number[] }> = {};
       
-      fdaTrades.forEach((trade: any) => {
+      mergedEvents.forEach((trade: any) => {
         const tradeTime = new Date(trade.created_at).getTime();
         const intervalStart = Math.floor(tradeTime / intervalMs) * intervalMs;
         const key = new Date(intervalStart).toISOString();
@@ -604,8 +659,7 @@ useEffect(() => {
           grouped[key] = { prices: [], volumes: [] };
         }
         
-        // const price = parseFloat(trade.price) || 0;
-        // convert trade price → USD
+        // Convert event price to INR for charting.
         let priceUSD =
           parseFloat(trade.price) *
           (currencyRatesToUSD[trade.fiat_currency] || 1);
@@ -613,8 +667,6 @@ useEffect(() => {
         // convert USD → INR
         let priceINR = priceUSD * USD_TO_INR;
 
-        // FDA price floor
-        priceINR = Math.max(priceINR, 3600);
         const amount = parseFloat(trade.amount) || 0;
         
         if (priceINR > 0) {
@@ -657,31 +709,22 @@ useEffect(() => {
       // If we have less than 50 data points, fill with mock data
       if (ohlc.length < 50) {
         const mockData = generateOHLCData('FDA', timeframe);
-        // Ensure the last price in mock data is exactly 2800
+        const targetFdaPrice = fdaBasePrice > 0 ? fdaBasePrice : 3600;
         if (mockData.length > 0) {
           const lastPoint = mockData[mockData.length - 1];
-          lastPoint.close = 3600;
-          lastPoint.high = Math.max(lastPoint.high, 3600);
-          lastPoint.low = Math.min(lastPoint.low, 3600);
+          lastPoint.close = targetFdaPrice;
+          lastPoint.high = Math.max(lastPoint.high, targetFdaPrice);
+          lastPoint.low = Math.min(lastPoint.low, targetFdaPrice);
         }
         // Ensure mock data is also sorted
         const combined = [...ohlc, ...mockData.slice(ohlc.length)].slice(0, 100);
         combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        // Ensure the very last point closes at 3600
+        // Ensure the very last point closes at configured FDA base price.
         if (combined.length > 0) {
           const lastCombined = combined[combined.length - 1];
-          lastCombined.close = 3600;
+          lastCombined.close = targetFdaPrice;
         }
         return combined;
-      }
-      
-      // Ensure the last price in real trade data is also normalized if it's close to 3600
-      if (ohlc.length > 0) {
-        const lastPoint = ohlc[ohlc.length - 1];
-        // If the last price is very close to 3600 (within 50), normalize it to 3600 for consistency
-        if (Math.abs(lastPoint.close - 3600) < 50) {
-          lastPoint.close = 3600;
-        }
       }
 
       return ohlc.slice(-100); // Last 100 intervals (already sorted)
@@ -709,7 +752,7 @@ useEffect(() => {
       setLoading(false);
     };
     loadData();
-  }, [selectedCoin, timeframe, auth]);
+  }, [selectedCoin, timeframe, auth, fdaBasePrice]);
 
   // Handle search submit
   const handleSearchSubmit = () => {
@@ -806,17 +849,11 @@ useEffect(() => {
       return livePrices.ETH.price;
     }
     if (selectedCoin === 'FDA') {
-      // For FDA, always show base price (2800) for consistency
-      // This ensures the price display is always ₹2,800.00 regardless of timeframe
-      // Only use actual trade price if we have real P2P trades with significantly different prices
       const lastClose = ohlcData[selectedCoin]?.[ohlcData[selectedCoin].length - 1]?.close;
-      // If price is significantly different from 2800 (more than 200 INR difference), it's likely real trade data
-      if (lastClose && lastClose > 0 && Math.abs(lastClose - 3600) > 200) {
-        // This is likely real trade data, use it
+      if (lastClose && lastClose > 0) {
         return lastClose;
       }
-      // Always default to base price (2800) for mock data consistency
-      return 3600;
+      return fdaBasePrice > 0 ? fdaBasePrice : 3600;
     }
     return ohlcData[selectedCoin]?.[ohlcData[selectedCoin].length - 1]?.close || 0;
   };

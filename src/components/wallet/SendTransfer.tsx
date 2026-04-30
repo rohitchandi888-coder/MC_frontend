@@ -67,6 +67,21 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
 }) => {
 
     const [isMobile, setIsMobile] = useState(false);
+    const gasFeeNum = parseFloat(estimatedGas || "0") || 0;
+    const nativeBalNum = parseFloat(nativeBalance || "0") || 0;
+    const sendAmountNum = parseFloat(sendAmount || "0") || 0;
+    const requiredBnbForOnChain =
+      transferType === "onchain"
+        ? assetType === "native"
+          ? sendAmountNum + gasFeeNum
+          : gasFeeNum
+        : 0;
+    const hasInsufficientGasForOnChain =
+      transferType === "onchain" &&
+      !estimatingGas &&
+      !!estimatedGas &&
+      nativeBalance !== null &&
+      nativeBalNum < requiredBnbForOnChain;
   
     useEffect(() => {
       const checkScreen = () => {
@@ -484,12 +499,21 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
       <button
         className="btn btn-primary w-full"
         onClick={handleSend}
-        disabled={transferType === "onchain" && !unlockedPrivateKeyRef.current}
+        disabled={
+          (transferType === "onchain" && !unlockedPrivateKeyRef.current) ||
+          hasInsufficientGasForOnChain
+        }
       >
         {transferType === "internal"
           ? "🔄 Send Internal Transfer (Zero Fee)"
           : "⛓️ Send On-Chain Transaction"}
       </button>
+      {hasInsufficientGasForOnChain && (
+        <p className="text-xs mt-2" style={{ color: "#fca5a5" }}>
+          ⚠️ You do not have required BNB for gas fee.
+          {` Available: ${nativeBalNum.toFixed(6)} BNB · Required: ${requiredBnbForOnChain.toFixed(6)} BNB`}
+        </p>
+      )}
       {transferType === "onchain" && !unlockedPrivateKeyRef.current && (
         <p className="text-xs text-slate-400 mt-2">
           ⚠️ Please unlock your wallet first to send on-chain transactions.
