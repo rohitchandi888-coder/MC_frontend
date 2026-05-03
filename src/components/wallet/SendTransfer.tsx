@@ -33,6 +33,9 @@ interface SendTransferProps {
   customTokenBalances?: Record<string, string>;
   fdaPrice?: number | null;
   onExit?: () => void;
+  requestGasEstimate?: () => void;
+  /** Mobile: skip token list when asset was chosen from home holdings. */
+  skipAssetPickerStep?: boolean;
 }
 
 export const SendTransfer: React.FC<SendTransferProps> = ({
@@ -64,6 +67,8 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
   customTokenBalances = {},
   fdaPrice = null,
   onExit = () => {},
+  requestGasEstimate,
+  skipAssetPickerStep = false,
 }) => {
 
     const [isMobile, setIsMobile] = useState(false);
@@ -125,6 +130,8 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
         registerRecipientWallet={registerRecipientWallet}
         onUnlock={goto}
         onExit={onExit}
+        requestGasEstimate={requestGasEstimate}
+        skipAssetPickerStep={skipAssetPickerStep}
       />
     );
   }
@@ -381,9 +388,9 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
                   ✅ MC Wallet Detected
                 </p>
                 <p className="text-xs text-slate-200">
-                  {recipientFdaWallet.fullName ||
+                  {recipientFdaWallet.walletLabel ||
+                    recipientFdaWallet.fullName ||
                     recipientFdaWallet.email ||
-                    recipientFdaWallet.walletLabel ||
                     "MC Wallet"}
                 </p>
                 <p className="text-xs text-slate-300 mt-1">

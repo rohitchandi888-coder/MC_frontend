@@ -333,10 +333,25 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
           </p>
           {Number.isFinite(parseFloat(amount)) && parseFloat(amount) > 0 && settings.fdaPrice > 0 && (
             <p className="text-xs text-gray-600 mt-1">
-              Value formula: {parseFloat(amount)} * {settings.fdaPrice} = {(parseFloat(amount) * settings.fdaPrice).toFixed(4)} INR.V.
-              Reward value ({activeRewardRate}%): {((parseFloat(amount) * settings.fdaPrice * activeRewardRate) / 100).toFixed(4)} INR.V (locked).
-              Estimated FDA at current price: {estimatedReward.toFixed(8)} FDA.
-              If FDA price changes at claim time, FDA quantity will change, but reward value stays fixed.
+              {holdPlan === 'standard' ? (
+                <>
+                  <span className="font-semibold text-gray-700">Standard plan — FDA: </span>
+                  You lock <strong>{parseFloat(amount)} FDA</strong> for {activePeriodMonths} months at{' '}
+                  <strong>{activeRewardRate}%</strong> reward on your locked FDA. Estimated extra FDA at today’s
+                  price: <strong>{estimatedReward.toFixed(8)} FDA</strong>. Estimated total on maturity:{' '}
+                  <strong>{(parseFloat(amount) + estimatedReward).toFixed(8)} FDA</strong>. Amounts in FDA are the
+                  basis of this plan; any INR.V figures elsewhere are illustrative using the current FDA price only.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-gray-700">Merchant Buy plan — FDA value (INR.V): </span>
+                  Value formula: {parseFloat(amount)} × {settings.fdaPrice} ={' '}
+                  {(parseFloat(amount) * settings.fdaPrice).toFixed(4)} INR.V. Reward value ({activeRewardRate}%):{' '}
+                  {((parseFloat(amount) * settings.fdaPrice * activeRewardRate) / 100).toFixed(4)} INR.V (locked).
+                  Estimated FDA at current price: {estimatedReward.toFixed(8)} FDA. If FDA price changes at claim
+                  time, FDA quantity will change, but reward value stays fixed.
+                </>
+              )}
             </p>
           )}
         </div>

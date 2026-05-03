@@ -65,12 +65,9 @@ const WalletModal: React.FC<WalletModalProps> = ({
                 <h3 style={{ color: "#fff", marginBottom: 10 }}>Select Wallet</h3>
 
                 {wallets.map((wallet) => {
-                    const selectedWallet = wallet.id
-                    // console.log({selectedWallet});
                     return (
-                       <div>
+                       <div key={wallet.id}>
                          <div
-                            key={wallet.id}
                             style={{
                                 border: '2px solid #333',
                                 padding: 10,

@@ -123,18 +123,11 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
     return isFromUser ? 'Sent' : 'Received';
   };
 
-  const getTransactionColor = (tx: Transaction) => {
-    if (!tx.from_address) return 'text-green-400';
-    const isFromUser = userWalletAddresses.some(
-      (addr) => addr.toLowerCase() === tx.from_address?.toLowerCase()
-    );
-    return isFromUser ? 'text-red-400' : 'text-green-400';
-  };
-
   const filterTransaction = useMemo(() => {
     const s = search.toLowerCase();
     const onSearchFind = transactions.filter((e) =>
       String(e.created_at || '').toLowerCase().includes(s) ||
+      String(e.amount || '').toLowerCase().includes(s) ||
       String(e.from_fda_user_id || '').toLowerCase().includes(s) ||
       String(e.to_fda_user_id || '').toLowerCase().includes(s) ||
       String(e.from_email || '').toLowerCase().includes(s) ||
@@ -166,7 +159,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
       <div className="section-header">
         <h2 className="section-title">Transaction History</h2>
         <p className="section-subtitle">
-          View all internal transfers for your wallet addresses
+          Internal FDA (custodial) transfers between MC wallets. Quantities are always FDA. On-chain token
+          movements (e.g. JW) are not listed here — use a block explorer for those.
         </p>
       </div>
 
@@ -234,20 +228,37 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
 
               const rowKey = `${tx.id}-${tx.created_at}-${tx.amount}-${tx.from_address ?? ""}-${tx.to_address ?? ""}-${rowIndex}`;
 
+              const qtyColor = isFromUser ? '#f87171' : '#4ade80';
               return (
                 <div key={rowKey} className="transaction-item" style={{ padding: '14px 12px' }}>
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <span className={`text-base font-bold ${getTransactionColor(tx)}`} style={{ color: '#e2e8f0' }}>
-                          {getTransactionType(tx)}
-                        </span>
-                        <span className="text-sm" style={{ color: '#cbd5e1' }}>
-                          {formatDate(tx.created_at)}
-                        </span>
-                      </div>
+                  <div className="flex items-center gap-3 mb-3 flex-wrap justify-between">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-base font-bold" style={{ color: '#f8fafc' }}>
+                        {getTransactionType(tx)}
+                      </span>
+                      <span className="text-sm" style={{ color: '#cbd5e1' }}>
+                        {formatDate(tx.created_at)}
+                      </span>
+                    </div>
+                  </div>
 
-                      <div className="space-y-2">
+                  <div
+                    className="mb-3 rounded-lg px-3 py-2.5"
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1px solid #475569',
+                    }}
+                  >
+                    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#94a3b8' }}>
+                      Quantity (FDA)
+                    </div>
+                    <div className="text-xl font-bold mt-1" style={{ color: qtyColor }}>
+                      {isFromUser ? '-' : '+'}
+                      {parseFloat(tx.amount).toFixed(4)} FDA
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                         {isFromUser && (
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -312,17 +323,6 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    <div className="text-right flex-shrink-0 min-w-[120px]">
-                      <p
-                        className="text-lg font-bold"
-                        style={{ color: isFromUser ? '#f87171' : '#4ade80' }}
-                      >
-                        {isFromUser ? '-' : '+'}{parseFloat(tx.amount).toFixed(4)} FDA
-                      </p>
-                    </div>
-                  </div>
                 </div>
               );
             })}

@@ -33,6 +33,8 @@ interface P2PTradingProps {
   myTrades: any[];
   releasingTokens: number | null;
   disputingTrade: number | null;
+  cancellingTrade: number | null;
+  cancelTrade: (tradeId: number) => Promise<void>;
   setSelectedTradeForPayment: (trade: any) => void;
   setPaymentScreenshot: (screenshot: string | null) => void;
   setShowPaymentModal: (show: boolean) => void;
@@ -95,6 +97,8 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   myTrades,
   releasingTokens,
   disputingTrade,
+  cancellingTrade,
+  cancelTrade,
   setSelectedTradeForPayment,
   setPaymentScreenshot,
   setShowPaymentModal,
@@ -120,6 +124,15 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   useEffect(() => {
     if (myTradesPage > totalMyTradesPages && totalMyTradesPages > 0) setMyTradesPage(totalMyTradesPages);
   }, [myTrades.length, totalMyTradesPages, myTradesPage]);
+
+  const canBuyerCreateDispute = (trade: any) => {
+    if (trade.status !== 'PAID_PENDING_RELEASE') return false;
+    if (!trade.paid_at) return false;
+    const paidAt = new Date(trade.paid_at);
+    if (Number.isNaN(paidAt.getTime())) return false;
+    const deadline = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000);
+    return Date.now() <= deadline.getTime();
+  };
 
   // Load payment methods from database
   React.useEffect(() => {
@@ -563,9 +576,10 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       step="any"
                       inputMode="decimal"
                       className="form-input-dark form-input-dark-focus py-3 w-full"
-                      placeholder="0.00"
+                      placeholder="FDA AMOUNT"
                       value={offerAmount}
                       onChange={(e) => setOfferAmount(e.target.value)}
+                      aria-label="FDA amount"
                       style={{
                         width: "100%",
                         maxWidth: "100%",
@@ -598,9 +612,10 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       step="any"
                       inputMode="decimal"
                       className="form-input-dark form-input-dark-focus py-3"
-                      placeholder="0.00"
+                      placeholder="FDA AMOUNT"
                       value={offerAmount}
                       onChange={(e) => setOfferAmount(e.target.value)}
+                      aria-label="FDA amount"
                       style={{
                         flex: "1 1 0%",
                         minWidth: 0,
@@ -942,7 +957,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                           ? '✅ COMPLETED'
                           : trade.status === 'PAID_PENDING_RELEASE'
                             ? '💰 PAID'
-                            : trade.status === 'PENDING'
+                            : trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT'
                               ? '⏳ PENDING'
                               : trade.status;
                       return (
@@ -972,17 +987,63 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                             </span>
                           </div>
                           <div className="mt-3 space-y-2">
-                            {trade.status === 'PENDING' && isBuyer && (
-                              <button
-                                onClick={() => {
-                                  setSelectedTradeForPayment(trade);
-                                  setPaymentScreenshot(null);
-                                  setShowPaymentModal(true);
-                                }}
-                                className="btn btn-yellow w-full text-xs py-2"
-                              >
-                                ✅ Pay
-                              </button>
+                            {isBuyer &&
+                              (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTradeForPayment(trade);
+                                      setPaymentScreenshot(null);
+                                      setShowPaymentModal(true);
+                                    }}
+                                    className="btn btn-yellow w-full text-xs py-2"
+                                  >
+                                    ✅ Pay
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void cancelTrade(trade.id)}
+                                    disabled={cancellingTrade === trade.id}
+                                    className="btn w-full text-xs py-2"
+                                    style={{
+                                      background:
+                                        cancellingTrade === trade.id ? '#9ca3af' : '#ef4444',
+                                      color: '#fff',
+                                    }}
+                                  >
+                                    {cancellingTrade === trade.id ? '...' : '❌ Cancel trade'}
+                                  </button>
+                                </>
+                              )}
+                            {isSeller && trade.status === 'PENDING' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void cancelTrade(trade.id)}
+                                  disabled={cancellingTrade === trade.id}
+                                  className="btn w-full text-xs py-2"
+                                  style={{
+                                    background:
+                                      cancellingTrade === trade.id ? '#9ca3af' : '#ef4444',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {cancellingTrade === trade.id ? '...' : '❌ Cancel trade'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openDisputeModal(trade)}
+                                  disabled={disputingTrade === trade.id}
+                                  className="btn w-full text-xs py-2"
+                                  style={{
+                                    background:
+                                      disputingTrade === trade.id ? '#9ca3af' : '#f59e0b',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                </button>
+                              </>
                             )}
                             {trade.status === 'PAID_PENDING_RELEASE' && isSeller && (
                               <>
@@ -994,12 +1055,14 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                 >
                                   {releasingTokens === trade.id ? '...' : '🚀 Release'}
                                 </button>
-                                {trade.payment_screenshot && (
+                                {(trade.payment_screenshot || trade.paymentScreenshot) && (
                                   <button
+                                    type="button"
                                     onClick={() => {
+                                      const src = trade.payment_screenshot || trade.paymentScreenshot;
                                       const newWindow = window.open();
-                                      if (newWindow) {
-                                        newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot}" alt="Payment Screenshot" /></body></html>`);
+                                      if (newWindow && src) {
+                                        newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${src}" alt="Payment Screenshot" /></body></html>`);
                                       }
                                     }}
                                     className="btn w-full text-xs py-2"
@@ -1009,6 +1072,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                   </button>
                                 )}
                                 <button
+                                  type="button"
                                   onClick={() => openDisputeModal(trade)}
                                   disabled={disputingTrade === trade.id}
                                   className="btn w-full text-xs py-2"
@@ -1017,6 +1081,25 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                   {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
                                 </button>
                               </>
+                            )}
+                            {trade.status === 'PAID_PENDING_RELEASE' && isBuyer && (
+                              <button
+                                type="button"
+                                onClick={() => openDisputeModal(trade)}
+                                disabled={
+                                  disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                }
+                                className="btn w-full text-xs py-2"
+                                style={{
+                                  background:
+                                    disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                      ? '#9ca3af'
+                                      : '#f59e0b',
+                                  color: '#fff',
+                                }}
+                              >
+                                {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                              </button>
                             )}
                             {trade.status === 'COMPLETED' && (
                               <p className="text-xs text-emerald-400 font-semibold text-center">✅ Done</p>
@@ -1125,7 +1208,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                 fontWeight: '600',
                                 textTransform: 'uppercase'
                               }}>
-                                {trade.status === 'COMPLETED' ? '✅ COMPLETED' : trade.status === 'PAID_PENDING_RELEASE' ? '💰 PAID' : trade.status === 'PENDING' ? '⏳ PENDING' : trade.status}
+                                {trade.status === 'COMPLETED' ? '✅ COMPLETED' : trade.status === 'PAID_PENDING_RELEASE' ? '💰 PAID' : trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT' ? '⏳ PENDING' : trade.status}
                               </span>
                             </td>
 
@@ -1154,27 +1237,95 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                             {/* Actions */}
                             <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
-                                {trade.status === 'PENDING' && isBuyer && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedTradeForPayment(trade);
-                                      setPaymentScreenshot(null);
-                                      setShowPaymentModal(true);
-                                    }}
-                                    style={{
-                                      padding: '0.375rem 0.75rem',
-                                      fontSize: '0.7rem',
-                                      fontWeight: '600',
-                                      background: '#fbbf24',
-                                      color: '#1e293b',
-                                      border: 'none',
-                                      borderRadius: '4px',
-                                      cursor: 'pointer',
-                                      width: '100%',
-                                    }}
-                                  >
-                                    ✅ Pay
-                                  </button>
+                                {isBuyer &&
+                                  (trade.status === 'PENDING' ||
+                                    trade.status === 'PENDING_PAYMENT') && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedTradeForPayment(trade);
+                                          setPaymentScreenshot(null);
+                                          setShowPaymentModal(true);
+                                        }}
+                                        style={{
+                                          padding: '0.375rem 0.75rem',
+                                          fontSize: '0.7rem',
+                                          fontWeight: '600',
+                                          background: '#fbbf24',
+                                          color: '#1e293b',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          width: '100%',
+                                        }}
+                                      >
+                                        ✅ Pay
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void cancelTrade(trade.id)}
+                                        disabled={cancellingTrade === trade.id}
+                                        style={{
+                                          padding: '0.375rem 0.75rem',
+                                          fontSize: '0.7rem',
+                                          fontWeight: '600',
+                                          background:
+                                            cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                          color: '#ffffff',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor:
+                                            cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                          width: '100%',
+                                        }}
+                                      >
+                                        {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                      </button>
+                                    </>
+                                  )}
+                                {isSeller && trade.status === 'PENDING' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => void cancelTrade(trade.id)}
+                                      disabled={cancellingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background:
+                                          cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor:
+                                          cancellingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openDisputeModal(trade)}
+                                      disabled={disputingTrade === trade.id}
+                                      style={{
+                                        padding: '0.375rem 0.75rem',
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        background:
+                                          disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor:
+                                          disputingTrade === trade.id ? 'not-allowed' : 'pointer',
+                                        width: '100%',
+                                      }}
+                                    >
+                                      {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                    </button>
+                                  </>
                                 )}
                                 {trade.status === 'PAID_PENDING_RELEASE' && isSeller && (
                                   <>
@@ -1195,12 +1346,14 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                     >
                                       {releasingTokens === trade.id ? '...' : '🚀 Release'}
                                     </button>
-                                    {trade.payment_screenshot && (
+                                    {(trade.payment_screenshot || trade.paymentScreenshot) && (
                                       <button
+                                        type="button"
                                         onClick={() => {
+                                          const src = trade.payment_screenshot || trade.paymentScreenshot;
                                           const newWindow = window.open();
-                                          if (newWindow) {
-                                            newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${trade.payment_screenshot}" alt="Payment Screenshot" /></body></html>`);
+                                          if (newWindow && src) {
+                                            newWindow.document.write(`<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${src}" alt="Payment Screenshot" /></body></html>`);
                                           }
                                         }}
                                         style={{
@@ -1219,6 +1372,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                       </button>
                                     )}
                                     <button
+                                      type="button"
                                       onClick={() => openDisputeModal(trade)}
                                       disabled={disputingTrade === trade.id}
                                       style={{
@@ -1236,6 +1390,34 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                       {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
                                     </button>
                                   </>
+                                )}
+                                {trade.status === 'PAID_PENDING_RELEASE' && isBuyer && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openDisputeModal(trade)}
+                                    disabled={
+                                      disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                    }
+                                    style={{
+                                      padding: '0.375rem 0.75rem',
+                                      fontSize: '0.7rem',
+                                      fontWeight: '600',
+                                      background:
+                                        disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                          ? '#d1d5db'
+                                          : '#f59e0b',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor:
+                                        disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                          ? 'not-allowed'
+                                          : 'pointer',
+                                      width: '100%',
+                                    }}
+                                  >
+                                    {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                  </button>
                                 )}
                                 {trade.status === 'COMPLETED' && (
                                   <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>

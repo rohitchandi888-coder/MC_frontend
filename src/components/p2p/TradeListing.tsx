@@ -495,18 +495,137 @@ const renderPaymentMethod = (methods: any) => {
                           </div>
                           <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
                             {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
-                              <button className="btn btn-yellow w-full text-xs py-2" onClick={() => { setSelectedTradeForPayment(trade); setPaymentScreenshot(null); setShowPaymentModal(true); }} disabled={markingAsPaid === trade.id}>
-                                {markingAsPaid === trade.id ? '...' : '✅ Pay'}
+                              <>
+                                <button
+                                  className="btn btn-yellow w-full text-xs py-2"
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedTradeForPayment(trade);
+                                    setPaymentScreenshot(null);
+                                    setShowPaymentModal(true);
+                                  }}
+                                  disabled={markingAsPaid === trade.id}
+                                >
+                                  {markingAsPaid === trade.id ? '...' : '✅ Pay'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn w-full text-xs py-2"
+                                  onClick={() => void cancelTrade(trade.id)}
+                                  disabled={cancellingTrade === trade.id}
+                                  style={{
+                                    background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                </button>
+                              </>
+                            )}
+                            {isBuyer && trade.status === 'PAID_PENDING_RELEASE' && (
+                              <button
+                                type="button"
+                                className="btn w-full text-xs py-2"
+                                onClick={() => openDisputeModal(trade)}
+                                disabled={disputingTrade === trade.id || !canBuyerCreateDispute(trade)}
+                                style={{
+                                  background:
+                                    disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                      ? '#d1d5db'
+                                      : '#f59e0b',
+                                  color: '#fff',
+                                }}
+                              >
+                                {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
                               </button>
                             )}
                             {isSeller && trade.status === 'PAID_PENDING_RELEASE' && (
-                              <button className="btn w-full text-xs py-2" style={{ background: releasingTokens === trade.id ? '#d1d5db' : '#10b981', color: '#fff' }} onClick={() => openReleaseConfirmModal(trade)} disabled={releasingTokens === trade.id}>
-                                {releasingTokens === trade.id ? '...' : '🚀 Release'}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn w-full text-xs py-2"
+                                  style={{
+                                    background: releasingTokens === trade.id ? '#d1d5db' : '#10b981',
+                                    color: '#fff',
+                                  }}
+                                  onClick={() => openReleaseConfirmModal(trade)}
+                                  disabled={releasingTokens === trade.id}
+                                >
+                                  {releasingTokens === trade.id ? '...' : '🚀 Release'}
+                                </button>
+                                {(trade.payment_screenshot || trade.paymentScreenshot) && (
+                                  <button
+                                    type="button"
+                                    className="btn w-full text-xs py-2"
+                                    style={{ background: '#6366f1', color: '#fff' }}
+                                    onClick={() => {
+                                      const src = trade.payment_screenshot || trade.paymentScreenshot;
+                                      const newWindow = window.open();
+                                      if (newWindow && src) {
+                                        newWindow.document.write(
+                                          `<html><head><title>Payment Screenshot - Trade #${trade.id}</title><style>body { margin: 0; padding: 20px; background: #f3f4f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; } img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }</style></head><body><img src="${src}" alt="Payment Screenshot" /></body></html>`,
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    📸 View
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn w-full text-xs py-2"
+                                  onClick={() => openDisputeModal(trade)}
+                                  disabled={disputingTrade === trade.id}
+                                  style={{
+                                    background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                </button>
+                              </>
+                            )}
+                            {isSeller && trade.status === 'PENDING' && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn w-full text-xs py-2"
+                                  onClick={() => void cancelTrade(trade.id)}
+                                  disabled={cancellingTrade === trade.id}
+                                  style={{
+                                    background: cancellingTrade === trade.id ? '#d1d5db' : '#ef4444',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {cancellingTrade === trade.id ? '...' : '❌ Cancel'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn w-full text-xs py-2"
+                                  onClick={() => openDisputeModal(trade)}
+                                  disabled={disputingTrade === trade.id}
+                                  style={{
+                                    background: disputingTrade === trade.id ? '#d1d5db' : '#f59e0b',
+                                    color: '#fff',
+                                  }}
+                                >
+                                  {disputingTrade === trade.id ? '...' : '⚠️ Dispute'}
+                                </button>
+                              </>
                             )}
                             {trade.status === 'COMPLETED' && (
                               <span style={{ fontSize: 12, color: '#059669', fontWeight: 600, textAlign: 'center' }}>
                                 ✅ Received {feeAmount > 0 ? `${amountReceived.toFixed(4)} FDA` : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                              </span>
+                            )}
+                            {trade.status === 'DISPUTED' && (
+                              <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600, textAlign: 'center' }}>
+                                ⚠️ Disputed
+                              </span>
+                            )}
+                            {trade.status === 'CANCELLED' && (
+                              <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>
+                                ❌ Cancelled
                               </span>
                             )}
                           </div>

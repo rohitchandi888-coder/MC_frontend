@@ -42,6 +42,22 @@ const popularTokens = [
   },
 ];
 
+/** BSC / modern nodes may leave legacy gasPrice null — use maxFeePerGas or getGasPrice(). */
+async function getEffectiveGasPriceWei(
+  provider: ethers.JsonRpcProvider
+): Promise<bigint> {
+  const fd = await provider.getFeeData();
+  const w = fd.gasPrice ?? fd.maxFeePerGas ?? fd.maxPriorityFeePerGas;
+  if (w != null && w > 0n) return w;
+  try {
+    const legacy = await provider.getGasPrice();
+    if (legacy > 0n) return legacy;
+  } catch {
+    /* ignore */
+  }
+  return 0n;
+}
+
 type NavTabGlyph = "home" | "explore" | "activity" | "profile";
 
 /** Inline SVGs — avoids Font Awesome webfont failures (broken “image” placeholders in some browsers). */
@@ -165,6 +181,7 @@ import {
   saveEncryptedWallet,
   saveWalletMeta,
   loadCustomTokens,
+  getMergedLocalCustomTokens,
   addCustomToken,
   removeCustomToken,
   toggleCustomToken,
@@ -356,6 +373,8 @@ export const Dashboard: React.FC = () => {
   const [tokenAddress, setTokenAddress] = useState(FDA_TOKEN_ADDRESS);
   const [estimatedGas, setEstimatedGas] = useState<string | null>(null);
   const [estimatingGas, setEstimatingGas] = useState(false);
+  /** Bumped when wallet unlock state changes so gas re-estimates (ref alone does not re-run effects). */
+  const [walletUnlockEpoch, setWalletUnlockEpoch] = useState(0);
 
   const [nativeBalance, setNativeBalance] = useState<string | null>(null);
   const [fdaBalance, setFdaBalance] = useState<string | null>(null);
@@ -367,6 +386,8 @@ export const Dashboard: React.FC = () => {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [checkAddress, setCheckAddress] = useState('');
   const [transferType, setTransferType] = useState<'internal' | 'onchain'>('internal');
+  /** When true, mobile Send skips the token picker (asset already chosen from home row). */
+  const [sendSkipAssetPickerStep, setSendSkipAssetPickerStep] = useState(false);
   const [recipientFdaWallet, setRecipientFdaWallet] = useState<any>(null);
 
   const [registeredFdaWallets, setRegisteredFdaWallets] = useState<any[]>([]);
@@ -409,6 +430,11 @@ export const Dashboard: React.FC = () => {
   const openUnlockTab = useCallback((returnTab?: Tab) => {
     setUnlockReturnTab(returnTab || activeTab);
     setActiveTab('unlock');
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'unlock') return;
+    if (activeTab !== 'send') setSendSkipAssetPickerStep(false);
   }, [activeTab]);
 
 
@@ -553,7 +579,7 @@ export const Dashboard: React.FC = () => {
     }
   }, [allWallets, selectedUnlockWalletId]);
 
-  const fetchBalances = async (address: string) => {
+  const fetchBalances = async (address: string, apiTokensOverride?: CustomToken[]) => {
     if (!address || !ethers.isAddress(address)) return;
 
     // Check if address belongs to user's own wallets
@@ -586,8 +612,21 @@ export const Dashboard: React.FC = () => {
         setFdaBalance('Error');
       }
 
-      // Fetch custom token balances
-      const tokens = loadCustomTokens(auth?.user.id);
+      // Custom tokens: localStorage (global + per-user) AND React list (API), so API-only tokens (e.g. JW) get balanceOf.
+      const tokenMap = new Map<string, CustomToken>();
+      for (const t of getMergedLocalCustomTokens(auth?.user.id)) {
+        tokenMap.set(t.address.toLowerCase(), t);
+      }
+      for (const t of customTokens) {
+        tokenMap.set(t.address.toLowerCase(), t);
+      }
+      if (apiTokensOverride?.length) {
+        for (const t of apiTokensOverride) {
+          tokenMap.set(t.address.toLowerCase(), t);
+        }
+      }
+      const tokens = Array.from(tokenMap.values());
+
       const balances: Record<string, string> = {};
       for (const token of tokens) {
         const key = token.address.toLowerCase();
@@ -1381,18 +1420,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [sendTo, assetType, tokenAddress, activeTab, auth]);
 
-  // Estimate gas when send form inputs change (only for on-chain)
-  useEffect(() => {
-    if (activeTab === 'send' && transferType === 'onchain' && unlockedPrivateKeyRef.current && sendTo.trim() && ethers.isAddress(sendTo.trim())) {
-      const timer = setTimeout(() => {
-        estimateGasAndMax();
-      }, 500); // Debounce
-      return () => clearTimeout(timer);
-    } else {
-      setEstimatedGas(null);
-    }
-  }, [sendTo, assetType, tokenAddress, activeTab, transferType]);
-
   useEffect(() => {
     if (activeTab === 'p2p' && auth) {
       // Only load trades and balance for P2P Trading tab (for creating offers)
@@ -1845,6 +1872,7 @@ export const Dashboard: React.FC = () => {
               unlockExtraWord.trim(),
             );
             unlockedPrivateKeyRef.current = privateKey;
+            setWalletUnlockEpoch((n) => n + 1);
 
             // Also restore to local storage if not already there
             const localWallets = getUserWallets();
@@ -1959,6 +1987,7 @@ export const Dashboard: React.FC = () => {
                       unlockExtraWord.trim(),
                     );
                     unlockedPrivateKeyRef.current = privateKey;
+                    setWalletUnlockEpoch((n) => n + 1);
                     showSuccessModal(`✅ Wallet restored from database and unlocked! Address: ${walletAddressFromPhrase}`);
                     setUnlockPassword('');
                     setUnlockExtraWord('');
@@ -2004,6 +2033,7 @@ export const Dashboard: React.FC = () => {
                     unlockExtraWord.trim(),
                   );
                   unlockedPrivateKeyRef.current = privateKey;
+                  setWalletUnlockEpoch((n) => n + 1);
 
                   // Also restore to local storage if not already there
                   const localWallets = getUserWallets();
@@ -2127,6 +2157,7 @@ export const Dashboard: React.FC = () => {
         unlockExtraWord.trim(),
       );
       unlockedPrivateKeyRef.current = privateKey;
+      setWalletUnlockEpoch((n) => n + 1);
       showSuccessModal(`✅ Wallet unlocked in memory. Address: ${encrypted.address}`);
 
       // Clear fields after successful unlock
@@ -2808,8 +2839,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const estimateGasAndMax = async () => {
-    // Internal FDA transfers are off-chain ledger moves; no chain gas estimate needed.
+  const estimateGasAndMax = useCallback(async () => {
     if (
       transferType === 'internal' &&
       assetType === 'token' &&
@@ -2818,7 +2848,16 @@ export const Dashboard: React.FC = () => {
       setEstimatedGas(null);
       return;
     }
-    if (!unlockedPrivateKeyRef.current || !sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
+    if (!sendTo.trim() || !ethers.isAddress(sendTo.trim())) {
+      setEstimatedGas(null);
+      return;
+    }
+
+    const signingAddr = unlockedPrivateKeyRef.current
+      ? new ethers.Wallet(unlockedPrivateKeyRef.current).address
+      : storedMeta?.address?.trim() || null;
+
+    if (!signingAddr || !ethers.isAddress(signingAddr)) {
       setEstimatedGas(null);
       return;
     }
@@ -2826,46 +2865,49 @@ export const Dashboard: React.FC = () => {
     try {
       setEstimatingGas(true);
       const provider = new ethers.JsonRpcProvider(DEFAULT_RPC_URL);
-      const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
-      const senderBalance = await provider.getBalance(wallet.address);
-      const balanceEth = parseFloat(ethers.formatEther(senderBalance));
-      if (!Number.isFinite(balanceEth) || balanceEth <= 0) {
-        // On-chain estimation requires native gas balance (BNB).
-        setEstimatedGas(null);
-        return;
-      }
+
+      let gasLimit: bigint;
 
       if (assetType === 'native') {
-        // Estimate gas for a small native transfer
-        const testAmount = ethers.parseEther('0.001');
-        const gasEstimate = await provider.estimateGas({
-          from: wallet.address,
+        const testValue = ethers.parseEther('0.001');
+        gasLimit = await provider.estimateGas({
+          from: signingAddr,
           to: sendTo.trim(),
-          value: testAmount,
+          value: testValue,
         });
-        const gasPrice = await provider.getFeeData();
-        const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
-        const gasCostEth = parseFloat(ethers.formatEther(gasCost));
-        setEstimatedGas(gasCostEth.toFixed(6));
       } else {
-        // Estimate gas for token transfer
-        if (!tokenAddress.trim() || !ethers.isAddress(tokenAddress.trim())) {
+        const tok = tokenAddress.trim();
+        if (!ethers.isAddress(tok)) {
           setEstimatedGas(null);
           return;
         }
-        // Must use a signer so estimateGas runs as msg.sender = wallet (provider-only => from = zero address → BEP20 revert)
-        const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, wallet);
-        const testAmount = ethers.parseUnits('1', await contract.decimals());
-        // Estimate with self-recipient to avoid false reverts from recipient-specific token rules.
-        const gasEstimate = await contract.transfer.estimateGas(wallet.address, testAmount);
-        const gasPrice = await provider.getFeeData();
-        const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
-        const gasCostEth = parseFloat(ethers.formatEther(gasCost));
-        setEstimatedGas(gasCostEth.toFixed(6));
+        if (unlockedPrivateKeyRef.current) {
+          const wallet = new ethers.Wallet(unlockedPrivateKeyRef.current, provider);
+          const contract = new ethers.Contract(tok, ERC20_ABI, wallet);
+          const testAmount = ethers.parseUnits('1', await contract.decimals());
+          gasLimit = await contract.transfer.estimateGas(wallet.address, testAmount);
+        } else {
+          const contractRead = new ethers.Contract(tok, ERC20_ABI, provider);
+          const dec = await contractRead.decimals();
+          const testAmount = ethers.parseUnits('1', dec);
+          const iface = new ethers.Interface(ERC20_ABI);
+          const data = iface.encodeFunctionData('transfer', [signingAddr, testAmount]);
+          gasLimit = await provider.estimateGas({
+            from: signingAddr,
+            to: tok,
+            data,
+          });
+        }
       }
+
+      const weiPerGas = await getEffectiveGasPriceWei(provider);
+      if (weiPerGas === 0n) {
+        setEstimatedGas(null);
+        return;
+      }
+      const gasCostEth = parseFloat(ethers.formatEther(gasLimit * weiPerGas));
+      setEstimatedGas(gasCostEth.toFixed(6));
     } catch (err) {
-      // Some tokens intentionally revert estimateGas for certain transfer paths.
-      // This should not block the send flow; keep UI quiet and continue.
       const msg = String((err as any)?.message || '');
       if (
         !msg.includes('execution reverted') &&
@@ -2879,7 +2921,21 @@ export const Dashboard: React.FC = () => {
     } finally {
       setEstimatingGas(false);
     }
-  };
+  }, [transferType, assetType, tokenAddress, sendTo, storedMeta?.address]);
+
+  useEffect(() => {
+    if (activeTab === 'send' && transferType === 'onchain' && sendTo.trim() && ethers.isAddress(sendTo.trim())) {
+      const timer = setTimeout(() => {
+        void estimateGasAndMax();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    setEstimatedGas(null);
+  }, [activeTab, transferType, sendTo, assetType, tokenAddress, walletUnlockEpoch, estimateGasAndMax]);
+
+  const requestGasEstimate = useCallback(() => {
+    void estimateGasAndMax();
+  }, [estimateGasAndMax]);
 
   const handleMaxAmount = async () => {
     if (!unlockedPrivateKeyRef.current || !storedMeta?.address) {
@@ -3528,15 +3584,18 @@ export const Dashboard: React.FC = () => {
         );
       }
 
-      setCustomTokens(
-        data.tokens.map((t: any) => ({
-          address: t.address,
-          symbol: t.symbol,
-          name: t.name,
-          status: t.status,
-          enabled: t.status === "ON"
-        }))
-      );
+      const mapped = data.tokens.map((t: any) => ({
+        address: t.address,
+        symbol: t.symbol,
+        name: t.name,
+        status: t.status,
+        enabled: t.status === "ON"
+      }));
+      setCustomTokens(mapped);
+
+      if (storedMeta?.address && ethers.isAddress(storedMeta.address)) {
+        await fetchBalances(storedMeta.address, mapped);
+      }
 
     }
     catch (err) {
@@ -3698,6 +3757,7 @@ export const Dashboard: React.FC = () => {
       showSuccessModal('✅ Wallet deleted successfully');
       // Clear unlocked key if it was for the deleted wallet
       unlockedPrivateKeyRef.current = null;
+      setWalletUnlockEpoch((n) => n + 1);
       // Refresh balances
       const userWallets = getUserWallets();
       const activeId = getActiveWalletId();
@@ -3824,6 +3884,42 @@ export const Dashboard: React.FC = () => {
   
     return () => clearInterval(interval);
   }, []);
+
+  /** USD line on mobile home for API/custom tokens (popularTokens effect does not cover JW, etc.). */
+  useEffect(() => {
+    let cancelled = false;
+    const addrs = customTokens
+      .map((t) => t.address)
+      .filter((a) => a && ethers.isAddress(a));
+    if (addrs.length === 0) return;
+    const run = async () => {
+      const additions: Record<string, number> = {};
+      await Promise.all(
+        addrs.map(async (addr) => {
+          try {
+            const res = await fetch(
+              `https://api.dexscreener.com/latest/dex/tokens/${addr}`
+            );
+            const data = await res.json();
+            const price = getBestPrice(data);
+            if (Number.isFinite(price) && price > 0) {
+              additions[addr.toLowerCase()] = price;
+              additions[addr] = price;
+            }
+          } catch {
+            /* ignore */
+          }
+        })
+      );
+      if (!cancelled && Object.keys(additions).length > 0) {
+        setTokenPrices((prev) => ({ ...prev, ...additions }));
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [customTokens]);
 
   const mobileWalletTitle = useMemo(() => {
     const raw = storedMeta?.label?.trim();
@@ -4022,7 +4118,14 @@ export const Dashboard: React.FC = () => {
               actions={[
                 { label: "Buy", icon: "fa-solid fa-dollar-sign", changeTab: () => handleChangeTab('p2p') },
                 { label: "Swap", icon: "fa-solid fa-right-left", changeTab: () => setShowSwapModal(true) },
-                { label: "Send", icon: "fa-solid fa-arrow-up-right-from-square", changeTab: () => handleChangeTab('send') },
+                {
+                  label: "Send",
+                  icon: "fa-solid fa-arrow-up-right-from-square",
+                  changeTab: () => {
+                    setSendSkipAssetPickerStep(false);
+                    handleChangeTab('send');
+                  },
+                },
                 { label: "Receive", icon: "fa-solid fa-arrow-down", changeTab: () => setShowWalletModal(true) },
               ]}
               tokens={popularTokens}
@@ -4035,11 +4138,40 @@ export const Dashboard: React.FC = () => {
               indiAction={() => setActiveTab('tokens')}
               internalFdaBalance={internalFdaBalance}
               setActiveTab={handleChangeTab}
-              onFdaClick={() => {
-                setAssetType('token');
-                setTokenAddress(FDA_TOKEN_ADDRESS);
-                setTransferType('internal');
-                setActiveTab('send');
+              onAssetClick={(row) => {
+                switch (row.assetKind) {
+                  case 'bnb':
+                    setSendSkipAssetPickerStep(true);
+                    setAssetType('native');
+                    setTransferType('onchain');
+                    handleChangeTab('send');
+                    break;
+                  case 'fda-internal':
+                    setSendSkipAssetPickerStep(true);
+                    setAssetType('token');
+                    setTokenAddress(FDA_TOKEN_ADDRESS);
+                    setTransferType('internal');
+                    handleChangeTab('send');
+                    break;
+                  case 'fda-chain':
+                    setSendSkipAssetPickerStep(true);
+                    setAssetType('token');
+                    setTokenAddress(FDA_TOKEN_ADDRESS);
+                    setTransferType('onchain');
+                    handleChangeTab('send');
+                    break;
+                  case 'custom':
+                    if (row.tokenAddress) {
+                      setSendSkipAssetPickerStep(true);
+                      setAssetType('token');
+                      setTokenAddress(row.tokenAddress);
+                      setTransferType('onchain');
+                      handleChangeTab('send');
+                    }
+                    break;
+                  default:
+                    break;
+                }
               }}
             />
             </div>
@@ -4200,6 +4332,7 @@ export const Dashboard: React.FC = () => {
           {activeTab === 'send' && (
             <SendTransfer
               key={`send-${unlockedPrivateKeyRef.current ? "unlocked" : "locked"}`}
+              requestGasEstimate={requestGasEstimate}
               storedMeta={storedMeta}
               allWallets={allWallets}
               auth={auth}
@@ -4227,7 +4360,11 @@ export const Dashboard: React.FC = () => {
               customTokens={customTokens}
               customTokenBalances={customTokenBalances}
               fdaPrice={fdaPrice}
-              onExit={() => setActiveTab('dashboard')}
+              skipAssetPickerStep={sendSkipAssetPickerStep}
+              onExit={() => {
+                setSendSkipAssetPickerStep(false);
+                setActiveTab('dashboard');
+              }}
             />
           )}
 
@@ -4352,6 +4489,8 @@ export const Dashboard: React.FC = () => {
               myTrades={myTrades}
               releasingTokens={releasingTokens}
               disputingTrade={disputingTrade}
+              cancellingTrade={cancellingTrade}
+              cancelTrade={cancelTrade}
               setSelectedTradeForPayment={setSelectedTradeForPayment}
               setPaymentScreenshot={setPaymentScreenshot}
               setShowPaymentModal={setShowPaymentModal}

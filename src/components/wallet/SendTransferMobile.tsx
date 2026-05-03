@@ -61,6 +61,10 @@ interface SendTransferMobileProps {
   registerRecipientWallet: (address: string, label?: string) => Promise<boolean | void>;
   onUnlock: () => void;
   onExit: () => void;
+  /** Refresh network fee estimate (e.g. when opening review or after unlock). */
+  requestGasEstimate?: () => void;
+  /** Parent already set asset (e.g. tapped BNB/JW on home) — go Recipient → Amount, not asset list. */
+  skipAssetPickerStep?: boolean;
 }
 
 export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
@@ -92,6 +96,8 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
   registerRecipientWallet,
   onUnlock,
   onExit,
+  requestGasEstimate,
+  skipAssetPickerStep = false,
 }) => {
   const [step, setStep] = useState<SendStep>("recipient");
   const [assetSearch, setAssetSearch] = useState("");
@@ -99,10 +105,45 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
   const [showFiat, setShowFiat] = useState(false);
   const [sending, setSending] = useState(false);
 
+  useEffect(() => {
+    if (step === "review" && transferType === "onchain") {
+      requestGasEstimate?.();
+    }
+  }, [step, transferType, requestGasEstimate]);
+
   const otherWallets = useMemo(
     () => allWallets.filter((w) => w.id !== storedMeta?.id),
     [allWallets, storedMeta?.id],
   );
+
+  /** Match "From": prefer wallet label; for MC recipients use API walletLabel before profile name. */
+  const fromWalletName = useMemo(() => {
+    const raw = storedMeta?.label?.trim();
+    if (raw && !/^new$/i.test(raw)) return raw;
+    if (storedMeta?.address) return shortAddr(storedMeta.address);
+    return "Your wallet";
+  }, [storedMeta]);
+
+  const toWalletName = useMemo(() => {
+    const trimmed = sendTo.trim();
+    if (!trimmed || !ethers.isAddress(trimmed)) return trimmed || "—";
+    const lower = trimmed.toLowerCase();
+    const localIdx = allWallets.findIndex((w) => w.address.toLowerCase() === lower);
+    if (localIdx >= 0) {
+      return walletDisplayName(allWallets[localIdx], localIdx);
+    }
+    const rf = recipientFdaWallet as {
+      walletLabel?: string;
+      fullName?: string;
+      email?: string;
+    } | null;
+    if (rf?.walletLabel && String(rf.walletLabel).trim())
+      return String(rf.walletLabel).trim();
+    if (rf?.fullName && String(rf.fullName).trim())
+      return String(rf.fullName).trim();
+    if (rf?.email && String(rf.email).trim()) return String(rf.email).trim();
+    return shortAddr(trimmed);
+  }, [sendTo, allWallets, recipientFdaWallet]);
 
   const baseAssets: AssetRow[] = useMemo(
     () => [
@@ -280,10 +321,15 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
 
   const goBack = () => {
     if (step === "asset") setStep("recipient");
-    else if (step === "amount") setStep("asset");
+    else if (step === "amount")
+      setStep(skipAssetPickerStep ? "recipient" : "asset");
     else if (step === "review") setStep("amount");
     else onExit();
   };
+
+  const recipientContinueStep: SendStep = skipAssetPickerStep
+    ? "amount"
+    : "asset";
 
   const shell: React.CSSProperties = {
     minHeight: "min(100dvh, 100vh)",
@@ -472,7 +518,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   type="button"
                   onClick={() => {
                     setSendTo(w.address);
-                    setStep("asset");
+                    setStep(recipientContinueStep);
                   }}
                   style={{
                     width: "100%",
@@ -527,7 +573,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
             <button
               type="button"
               disabled={!sendTo.trim() || !ethers.isAddress(sendTo.trim())}
-              onClick={() => setStep("asset")}
+              onClick={() => setStep(recipientContinueStep)}
               style={{
                 width: "100%",
                 padding: 14,
@@ -1004,31 +1050,10 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 marginBottom: 12,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: MM.textSecondary }}>From</div>
-                  <div style={{ fontWeight: 700 }}>
-                    {storedMeta?.label?.trim() && !/^new$/i.test(storedMeta.label.trim())
-                      ? storedMeta.label
-                      : "Your wallet"}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: MM.textSecondary }}>To</div>
-                  <div style={{ fontWeight: 700 }}>
-                    {recipientFdaWallet &&
-                    (recipientFdaWallet.fullName ||
-                      recipientFdaWallet.email ||
-                      recipientFdaWallet.walletLabel)
-                      ? String(
-                          recipientFdaWallet.fullName ||
-                            recipientFdaWallet.email ||
-                            recipientFdaWallet.walletLabel,
-                        )
-                      : shortAddr(sendTo)}
-                  </div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: MM.textSecondary }}>From</div>
+                <div style={{ fontWeight: 700 }}>{fromWalletName}</div>
+                {storedMeta?.address && (
                   <div
                     style={{
                       fontSize: 12,
@@ -1037,8 +1062,22 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                       marginTop: 4,
                     }}
                   >
-                    {shortAddr(sendTo)}
+                    {shortAddr(storedMeta.address)}
                   </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: MM.textSecondary }}>To</div>
+                <div style={{ fontWeight: 700 }}>{toWalletName}</div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: MM.textSecondary,
+                    fontFamily: "ui-monospace, monospace",
+                    marginTop: 4,
+                  }}
+                >
+                  {shortAddr(sendTo)}
                 </div>
               </div>
             </div>

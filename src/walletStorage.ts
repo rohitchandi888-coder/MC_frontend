@@ -270,6 +270,20 @@ export function loadCustomTokens(userId?: number | null): CustomToken[] {
   }
 }
 
+/** Global + per-user localStorage lists merged (per-user row wins on same address). */
+export function getMergedLocalCustomTokens(userId?: number | null): CustomToken[] {
+  const map = new Map<string, CustomToken>();
+  for (const t of loadCustomTokens(null)) {
+    map.set(t.address.toLowerCase(), t);
+  }
+  if (userId) {
+    for (const t of loadCustomTokens(userId)) {
+      map.set(t.address.toLowerCase(), t);
+    }
+  }
+  return Array.from(map.values());
+}
+
 export function addCustomToken(token: CustomToken, userId?: number | null) {
   const tokens = loadCustomTokens(userId);
   if (tokens.find((t) => t.address.toLowerCase() === token.address.toLowerCase())) {

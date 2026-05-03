@@ -206,6 +206,22 @@ interface ActionItem {
 
 type PopularToken = { symbol: string; name: string; address: string };
 
+/** Home token row — used to open Send with the right asset (BNB vs FDA vs custom). */
+export type HomeHoldingRow = {
+  key: string;
+  symbol: string;
+  name: string;
+  amountStr: string;
+  value: number;
+  quoteCurrency: "USD" | "INR";
+  changePct: number | null;
+  mainIcon: string;
+  subIcon?: string;
+  assetKind: "bnb" | "fda-chain" | "fda-internal" | "custom";
+  /** Set for FDA rows and custom tokens (BEP20 address). */
+  tokenAddress: string | null;
+};
+
 interface MobileDashboardProps {
   auth: AuthState | null;
   price: number | null;
@@ -221,6 +237,9 @@ interface MobileDashboardProps {
   tokenPrices?: Record<string, number>;
   customTokens?: CustomToken[];
   customTokenBalances?: Record<string, string>;
+  /** Opens Send tab with BNB / FDA / custodial FDA / custom token preset. */
+  onAssetClick?: (row: HomeHoldingRow) => void;
+  /** @deprecated Prefer onAssetClick — kept for older callers */
   onFdaClick?: () => void;
 }
 
@@ -279,6 +298,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
   tokens = [],
   customTokens = [],
   customTokenBalances = {},
+  onAssetClick,
   onFdaClick,
 }) => {
   const [showNetworkModal, setShowNetworkModal] = useState(false);
@@ -305,17 +325,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
   };
 
   const holdingRows = useMemo(() => {
-    const rows: {
-      key: string;
-      symbol: string;
-      name: string;
-      amountStr: string;
-      value: number;
-      quoteCurrency: "USD" | "INR";
-      changePct: number | null;
-      mainIcon: string;
-      subIcon?: string;
-    }[] = [];
+    const rows: HomeHoldingRow[] = [];
 
     const bnbPx = priceForAddress(BNB_NATIVE);
     const nb = parseFloat(nativeBalance || "0");
@@ -330,6 +340,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         changePct: null,
         mainIcon: BNB,
         subIcon: Radium,
+        assetKind: "bnb",
+        tokenAddress: null,
       });
     }
 
@@ -351,6 +363,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         changePct: null,
         mainIcon: FDA_LOGO_URL,
         subIcon: pancakeswap,
+        assetKind: "fda-chain",
+        tokenAddress: FDA_TOKEN_ADDRESS,
       });
     }
 
@@ -366,18 +380,36 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         changePct: null,
         mainIcon: FDA_LOGO_URL,
         subIcon: hydro,
+        assetKind: "fda-internal",
+        tokenAddress: FDA_TOKEN_ADDRESS,
       });
     }
 
     for (const t of customTokens) {
       const addr = t.address;
       const balStr =
-        customTokenBalances[addr] ??
         customTokenBalances[addr.toLowerCase()] ??
-        customTokenBalances[addr.toUpperCase()];
-      if (!balStr) continue;
+        customTokenBalances[addr] ??
+        customTokenBalances[addr.toUpperCase()] ??
+        "0";
+      if (balStr === "Error") {
+        rows.push({
+          key: `cust-${addr}`,
+          symbol: t.symbol || "?",
+          name: t.name || t.symbol || "?",
+          amountStr: "—",
+          value: 0,
+          quoteCurrency: "USD",
+          changePct: null,
+          mainIcon: ETH,
+          subIcon: osmo,
+          assetKind: "custom",
+          tokenAddress: addr,
+        });
+        continue;
+      }
       const bal = parseFloat(balStr);
-      if (!(bal > 1e-18)) continue;
+      if (!Number.isFinite(bal) || bal < 0) continue;
       const px = priceForAddress(addr);
       const sym = t.symbol || "?";
       let mainIcon = ETH;
@@ -393,6 +425,8 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
         changePct: null,
         mainIcon,
         subIcon: osmo,
+        assetKind: "custom",
+        tokenAddress: addr,
       });
     }
 
@@ -912,7 +946,22 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                 ? holdingRows.map((row) => (
                     <div
                       key={row.key}
+                      role={onAssetClick || (row.symbol === "FDA" && onFdaClick) ? "button" : undefined}
+                      tabIndex={onAssetClick || (row.symbol === "FDA" && onFdaClick) ? 0 : undefined}
                       onClick={() => {
+                        if (onAssetClick) {
+                          onAssetClick(row);
+                          return;
+                        }
+                        if (row.symbol === "FDA" && onFdaClick) onFdaClick();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return;
+                        e.preventDefault();
+                        if (onAssetClick) {
+                          onAssetClick(row);
+                          return;
+                        }
                         if (row.symbol === "FDA" && onFdaClick) onFdaClick();
                       }}
                       style={{
@@ -921,7 +970,10 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                         alignItems: "center",
                         padding: "12px 10px",
                         borderRadius: 10,
-                        cursor: row.symbol === "FDA" ? "pointer" : "default",
+                        cursor:
+                          onAssetClick || (row.symbol === "FDA" && onFdaClick)
+                            ? "pointer"
+                            : "default",
                       }}
                     >
                       <div style={{ display: "flex", gap: 12, minWidth: 0 }}>
