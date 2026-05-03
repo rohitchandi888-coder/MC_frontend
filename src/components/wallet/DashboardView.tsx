@@ -323,7 +323,9 @@ useEffect(() => {
                   .filter(token => token.status === "GLOBAL" || token.enabled)
                   .map((token) => {
 
-                    const balance = customTokenBalances[token.address];
+                    const balance =
+                      customTokenBalances[token.address.toLowerCase()] ??
+                      customTokenBalances[token.address];
 
                     return (
                       <div key={token.address} className="balance-card">

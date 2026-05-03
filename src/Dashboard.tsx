@@ -590,14 +590,15 @@ export const Dashboard: React.FC = () => {
       const tokens = loadCustomTokens(auth?.user.id);
       const balances: Record<string, string> = {};
       for (const token of tokens) {
+        const key = token.address.toLowerCase();
         try {
           const tokenContract = new ethers.Contract(token.address, ERC20_ABI, provider);
           const decimals = await tokenContract.decimals();
           const tokenBal = await tokenContract.balanceOf(address);
-          balances[token.address] = ethers.formatUnits(tokenBal, decimals);
+          balances[key] = ethers.formatUnits(tokenBal, decimals);
         } catch (err) {
           console.error(`Failed to fetch balance for ${token.symbol}:`, err);
-          balances[token.address] = 'Error';
+          balances[key] = 'Error';
         }
       }
       setCustomTokenBalances(balances);
@@ -2157,10 +2158,14 @@ export const Dashboard: React.FC = () => {
         showErrorModal(`⚠️ ${data.error || 'Failed to load offers'}`);
         return;
       }
-      console.log('Loaded offers:', data);
-      setOffers(data);
+      const list = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) {
+        console.warn('loadOffers: expected array, got', typeof data, data);
+      }
+      console.log('Loaded offers:', list);
+      setOffers(list);
     } catch {
-      showErrorModal('⚠️ Unable to load offers.');
+      showErrorModal('⚠️ Unable to load offers (check backend is running and CORS / API URL).');
     } finally {
       setLoadingOffers(false);
     }
@@ -2422,6 +2427,10 @@ export const Dashboard: React.FC = () => {
       setOfferMinLimit('');
       setOfferMaxLimit('');
       setOfferPaymentMethods('');
+      // So the new offer is not hidden by an existing BUY/SELL filter or search text
+      setOffersFilterType('ALL');
+      setOffersSearch('');
+      setOffersPage(1);
       await loadOffers();
       if (storedMeta?.address) {
         await fetchInternalBalance(storedMeta.address); // Refresh internal FDA balance
@@ -2844,7 +2853,8 @@ export const Dashboard: React.FC = () => {
           setEstimatedGas(null);
           return;
         }
-        const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, provider);
+        // Must use a signer so estimateGas runs as msg.sender = wallet (provider-only => from = zero address → BEP20 revert)
+        const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, wallet);
         const testAmount = ethers.parseUnits('1', await contract.decimals());
         // Estimate with self-recipient to avoid false reverts from recipient-specific token rules.
         const gasEstimate = await contract.transfer.estimateGas(wallet.address, testAmount);
@@ -2906,20 +2916,28 @@ export const Dashboard: React.FC = () => {
           showErrorModal('⚠️ Enter token contract address first.');
           return;
         }
-        const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, provider);
-        const decimals = await contract.decimals();
-        const tokenBalance = await contract.balanceOf(wallet.address);
+        const tokenAddr = tokenAddress.trim();
+        const contractRead = new ethers.Contract(tokenAddr, ERC20_ABI, provider);
+        const decimals = await contractRead.decimals();
+        const tokenBalance = await contractRead.balanceOf(wallet.address);
         const balanceFormatted = ethers.formatUnits(tokenBalance, decimals);
         setSendAmount(parseFloat(balanceFormatted).toFixed(4));
 
-        // Also estimate gas
-        const testAmount = ethers.parseUnits('1', decimals);
-        const gasEstimate = await contract.transfer.estimateGas(wallet.address, testAmount);
-        const gasPrice = await provider.getFeeData();
-        const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
-        const gasCostEth = parseFloat(ethers.formatEther(gasCost));
-        setEstimatedGas(gasCostEth.toFixed(6));
-        showSuccessModal(`✅ Max tokens: ${parseFloat(balanceFormatted).toFixed(4)} (gas: ~${gasCostEth.toFixed(6)} BNB)`);
+        // Gas estimate must use signer contract — provider-only makes transfer() simulate from 0x0 (BEP20 revert)
+        try {
+          const contractSigner = new ethers.Contract(tokenAddr, ERC20_ABI, wallet);
+          const testAmount = ethers.parseUnits('1', decimals);
+          const gasEstimate = await contractSigner.transfer.estimateGas(wallet.address, testAmount);
+          const gasPrice = await provider.getFeeData();
+          const gasCost = gasEstimate * (gasPrice.gasPrice || 0n);
+          const gasCostEth = parseFloat(ethers.formatEther(gasCost));
+          setEstimatedGas(gasCostEth.toFixed(6));
+          showSuccessModal(`✅ Max tokens: ${parseFloat(balanceFormatted).toFixed(4)} (gas: ~${gasCostEth.toFixed(6)} BNB)`);
+        } catch (gasErr) {
+          console.warn('Token gas estimate skipped:', gasErr);
+          setEstimatedGas(null);
+          showSuccessModal(`✅ Max tokens: ${parseFloat(balanceFormatted).toFixed(4)}`);
+        }
       }
     } catch (err) {
       console.error('Max amount error:', err);
@@ -3565,7 +3583,7 @@ export const Dashboard: React.FC = () => {
     if (removeCustomToken(address, auth?.user.id)) {
       setCustomTokens(loadCustomTokens(auth?.user.id));
       const newBalances = { ...customTokenBalances };
-      delete newBalances[address];
+      delete newBalances[address.toLowerCase()];
       setCustomTokenBalances(newBalances);
       showSuccessModal('✅ Token removed successfully.');
     }
@@ -3716,12 +3734,12 @@ export const Dashboard: React.FC = () => {
     const assetSymbol = offer.assetSymbol || offer.asset_symbol || '';
     const fiatCurrency = offer.fiatCurrency || offer.fiat_currency || '';
     const paymentMethods = offer.paymentMethods || offer.payment_methods || '';
-    const offerType = offer.type || '';
-    const status = offer.status || 'OPEN';
+    const offerType = String(offer.type || '').toUpperCase().trim();
+    const status = String(offer.status || 'OPEN').toUpperCase().trim();
 
     // CRITICAL: Filter out offers with 0 remaining/available amount
-    const remaining = parseFloat(offer.remaining || offer.available_amount || 0);
-    if (remaining <= 0) {
+    const remaining = parseFloat(String(offer.remaining ?? offer.available_amount ?? 0));
+    if (!Number.isFinite(remaining) || remaining <= 0) {
       return false; // Don't show offers with 0 or negative available amount
     }
 

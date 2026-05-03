@@ -243,7 +243,7 @@ const renderPaymentMethod = (methods: any) => {
           <div className="offer-form-card mb-6">
             <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
               <h3 className="offer-form-title">
-                Available Offers ({filteredOffers.length})
+                Available Offers ({loadingOffers ? '…' : filteredOffers.length})
               </h3>
               <button
                 className={`btn btn-yellow text-xs py-2 px-4 flex items-center gap-2 ${loadingOffers ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -280,11 +280,25 @@ const renderPaymentMethod = (methods: any) => {
               </select>
             </div>
 
-            {filteredOffers.length === 0 ? (
+            {loadingOffers ? (
+              <div
+                className="empty-state"
+                style={{ background: '#f9fafb', border: '1px dashed #e5e7eb' }}
+              >
+                <p className="empty-state-icon">⏳</p>
+                <p className="empty-state-title" style={{ color: '#6b7280' }}>Loading offers…</p>
+                <p className="empty-state-description" style={{ color: '#9ca3af' }}>
+                  Fetching the latest OPEN offers from the server.
+                </p>
+              </div>
+            ) : filteredOffers.length === 0 ? (
               <div className="empty-state" style={{ background: '#f9fafb', border: '1px dashed #e5e7eb' }}>
                 <p className="empty-state-icon">📊</p>
                 <p className="empty-state-title" style={{ color: '#6b7280' }}>No offers found</p>
-                <p className="empty-state-description" style={{ color: '#9ca3af' }}>Try adjusting your search or filters</p>
+                <p className="empty-state-description" style={{ color: '#9ca3af' }}>
+                  No OPEN offers match your filters, or none exist yet. Create one under P2P Trading, or check that your
+                  backend is reachable.
+                </p>
               </div>
             ) : (
               <>

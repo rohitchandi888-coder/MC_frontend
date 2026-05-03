@@ -547,9 +547,6 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                     </span>
                   )}
                 </p>
-                <p className="text-xs mb-2" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
-                  Minimum price per FDA: {p2pMinPricePerFda}
-                </p>
                 {inMobileShell ? (
                   <div
                     style={{
@@ -641,6 +638,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   value={offerPrice}
                   onChange={(e) => setOfferPrice(e.target.value)}
                 />
+                <p className="text-xs mt-2 mb-0" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
+                  Minimum price per FDA: {p2pMinPricePerFda}
+                </p>
               </div>
             </div>
 
