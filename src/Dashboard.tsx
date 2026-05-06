@@ -308,6 +308,7 @@ export const Dashboard: React.FC = () => {
   const [adminDisputes, setAdminDisputes] = useState<any[]>([]);
   const [p2pFeeRate, setP2pFeeRate] = useState<number>(1);
   const [p2pMinPricePerFda, setP2pMinPricePerFda] = useState<number>(1);
+  const [p2pMinPricePerFdaUsdt, setP2pMinPricePerFdaUsdt] = useState<number>(1);
   const [editingFeeRate, setEditingFeeRate] = useState(false);
   const [newFeeRate, setNewFeeRate] = useState<string>('1');
   const [updatingFeeRate, setUpdatingFeeRate] = useState(false);
@@ -359,10 +360,12 @@ export const Dashboard: React.FC = () => {
   const [offerType, setOfferType] = useState<'BUY' | 'SELL'>('BUY');
   const [offerAmount, setOfferAmount] = useState('');
   const [offerPrice, setOfferPrice] = useState('');
-  const [offerFiatCurrency, setOfferFiatCurrency] = useState('USD');
+  const [offerFiatCurrency, setOfferFiatCurrency] = useState('INR');
   const [offerMinLimit, setOfferMinLimit] = useState('');
   const [offerMaxLimit, setOfferMaxLimit] = useState('');
   const [offerPaymentMethods, setOfferPaymentMethods] = useState('');
+  /** Saved BEP20 address for USDT-priced P2P offers (from GET /auth/profile). */
+  const [p2pUsdtPayoutAddress, setP2pUsdtPayoutAddress] = useState('');
   const [creatingOffer, setCreatingOffer] = useState(false);
   const [addFdaAmount, setAddFdaAmount] = useState('');
   const [addingFdaBalance, setAddingFdaBalance] = useState(false);
@@ -1306,6 +1309,10 @@ export const Dashboard: React.FC = () => {
       if (Number.isFinite(minAmount) && minAmount > 0) {
         setP2pMinPricePerFda(minAmount);
       }
+      const minUsdt = Number(data?.minPricePerFdaUsdt ?? 1);
+      if (Number.isFinite(minUsdt) && minUsdt > 0) {
+        setP2pMinPricePerFdaUsdt(minUsdt);
+      }
     } catch (err) {
       console.error('Failed to fetch minimum offer amount:', err);
     }
@@ -1333,6 +1340,10 @@ export const Dashboard: React.FC = () => {
 
       if (res.ok) {
         const profileData = await res.json();
+        const usdtRaw = profileData.p2p_usdt_payout_address;
+        setP2pUsdtPayoutAddress(
+          typeof usdtRaw === 'string' && usdtRaw.trim() ? usdtRaw.trim() : '',
+        );
         // Update auth state with latest profile data
         const updatedAuth = {
           ...currentAuth,
@@ -1382,26 +1393,23 @@ export const Dashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - refreshUserProfile uses current auth from closure
 
-  // Auto-calculate Min Limit and Max Limit based on Amount and Price
+  // Auto-calculate Min Limit and Max Limit based on Amount and Price (same for INR and USDT)
   useEffect(() => {
-    if (offerAmount && offerPrice) {
-      const amount = Number(offerAmount);
-      const price = Number(offerPrice);
-
-      if (amount > 0 && price > 0) {
-        // Min Limit = Price per FDA (minimum 1 FDA)
-        const minLimit = price.toFixed(2);
-        // Max Limit = Amount * Price (total value)
-        const maxLimit = (amount * price).toFixed(2);
-
-        setOfferMinLimit(minLimit);
-        setOfferMaxLimit(maxLimit);
-      }
-    } else {
-      // Clear limits if amount or price is empty
+    if (!offerAmount?.trim() || !String(offerPrice).trim()) {
       setOfferMinLimit('');
       setOfferMaxLimit('');
+      return;
     }
+    const amount = Number(offerAmount);
+    const price = Number(offerPrice);
+    if (!Number.isFinite(amount) || !Number.isFinite(price) || amount <= 0 || price <= 0) {
+      setOfferMinLimit('');
+      setOfferMaxLimit('');
+      return;
+    }
+    // Min limit = value of 1 FDA at this price; max = full offer notional
+    setOfferMinLimit(price.toFixed(2));
+    setOfferMaxLimit((amount * price).toFixed(2));
   }, [offerAmount, offerPrice]);
 
   // Check if recipient is MC wallet
@@ -2290,13 +2298,26 @@ export const Dashboard: React.FC = () => {
       showErrorModal('Please enter a valid amount.');
       return;
     }
-    if (Number(offerPrice) < p2pMinPricePerFda) {
-      showErrorModal(`Minimum price per FDA is ${p2pMinPricePerFda}.`);
-      return;
-    }
     if (!offerPrice || Number(offerPrice) <= 0) {
       showErrorModal('Please enter a valid price.');
       return;
+    }
+    const minPriceRequired =
+      offerFiatCurrency === 'USDT' ? p2pMinPricePerFdaUsdt : p2pMinPricePerFda;
+    if (Number(offerPrice) < minPriceRequired) {
+      const unit = offerFiatCurrency === 'USDT' ? 'USDT' : 'INR';
+      showErrorModal(`Minimum price per FDA is ${minPriceRequired} ${unit}.`);
+      return;
+    }
+
+    if (offerFiatCurrency === 'USDT') {
+      const addr = (p2pUsdtPayoutAddress || '').trim();
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) {
+        showErrorModal(
+          'Add a valid USDT (BEP20) payout address under Payment Methods before creating USDT offers.',
+        );
+        return;
+      }
     }
 
     // Check for active payment methods if currency is INR
@@ -3285,6 +3306,7 @@ export const Dashboard: React.FC = () => {
         const minOfferSetting =
           settingsData.find((s: any) => s.key === 'p2p_min_price_per_fda') ||
           settingsData.find((s: any) => s.key === 'p2p_min_offer_amount');
+        const minOfferUsdtSetting = settingsData.find((s: any) => s.key === 'p2p_min_price_per_fda_usdt');
         if (minOfferSetting) {
           const minAmount = Number(minOfferSetting.value);
           if (Number.isFinite(minAmount) && minAmount > 0) {
@@ -3292,6 +3314,12 @@ export const Dashboard: React.FC = () => {
           }
         } else {
           fetchP2PMinOfferAmount();
+        }
+        if (minOfferUsdtSetting?.value) {
+          const mu = Number(minOfferUsdtSetting.value);
+          if (Number.isFinite(mu) && mu > 0) {
+            setP2pMinPricePerFdaUsdt(mu);
+          }
         }
       } else {
         // If admin settings fail, try public endpoint for fee rate
@@ -4464,10 +4492,12 @@ export const Dashboard: React.FC = () => {
             <P2PTrading
               inMobileShell={isMobile}
               auth={auth}
+              canUseUsdt={/^0x[a-fA-F0-9]{40}$/i.test((p2pUsdtPayoutAddress || '').trim())}
               internalFdaBalance={internalFdaBalance}
               internalFdaLocked={internalFdaLocked}
               p2pFeeRate={p2pFeeRate}
               p2pMinPricePerFda={p2pMinPricePerFda}
+              p2pMinPricePerFdaUsdt={p2pMinPricePerFdaUsdt}
               addFdaAmount={addFdaAmount}
               setAddFdaAmount={setAddFdaAmount}
               addingFdaBalance={addingFdaBalance}
@@ -4566,6 +4596,7 @@ export const Dashboard: React.FC = () => {
               newTokenName={newTokenName}
               onShowSuccessModal={showSuccessModal}
               onShowErrorModal={showErrorModal}
+              onP2PMinPricesUpdated={fetchP2PMinOfferAmount}
             />
           )}
 
@@ -4603,7 +4634,15 @@ export const Dashboard: React.FC = () => {
           )}
 
           {activeTab === 'payment-methods' && (
-            <PaymentMethods auth={auth} />
+            <PaymentMethods
+              auth={auth}
+              p2pFiatCurrency={offerFiatCurrency}
+              onP2pFiatCurrencyChange={setOfferFiatCurrency}
+              usdtPayoutAddress={p2pUsdtPayoutAddress}
+              onP2pUsdtPayoutSaved={() => {
+                void refreshUserProfile();
+              }}
+            />
           )}
 
           {activeTab === 'view-phrases' && (

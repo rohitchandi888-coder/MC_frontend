@@ -17,6 +17,7 @@ import { MM } from '../../theme/metaMaskShell';
 
 const currencyRatesToUSD: Record<string, number> = {
   USD: 1,
+  USDT: 1,
   INR: 1 / 94.54,
   EUR: 1.08,
 };

@@ -33,6 +33,8 @@ interface AdminPanelProps {
   loadAdminData: () => Promise<void>;
   onShowSuccessModal?: (message: string) => void;
   onShowErrorModal?: (message: string) => void;
+  /** After admin saves INR/USDT minimum price per FDA, refresh P2P trade form limits. */
+  onP2PMinPricesUpdated?: () => void;
 }
 
 // https://merchantcoinwallet.com/admin/addGlobalWallet
@@ -65,12 +67,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   loadAdminData,
   onShowSuccessModal,
   onShowErrorModal,
+  onP2PMinPricesUpdated,
 }) => {
   const [adminTradesPage, setAdminTradesPage] = useState(1);
   const [fdaPrice, setFdaPrice] = useState("");
   const [minOfferAmount, setMinOfferAmount] = useState('1');
   const [editingMinOfferAmount, setEditingMinOfferAmount] = useState(false);
   const [updatingMinOfferAmount, setUpdatingMinOfferAmount] = useState(false);
+  const [minOfferAmountUsdt, setMinOfferAmountUsdt] = useState('1');
+  const [editingMinOfferAmountUsdt, setEditingMinOfferAmountUsdt] = useState(false);
+  const [updatingMinOfferAmountUsdt, setUpdatingMinOfferAmountUsdt] = useState(false);
   const [updatingFdaPrice, setUpdatingFdaPrice] = useState(false);
   const [rewardRate, setRewardRate] = useState('5');
   const [rewardMinAmount, setRewardMinAmount] = useState('25');
@@ -214,6 +220,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           settings.find((s: any) => s?.key === 'p2p_min_offer_amount')
         )
         : null;
+      const minOfferUsdtSetting = Array.isArray(settings)
+        ? settings.find((s: any) => s?.key === 'p2p_min_price_per_fda_usdt')
+        : null;
       if (fdaPriceSetting?.value) {
         const nextPrice = Number(fdaPriceSetting.value);
         if (Number.isFinite(nextPrice) && nextPrice > 0) {
@@ -222,6 +231,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       if (minOfferSetting?.value) {
         setMinOfferAmount(String(minOfferSetting.value));
+      }
+      if (minOfferUsdtSetting?.value) {
+        setMinOfferAmountUsdt(String(minOfferUsdtSetting.value));
       }
     } catch (err) {
       console.error("Failed to load FDA price:", err);
@@ -253,18 +265,56 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify({
           value: valueStr,
-          description: 'Minimum price per FDA required to create a P2P offer (BUY and SELL)',
+          description: 'Minimum price per FDA (INR) for INR-denominated P2P offers (BUY and SELL)',
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to update minimum price per FDA');
       setMinOfferAmount(String(data?.value || valueStr));
       setEditingMinOfferAmount(false);
-      pushSuccess(`✅ Minimum price per FDA updated to ${String(data?.value || valueStr)}.`);
+      pushSuccess(`✅ Minimum price per FDA (INR) updated to ${String(data?.value || valueStr)}.`);
+      onP2PMinPricesUpdated?.();
     } catch (err: any) {
       pushError(err?.message || 'Failed to update minimum price per FDA');
     } finally {
       setUpdatingMinOfferAmount(false);
+    }
+  };
+
+  const updateMinOfferUsdtSetting = async () => {
+    const valueStr = String(minOfferAmountUsdt || '').trim();
+    if (!/^\d+(\.\d{0,18})?$/.test(valueStr)) {
+      pushError('Minimum price per FDA (USDT) must be a decimal with up to 18 places.');
+      return;
+    }
+    const numeric = parseFloat(valueStr);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      pushError('Minimum price per FDA (USDT) must be greater than 0.');
+      return;
+    }
+    setUpdatingMinOfferAmountUsdt(true);
+    try {
+      const res = await fetch(getApiUrl('admin/settings/p2p_min_price_per_fda_usdt'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth?.token}`,
+        },
+        body: JSON.stringify({
+          value: valueStr,
+          description: 'Minimum price per FDA (USDT) for USDT-denominated P2P offers',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to update USDT minimum');
+      setMinOfferAmountUsdt(String(data?.value || valueStr));
+      setEditingMinOfferAmountUsdt(false);
+      pushSuccess(`✅ Minimum price per FDA (USDT) updated to ${String(data?.value || valueStr)}.`);
+      onP2PMinPricesUpdated?.();
+    } catch (err: any) {
+      pushError(err?.message || 'Failed to update USDT minimum');
+    } finally {
+      setUpdatingMinOfferAmountUsdt(false);
     }
   };
 
@@ -566,10 +616,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         <div className="mb-6">
           <label className="modal-label">
-            Minimum Price per FDA
+            Minimum price per FDA (INR)
           </label>
           <p className="text-xs text-gray-600 mb-3">
-            Enforced for both BUY and SELL offers. Users cannot create offers below this Price per FDA value.
+            Applies to INR offers only (BUY and SELL). Users cannot set price per FDA below this in INR.
           </p>
           {editingMinOfferAmount ? (
             <div className="flex gap-3 items-center">
@@ -585,7 +635,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   }
                 }}
               />
-              <span className="text-sm text-gray-600">Per FDA</span>
+              <span className="text-sm text-gray-600">INR / FDA</span>
               <button
                 className={`btn btn-success ${updatingMinOfferAmount ? 'opacity-60 cursor-not-allowed' : ''}`}
                 onClick={updateMinOfferSetting}
@@ -619,13 +669,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           )}
         </div>
 
+        <div className="mb-6">
+          <label className="modal-label">Minimum price per FDA (USDT)</label>
+          <p className="text-xs text-gray-600 mb-3">
+            Applies to USDT offers only (BUY and SELL). Separate from the INR minimum.
+          </p>
+          {editingMinOfferAmountUsdt ? (
+            <div className="flex gap-3 items-center">
+              <input
+                type="text"
+                pattern="^\d+(\.\d{0,18})?$"
+                className="form-input flex-1 py-3 max-w-72"
+                value={minOfferAmountUsdt}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || /^\d*\.?\d{0,18}$/.test(value)) {
+                    setMinOfferAmountUsdt(value);
+                  }
+                }}
+              />
+              <span className="text-sm text-gray-600">USDT / FDA</span>
+              <button
+                className={`btn btn-success ${updatingMinOfferAmountUsdt ? 'opacity-60 cursor-not-allowed' : ''}`}
+                onClick={updateMinOfferUsdtSetting}
+                disabled={updatingMinOfferAmountUsdt}
+              >
+                {updatingMinOfferAmountUsdt ? 'Saving...' : '✅ Save'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setEditingMinOfferAmountUsdt(false);
+                  loadFdaPrice();
+                }}
+                disabled={updatingMinOfferAmountUsdt}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-3 items-center">
+              <div className="card-dark py-3 px-5 text-base font-semibold text-gray-900 min-w-24">
+                {minOfferAmountUsdt}
+              </div>
+              <button
+                className="btn btn-blue"
+                onClick={() => setEditingMinOfferAmountUsdt(true)}
+              >
+                ✏️ Edit
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Holding FDA Amount */}
         <div className="mb-6">
           <label className="modal-label">
             Holding FDA Amount
           </label>
           <p className="text-xs text-gray-600 mb-3">
-            Set the minimum FDA balance users must maintain (supports up to 18 decimal places). Users cannot create offers or transfer if their usable balance would fall below this amount.
+            Set the minimum FDA balance users must maintain (supports up to 18 decimal places). Users cannot create offers or transfer if their usable balance would fall below this amount.{' '}
+            <strong className="font-semibold text-gray-800">This is not the minimum USDT price per FDA for P2P</strong>
+            — use &quot;Minimum price per FDA (USDT)&quot; in this same section for that.
           </p>
           {editingHoldingFda ? (
             <div className="flex gap-3 items-center">

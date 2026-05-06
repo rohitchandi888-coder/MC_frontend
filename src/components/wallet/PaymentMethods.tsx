@@ -27,15 +27,43 @@ interface PaymentMethod {
   qr_code?: string | null;
   is_active: boolean;
   type?: 'UPI' | 'QR';
-  offerFiatCurrency: 'USD' | 'EUR' | 'GBP' | 'INR'
+  offerFiatCurrency: 'INR'
+}
+
+type FiatCode = 'INR' | 'USDT';
+
+const BEP20_ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
+
+function isValidBep20Address(addr: string): boolean {
+  return BEP20_ADDR_RE.test(String(addr || '').trim());
+}
+
+function isFiatCode(v: string | undefined): v is FiatCode {
+  return v === 'INR' || v === 'USDT';
 }
 
 interface PaymentMethodsProps {
   auth: AuthState | null;
+  /** Keeps Profile "Payment Currency" in sync with P2P offer fiat (same totals / payment-methods filter). */
+  p2pFiatCurrency?: string;
+  onP2pFiatCurrencyChange?: (fiat: FiatCode) => void;
+  /** Saved BEP20 payout from GET /auth/profile (after refresh). */
+  usdtPayoutAddress?: string;
+  onP2pUsdtPayoutSaved?: () => void;
 }
 
-export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
-  const [selectedFiat, setSelectedFiat] = useState<'USD' | 'EUR' | 'GBP' | 'INR'>('INR');
+export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
+  auth,
+  p2pFiatCurrency,
+  onP2pFiatCurrencyChange,
+  usdtPayoutAddress = '',
+  onP2pUsdtPayoutSaved,
+}) => {
+  const [selectedFiat, setSelectedFiat] = useState<FiatCode>(() =>
+    isFiatCode(p2pFiatCurrency) ? p2pFiatCurrency : 'INR',
+  );
+  const [usdtDraft, setUsdtDraft] = useState('');
+  const [usdtSaving, setUsdtSaving] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -61,6 +89,33 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
       loadPaymentMethods();
     }
   }, [auth]);
+
+  useEffect(() => {
+    if (isFiatCode(p2pFiatCurrency) && p2pFiatCurrency !== selectedFiat) {
+      setSelectedFiat(p2pFiatCurrency);
+    }
+  }, [p2pFiatCurrency, selectedFiat]);
+
+  useEffect(() => {
+    setUsdtDraft((usdtPayoutAddress || '').trim());
+  }, [usdtPayoutAddress]);
+
+  const hasSavedUsdt = isValidBep20Address(usdtPayoutAddress || '');
+
+  /** Only INR and USDT are supported; USDT requires a saved payout address. */
+  useEffect(() => {
+    if (!onP2pFiatCurrencyChange) return;
+    const cur = p2pFiatCurrency;
+    if (cur === 'USDT' && !hasSavedUsdt) {
+      onP2pFiatCurrencyChange('INR');
+      setSelectedFiat('INR');
+      return;
+    }
+    if (cur && ['USD', 'EUR', 'GBP'].includes(cur)) {
+      onP2pFiatCurrencyChange('INR');
+      setSelectedFiat('INR');
+    }
+  }, [p2pFiatCurrency, hasSavedUsdt, onP2pFiatCurrencyChange]);
 
   const loadPaymentMethods = async () => {
     if (!auth) return;
@@ -100,6 +155,73 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({ auth }) => {
 
       setLoading(false);
 
+    }
+  };
+
+  /** Prefer PUT /auth/profile (avoids 404 when dedicated route is not deployed); fallback to /auth/p2p-usdt-payout. */
+  const putUsdtPayoutAddress = async (addressValue: string) => {
+    if (!auth) throw new Error('Not logged in');
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.token}`,
+    };
+    let res = await fetch(getApiUrl('auth/profile'), {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ p2p_usdt_payout_address: addressValue }),
+    });
+    if (res.ok) {
+      return res;
+    }
+    const res2 = await fetch(getApiUrl('auth/p2p-usdt-payout'), {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ address: addressValue }),
+    });
+    return res2.ok ? res2 : res;
+  };
+
+  const saveUsdtPayout = async () => {
+    if (!auth) return;
+    const t = usdtDraft.trim();
+    if (!isValidBep20Address(t)) {
+      alert('Enter a valid BEP20 address (0x followed by 40 hex characters).');
+      return;
+    }
+    setUsdtSaving(true);
+    try {
+      const res = await putUsdtPayoutAddress(t);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === 'string' ? data.error : 'Failed to save address');
+        return;
+      }
+      onP2pUsdtPayoutSaved?.();
+    } catch (e) {
+      console.error(e);
+      alert('Network error saving USDT address');
+    } finally {
+      setUsdtSaving(false);
+    }
+  };
+
+  const clearUsdtPayout = async () => {
+    if (!auth) return;
+    setUsdtSaving(true);
+    try {
+      const res = await putUsdtPayoutAddress('');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === 'string' ? data.error : 'Failed to remove address');
+        return;
+      }
+      setUsdtDraft('');
+      onP2pUsdtPayoutSaved?.();
+    } catch (e) {
+      console.error(e);
+      alert('Network error removing USDT address');
+    } finally {
+      setUsdtSaving(false);
     }
   };
 
@@ -386,26 +508,68 @@ const handleAdd = async () => {
 
       <div className="card-dark mb-3 md:mb-4">
         <label className="text-sm text-slate-300 mb-1.5 block font-medium">
-          Payment Currency
+          Payment currency
         </label>
 
         <select
           className="form-input-dark w-full"
           value={selectedFiat}
-          onChange={(e) => setSelectedFiat(e.target.value as any)}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!isFiatCode(v)) return;
+            setSelectedFiat(v);
+            onP2pFiatCurrencyChange?.(v);
+          }}
         >
-          <option value="INR">INR (India)</option>
-          <option value="USD">USD (USA)</option>
-          <option value="EUR">EUR (Europe)</option>
-          <option value="GBP">GBP (UK)</option>
+          <option value="INR">INR</option>
+          {hasSavedUsdt ? <option value="USDT">USDT</option> : null}
         </select>
+        {!hasSavedUsdt && (
+          <p className="text-[11px] text-slate-400 mt-1.5">Save a USDT address below to enable USDT.</p>
+        )}
       </div>
+
+      <div className="card-dark mb-3 md:mb-4">
+        <p className="text-sm font-semibold text-slate-300 mb-1">USDT payout (BEP20)</p>
+        <p className="text-xs text-slate-400 mb-2 leading-snug">
+          Required to create P2P offers priced in USDT. INR offers use UPI/QR only.
+        </p>
+        <input
+          type="text"
+          className="form-input-dark w-full font-mono text-xs"
+          value={usdtDraft}
+          onChange={(e) => setUsdtDraft(e.target.value)}
+          placeholder="0x… 40 hex characters"
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <div className="flex flex-wrap gap-2 mt-2">
+          <button
+            type="button"
+            className="btn btn-primary min-h-10 flex-1 sm:flex-none px-4"
+            onClick={() => void saveUsdtPayout()}
+            disabled={usdtSaving || !usdtDraft.trim()}
+          >
+            {usdtSaving ? 'Saving…' : 'Save address'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-gray min-h-10 flex-1 sm:flex-none px-4"
+            onClick={() => void clearUsdtPayout()}
+            disabled={usdtSaving || !hasSavedUsdt}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+
       {/* Add New Payment Method */}
       <div className="card-dark mb-4 md:mb-6">
         <p className="text-sm font-semibold text-slate-300 mb-3">Add New Payment Method</p>
         {selectedFiat !== 'INR' ? (
-          <p className="text-sm text-amber-300">
-            Payment methods for {selectedFiat} will be added soon.
+          <p className="text-sm text-slate-300 leading-relaxed">
+            UPI and QR codes are only for <strong>INR</strong>. Switch Payment Currency to INR above to add them.
+            For <strong>USDT</strong> offers, use the payout address you saved above.
           </p>
         ) : (
           <div className="space-y-3">

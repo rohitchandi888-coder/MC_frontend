@@ -8,16 +8,21 @@ interface P2PTradingProps {
   /** Light MetaMask-style cards/inputs on mobile (matches app shell). */
   inMobileShell?: boolean;
   auth: AuthState | null;
+  /** When false, USDT is hidden and any USDT selection is coerced to INR. */
+  canUseUsdt?: boolean;
   internalFdaBalance: number | null;
   internalFdaLocked: number | null;
   p2pFeeRate: number;
+  /** Minimum price per FDA when offer fiat is INR. */
   p2pMinPricePerFda: number;
+  /** Minimum price per FDA when offer fiat is USDT. */
+  p2pMinPricePerFdaUsdt: number;
   addFdaAmount: string;
   setAddFdaAmount: (amount: string) => void;
   addingFdaBalance: boolean;
   offerType: 'BUY' | 'SELL';
   setOfferType: (type: 'BUY' | 'SELL') => void;
-  offerFiatCurrency: 'USD' | 'EUR' | 'GBP' | 'INR' ;
+  offerFiatCurrency: 'INR' | 'USDT';
   setOfferFiatCurrency: (currency: string) => void;
   offerAmount: string;
   setOfferAmount: (amount: string) => void;
@@ -72,10 +77,12 @@ function shouldShowUpiLine(pm: PaymentMethod, revealed: boolean): boolean {
 export const P2PTrading: React.FC<P2PTradingProps> = ({
   inMobileShell = false,
   auth,
+  canUseUsdt = false,
   internalFdaBalance,
   internalFdaLocked,
   p2pFeeRate,
   p2pMinPricePerFda,
+  p2pMinPricePerFdaUsdt,
   addFdaAmount,
   setAddFdaAmount,
   addingFdaBalance,
@@ -141,6 +148,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
     }
   }, [auth,offerFiatCurrency]);
 
+  React.useEffect(() => {
+    if (!canUseUsdt && offerFiatCurrency === 'USDT') {
+      setOfferFiatCurrency('INR');
+    }
+  }, [canUseUsdt, offerFiatCurrency, setOfferFiatCurrency]);
+
   const loadPaymentMethods = async () => {
     if (!auth) return;
     setLoadingPaymentMethods(true);
@@ -183,7 +196,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
       setSelectedPaymentMethodIds([]);
       setOfferPaymentMethods('');
     }
-  }, [offerFiatCurrency, paymentMethods]); // Only run when currency or payment methods change
+  }, [offerFiatCurrency, paymentMethods]);
 
   // Update payment methods string when selected payment methods change
   React.useEffect(() => {
@@ -212,36 +225,49 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const selectedActivePaymentMethodCount = selectedPaymentMethodIds.filter((id) =>
     activePaymentMethodIds.includes(id),
   ).length;
+  /** UPI/QR in Profile is only used for INR settlement. Other fiats / USDT do not use those rows. */
+  const sellRequiresProfilePaymentMethods = offerFiatCurrency === 'INR';
+  const effectiveMinPricePerFda =
+    offerFiatCurrency === 'USDT' ? p2pMinPricePerFdaUsdt : p2pMinPricePerFda;
   const isCreateOfferDisabled =
     creatingOffer ||
     !offerAmount ||
     !offerPrice ||
-    Number(offerPrice) < p2pMinPricePerFda ||
-    ((offerType === 'SELL' && selectedActivePaymentMethodCount === 0) ||
-      (offerType === 'BUY' && !offerPaymentMethods.trim()));
+    Number(offerPrice) < effectiveMinPricePerFda ||
+    ((offerType === 'SELL' &&
+      sellRequiresProfilePaymentMethods &&
+      selectedActivePaymentMethodCount === 0) ||
+      (offerType === 'BUY' &&
+        offerFiatCurrency === 'INR' &&
+        !offerPaymentMethods.trim()));
   const createOfferDisabledReason =
     !offerAmount
       ? 'Enter FDA amount.'
       : !offerPrice
         ? 'Enter price per FDA.'
-      : Number(offerPrice) < p2pMinPricePerFda
-        ? `Minimum price per FDA is ${p2pMinPricePerFda}.`
-        : offerType === 'SELL' && selectedActivePaymentMethodCount === 0
-          ? 'Select at least one active payment method.'
-          : offerType === 'BUY' && !offerPaymentMethods.trim()
-            ? 'Enter payment method details.'
+      : Number(offerPrice) < effectiveMinPricePerFda
+        ? `Minimum price per FDA is ${effectiveMinPricePerFda} ${offerFiatCurrency === 'USDT' ? 'USDT' : 'INR'}.`
+        : offerType === 'SELL' &&
+            sellRequiresProfilePaymentMethods &&
+            selectedActivePaymentMethodCount === 0
+          ? 'Select at least one active payment method (required for INR / UPI).'
+          : offerType === 'BUY' &&
+            offerFiatCurrency === 'INR' &&
+            !offerPaymentMethods.trim()
+            ? 'Select payment methods for INR.'
             : '';
 
-  // UX: when SELL has active methods but nothing selected, preselect first one.
+  // UX: when SELL + INR has active methods but nothing selected, preselect first one.
   React.useEffect(() => {
     if (offerType !== 'SELL') return;
+    if (offerFiatCurrency !== 'INR') return;
     if (activePaymentMethodIds.length === 0) return;
     if (selectedActivePaymentMethodCount > 0) return;
     setSelectedPaymentMethodIds((prev) => {
       const hasActiveSelection = prev.some((id) => activePaymentMethodIds.includes(id));
       return hasActiveSelection ? prev : [activePaymentMethodIds[0]];
     });
-  }, [offerType, activePaymentMethodIds.join(','), selectedActivePaymentMethodCount]);
+  }, [offerType, offerFiatCurrency, activePaymentMethodIds.join(','), selectedActivePaymentMethodCount]);
 
   const handlePaymentMethodToggle = (id: number) => {
     setSelectedPaymentMethodIds((prev) => {
@@ -526,17 +552,26 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
 
             <div className="mb-4">
               <div>
-                <p className="text-xs  mb-2 p2p-subheading">Fiat Currency</p>
+                <p className="text-xs  mb-2 p2p-subheading">Price currency (per 1 FDA)</p>
                 <select
                   className="form-select-dark w-full py-3"
                   value={offerFiatCurrency}
                   onChange={(e) => setOfferFiatCurrency(e.target.value)}
                 >
-                  <option value="USD">USDT</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
                   <option value="INR">INR</option>
+                  {canUseUsdt ? <option value="USDT">USDT</option> : null}
                 </select>
+                {offerFiatCurrency === 'INR' && (
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">UPI / QR from Profile.</p>
+                )}
+                {offerFiatCurrency === 'USDT' && (
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">USDT from your saved payout address.</p>
+                )}
+                {!canUseUsdt && (
+                  <p className="text-[11px] text-amber-300/90 mt-1.5 leading-snug">
+                    Add a USDT (BEP20) address under Payment Methods for USDT.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -653,9 +688,16 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   value={offerPrice}
                   onChange={(e) => setOfferPrice(e.target.value)}
                 />
-                <p className="text-xs mt-2 mb-0" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
-                  Minimum price per FDA: {p2pMinPricePerFda}
-                </p>
+                {offerFiatCurrency === 'INR' && (
+                  <p className="text-xs mt-2 mb-0" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
+                    Minimum price per FDA: {p2pMinPricePerFda}
+                  </p>
+                )}
+                {offerFiatCurrency === 'USDT' && (
+                  <p className="text-xs mt-2 mb-0" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
+                    Minimum price per FDA: {p2pMinPricePerFdaUsdt} USDT
+                  </p>
+                )}
               </div>
             </div>
 
@@ -668,6 +710,11 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             >
               <div style={{ minWidth: 0 }}>
                 <p className="text-xs mb-2 font-semibold p2p-subheading">Min Limit ({offerFiatCurrency})</p>
+                {offerFiatCurrency === 'USDT' && (
+                  <p className="text-xs mb-1" style={{ color: inMobileShell ? MM.textMuted : '#64748b' }}>
+                    Smallest slice (1 FDA × price). Admin USDT minimum applies to price per FDA above, not this field.
+                  </p>
+                )}
                 <input
                   type="number"
                   step="any"
@@ -702,7 +749,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               </div>
             </div>
 
-            {offerType === 'SELL' && (
+            {offerType === 'SELL' && sellRequiresProfilePaymentMethods && (
               <div className="mb-4">
               <p className="text-xs  mb-2 p2p-subheading">Payment Methods</p>
               <p className="text-xs mb-2" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
@@ -888,6 +935,25 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 </div>
               ) }
             </div>
+            )}
+
+            {offerType === 'SELL' && !sellRequiresProfilePaymentMethods && (
+              <div
+                className="mb-4 rounded-xl border p-3"
+                style={{
+                  borderColor: inMobileShell ? MM.borderLight : '#475569',
+                  background: inMobileShell ? MM.pageBg : 'rgba(15,23,42,0.35)',
+                }}
+              >
+                <p className="text-xs font-semibold p2p-subheading">Settlement ({offerFiatCurrency})</p>
+                <p className="text-xs mt-1.5 leading-relaxed" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
+                  {offerFiatCurrency === 'INR' ? (
+                    <>INR sells use Profile UPI / QR.</>
+                  ) : (
+                    <>USDT: price above; transfer off-app.</>
+                  )}
+                </p>
+              </div>
             )}
 
             {offerType === 'BUY' &&(

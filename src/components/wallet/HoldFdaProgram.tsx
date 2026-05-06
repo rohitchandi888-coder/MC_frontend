@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getApiUrl } from '../../config';
 import type { AuthState } from '../types';
 
@@ -40,6 +41,15 @@ type HoldingSettings = {
   fdaPrice: number;
 };
 
+type HoldingBalanceSummary = {
+  /** Internal FDA on the **selected** wallet (same basis as start-hold check). */
+  totalInternalFdaAllWallets: number;
+  usableForNewHold: number;
+  lockedInOpenSellOffers: number;
+  activeHoldingsAmount: number;
+  holdingReserve: number;
+};
+
 export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   auth,
   walletAddress,
@@ -59,6 +69,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     fdaPrice: 0,
   });
   const [holdings, setHoldings] = useState<RewardStatusRow[]>([]);
+  const [holdingBalanceSummary, setHoldingBalanceSummary] = useState<HoldingBalanceSummary | null>(null);
   const [pendingReward, setPendingReward] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -129,7 +140,10 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     if (!auth?.token) return;
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('internal/holdings/reward-status'), {
+      const base = getApiUrl('internal/holdings/reward-status');
+      const addr = typeof walletAddress === 'string' ? walletAddress.trim() : '';
+      const url = addr ? `${base}?wallet_address=${encodeURIComponent(addr)}` : base;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -147,6 +161,18 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       });
       setPendingReward(Number(data?.pendingReward ?? 0));
       setHoldings(Array.isArray(data?.holdings) ? data.holdings : []);
+      const s = data?.holdingBalanceSummary;
+      if (s && typeof s.usableForNewHold === 'number') {
+        setHoldingBalanceSummary({
+          totalInternalFdaAllWallets: Number(s.totalInternalFdaAllWallets),
+          usableForNewHold: Number(s.usableForNewHold),
+          lockedInOpenSellOffers: Number(s.lockedInOpenSellOffers),
+          activeHoldingsAmount: Number(s.activeHoldingsAmount),
+          holdingReserve: Number(s.holdingReserve),
+        });
+      } else {
+        setHoldingBalanceSummary(null);
+      }
     } catch (err: any) {
       pushError(err?.message || 'Failed to load holding status');
     } finally {
@@ -157,7 +183,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   useEffect(() => {
     loadRewardStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth?.token]);
+  }, [auth?.token, walletAddress]);
 
   const startHolding = async () => {
     const parsedAmount = parseFloat(amount);
@@ -232,13 +258,30 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   };
 
   const openBreakFlow = (holdingId: number) => {
-    if (!auth?.token) return;
+    if (!auth?.token) {
+      pushError('You need to be logged in to request an early unlock. Please sign in again.');
+      return;
+    }
     setBreakFlow({ open: true, holdingId, step: 1, note: '' });
   };
 
-  const closeBreakFlow = () => {
+  const closeBreakFlow = useCallback(() => {
     setBreakFlow({ open: false, holdingId: null, step: 1, note: '' });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!breakFlow.open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeBreakFlow();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [breakFlow.open, closeBreakFlow]);
 
   const requestBreakHolding = async (holdingId: number, note: string) => {
     if (!auth?.token) return;
@@ -291,9 +334,44 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         </div>
 
         <div className="mb-3">
-          <label className="modal-label">Wallet Address</label>
+          <label className="modal-label">Active wallet (your account)</label>
           <input className="form-input w-full" value={walletAddress || ''} disabled />
+          <p className="text-xs text-gray-500 mt-1">
+            New holds use FDA on the <strong>selected wallet only</strong>. Switch the active wallet in the header to
+            start a hold from another address.
+          </p>
         </div>
+
+        {holdingBalanceSummary != null && (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <span className="font-semibold text-slate-800">Selected wallet (internal FDA): </span>
+            {holdingBalanceSummary.totalInternalFdaAllWallets.toFixed(4)} ·{' '}
+            <span className="font-semibold text-slate-800">Usable to start a hold from this address: </span>
+            {holdingBalanceSummary.usableForNewHold.toFixed(4)}
+            <span className="text-slate-500 block mt-1">
+              Usable = this wallet&apos;s internal FDA minus active holds and reserve. Sell offers already reduced the
+              wallets that created them, so that FDA is not subtracted again here.
+            </span>
+            {holdingBalanceSummary.lockedInOpenSellOffers > 0 && (
+              <span className="text-slate-500 block mt-1">
+                Open FDA sell offers (account-wide): {holdingBalanceSummary.lockedInOpenSellOffers.toFixed(4)} remaining
+                — informational only.
+              </span>
+            )}
+            {holdingBalanceSummary.activeHoldingsAmount > 0 && (
+              <span className="text-slate-500">
+                {' '}
+                (active holds: −{holdingBalanceSummary.activeHoldingsAmount.toFixed(4)})
+              </span>
+            )}
+            {holdingBalanceSummary.holdingReserve > 0 && (
+              <span className="text-slate-500">
+                {' '}
+                (reserve: −{holdingBalanceSummary.holdingReserve.toFixed(4)})
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mb-3">
           <label className="modal-label">Hold Plan</label>
@@ -417,84 +495,144 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         )}
       </div>
 
-      {breakFlow.open && breakFlow.holdingId != null && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="break-flow-title">
-          <div className="card-dark p-3 sm:p-4 max-w-md w-full text-sm text-gray-200 shadow-lg border border-slate-600 rounded-xl max-h-[88vh] overflow-y-auto">
-            <h3 id="break-flow-title" className="text-base sm:text-lg font-semibold text-white mb-1">
-              Request early unlock
-            </h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 mb-2">
-              Holding #{breakFlow.holdingId}
-            </p>
-            {breakFlow.step === 1 && (
-              <div className="space-y-3">
-                <p className="text-sm leading-5">
-                  This sends a request to an admin. Early unlock is not guaranteed; someone must review and approve
-                  it.
-                </p>
-                <p className="text-slate-400 text-[11px] sm:text-xs">Step 1 of 3</p>
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={closeBreakFlow}>
-                    Cancel
-                  </button>
-                  <button type="button" className="btn btn-primary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))}>
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-            {breakFlow.step === 2 && (
-              <div className="space-y-3">
-                <label className="block text-xs text-slate-400" htmlFor="break-note">Optional reason for admin</label>
-                <textarea
-                  id="break-note"
-                  className="form-input w-full min-h-[100px] text-gray-900"
-                  value={breakFlow.note}
-                  onChange={(e) => setBreakFlow((b) => ({ ...b, note: e.target.value }))}
-                  placeholder="e.g. need liquidity for…"
-                />
-                <p className="text-slate-400 text-[11px] sm:text-xs">Step 2 of 3</p>
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 1 }))}>
-                    Back
-                  </button>
-                  <button type="button" className="btn btn-primary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 3 }))}>
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-            {breakFlow.step === 3 && (
-              <div className="space-y-3">
-                <p className="text-sm leading-5">
-                  You are about to submit a break request for holding <strong>#{breakFlow.holdingId}</strong>.
-                </p>
-                {breakFlow.note.trim() ? (
-                  <p className="text-slate-300 text-xs whitespace-pre-wrap border border-slate-600 rounded p-2 bg-slate-900/40">{breakFlow.note}</p>
-                ) : (
-                  <p className="text-slate-400 text-xs">No extra note was added.</p>
-                )}
-                <p className="text-slate-400 text-[11px] sm:text-xs">Step 3 of 3 - Confirm and submit</p>
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-                  <button type="button" className="btn btn-secondary w-full sm:w-auto min-h-10" onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))} disabled={requestingBreakId === breakFlow.holdingId}>
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-red w-full sm:w-auto min-h-10"
-                    disabled={requestingBreakId === breakFlow.holdingId}
-                    onClick={() => {
-                      if (breakFlow.holdingId != null) void requestBreakHolding(breakFlow.holdingId, breakFlow.note);
+      {breakFlow.open &&
+        breakFlow.holdingId != null &&
+        createPortal(
+          <div
+            role="presentation"
+            onClick={closeBreakFlow}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 10050,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 'clamp(12px, 3vw, 24px)',
+              boxSizing: 'border-box',
+              background: 'rgba(15, 23, 42, 0.55)',
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="break-flow-title"
+              className="card-dark text-sm"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '28rem',
+                maxHeight: 'min(88vh, 640px)',
+                overflowY: 'auto',
+                margin: 0,
+                padding: '1rem 1.15rem',
+                borderRadius: '1rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+                border: '1px solid #475569',
+                boxSizing: 'border-box',
+              }}
+            >
+              <h3 id="break-flow-title" className="text-base sm:text-lg font-semibold text-white mb-1">
+                Request early unlock
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 mb-2">
+                Holding #{breakFlow.holdingId}
+              </p>
+              {breakFlow.step === 1 && (
+                <div className="space-y-3">
+                  <p className="text-sm leading-5">
+                    This sends a request to an admin. Early unlock is not guaranteed; someone must review and approve
+                    it.
+                  </p>
+                  <p className="text-slate-400 text-[11px] sm:text-xs">Step 1 of 3</p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                      justifyContent: 'flex-end',
+                      width: '100%',
                     }}
                   >
-                    {requestingBreakId === breakFlow.holdingId ? 'Submitting...' : 'Submit request'}
-                  </button>
+                    <button type="button" className="btn btn-secondary w-full" style={{ minHeight: 40 }} onClick={closeBreakFlow}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary w-full" style={{ minHeight: 40 }} onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))}>
+                      Next
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              )}
+              {breakFlow.step === 2 && (
+                <div className="space-y-3">
+                  <label className="block text-xs text-slate-400" htmlFor="break-note">Optional reason for admin</label>
+                  <textarea
+                    id="break-note"
+                    className="form-input w-full min-h-[100px] text-gray-900"
+                    value={breakFlow.note}
+                    onChange={(e) => setBreakFlow((b) => ({ ...b, note: e.target.value }))}
+                    placeholder="e.g. need liquidity for…"
+                  />
+                  <p className="text-slate-400 text-[11px] sm:text-xs">Step 2 of 3</p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                      justifyContent: 'flex-end',
+                      width: '100%',
+                    }}
+                  >
+                    <button type="button" className="btn btn-secondary w-full" style={{ minHeight: 40 }} onClick={() => setBreakFlow((b) => ({ ...b, step: 1 }))}>
+                      Back
+                    </button>
+                    <button type="button" className="btn btn-primary w-full" style={{ minHeight: 40 }} onClick={() => setBreakFlow((b) => ({ ...b, step: 3 }))}>
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+              {breakFlow.step === 3 && (
+                <div className="space-y-3">
+                  <p className="text-sm leading-5">
+                    You are about to submit a break request for holding <strong>#{breakFlow.holdingId}</strong>.
+                  </p>
+                  {breakFlow.note.trim() ? (
+                    <p className="text-slate-300 text-xs whitespace-pre-wrap border border-slate-600 rounded p-2 bg-slate-900/40">{breakFlow.note}</p>
+                  ) : (
+                    <p className="text-slate-400 text-xs">No extra note was added.</p>
+                  )}
+                  <p className="text-slate-400 text-[11px] sm:text-xs">Step 3 of 3 - Confirm and submit</p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem',
+                      justifyContent: 'flex-end',
+                      width: '100%',
+                    }}
+                  >
+                    <button type="button" className="btn btn-secondary w-full" style={{ minHeight: 40 }} onClick={() => setBreakFlow((b) => ({ ...b, step: 2 }))} disabled={requestingBreakId === breakFlow.holdingId}>
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-red w-full"
+                      style={{ minHeight: 40 }}
+                      disabled={requestingBreakId === breakFlow.holdingId}
+                      onClick={() => {
+                        if (breakFlow.holdingId != null) void requestBreakHolding(breakFlow.holdingId, breakFlow.note);
+                      }}
+                    >
+                      {requestingBreakId === breakFlow.holdingId ? 'Submitting...' : 'Submit request'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
