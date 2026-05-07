@@ -13,6 +13,7 @@ interface HoldFdaProgramProps {
 
 type RewardStatusRow = {
   id: number;
+  walletAddress?: string | null;
   plan?: 'standard' | 'merchant_buy';
   amount: number;
   holdingPeriod: string;
@@ -69,7 +70,9 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     fdaPrice: 0,
   });
   const [holdings, setHoldings] = useState<RewardStatusRow[]>([]);
+  const [walletLabelByAddress, setWalletLabelByAddress] = useState<Record<string, string>>({});
   const [holdingBalanceSummary, setHoldingBalanceSummary] = useState<HoldingBalanceSummary | null>(null);
+  const [historyScope, setHistoryScope] = useState<'selected' | 'all'>('selected');
   const [pendingReward, setPendingReward] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -142,7 +145,10 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     try {
       const base = getApiUrl('internal/holdings/reward-status');
       const addr = typeof walletAddress === 'string' ? walletAddress.trim() : '';
-      const url = addr ? `${base}?wallet_address=${encodeURIComponent(addr)}` : base;
+      const url =
+        historyScope === 'selected' && addr
+          ? `${base}?wallet_address=${encodeURIComponent(addr)}`
+          : base;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${auth.token}` },
       });
@@ -183,7 +189,33 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   useEffect(() => {
     loadRewardStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth?.token, walletAddress]);
+  }, [auth?.token, walletAddress, historyScope]);
+
+  useEffect(() => {
+    const loadWalletLabels = async () => {
+      if (!auth?.token) {
+        setWalletLabelByAddress({});
+        return;
+      }
+      try {
+        const res = await fetch(getApiUrl('wallets'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        if (!res.ok) return;
+        const rows = (await res.json().catch(() => [])) as Array<{ address?: string; label?: string }>;
+        const next: Record<string, string> = {};
+        for (const row of rows) {
+          const addr = String(row?.address || '').trim().toLowerCase();
+          const label = String(row?.label || '').trim();
+          if (addr && label) next[addr] = label;
+        }
+        setWalletLabelByAddress(next);
+      } catch {
+        // best-effort only
+      }
+    };
+    loadWalletLabels();
+  }, [auth?.token]);
 
   const startHolding = async () => {
     const parsedAmount = parseFloat(amount);
@@ -305,6 +337,14 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     } finally {
       setRequestingBreakId(null);
     }
+  };
+
+  const renderWalletTag = (addr?: string | null) => {
+    if (!addr) return 'Legacy hold (no wallet tag)';
+    const normalized = addr.trim().toLowerCase();
+    const label = walletLabelByAddress[normalized];
+    const shortAddr = `${addr.slice(0, 10)}...${addr.slice(-4)}`;
+    return label ? `${label} (${shortAddr})` : shortAddr;
   };
 
   return (
@@ -453,6 +493,27 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
 
       <div className="offer-form-card">
         <h3 className="offer-form-title">Your Holding Lots</h3>
+        <div className="mb-2 flex gap-2">
+          <button
+            type="button"
+            className={`btn ${historyScope === 'selected' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setHistoryScope('selected')}
+          >
+            Selected Wallet
+          </button>
+          <button
+            type="button"
+            className={`btn ${historyScope === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setHistoryScope('all')}
+          >
+            All Wallets
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400 mb-2">
+          {historyScope === 'selected'
+            ? 'Showing hold records for the currently selected wallet.'
+            : 'Showing hold records across all wallets (wallet-wise tags shown below).'}
+        </p>
         <p className="text-xs text-gray-600 mb-3">Pending reward: {pendingReward.toFixed(8)} FDA</p>
         {holdings.length === 0 ? (
           <p className="text-sm text-gray-600">No holdings yet. Fill the form above to start.</p>
@@ -469,6 +530,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
                 <div className="text-slate-500 mt-1">
                   Reward {h.rewardRate}% = {h.rewardAmount} FDA · Total {h.projectedTotal} FDA
                 </div>
+                <div className="text-slate-500 mt-1">Wallet: {renderWalletTag(h.walletAddress)}</div>
                 <div className="text-slate-500 mt-1">
                   Break request: {h.breakRequestStatus || 'NONE'}
                   {h.breakRequestedAt ? ` · Requested: ${new Date(h.breakRequestedAt).toLocaleString()}` : ''}

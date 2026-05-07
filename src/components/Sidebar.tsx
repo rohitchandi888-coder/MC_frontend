@@ -61,9 +61,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, auth,
             <button className={`sidebar-nav-button ${activeTab === 'wallets' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('wallets')}>
               📋 Manage wallets
             </button>
-            <button className={`sidebar-nav-button ${activeTab === 'fdawallets' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('fdawallets')}>
-              🔷 MC Wallets
-            </button>
             <button className={`sidebar-nav-button ${activeTab === 'hold-fda' ? 'sidebar-nav-button-active' : 'sidebar-nav-button-inactive'}`} onClick={() => setActiveTab('hold-fda')}>
               🔒 Hold FDA
             </button>

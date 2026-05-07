@@ -149,10 +149,11 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   }, [auth,offerFiatCurrency]);
 
   React.useEffect(() => {
-    if (!canUseUsdt && offerFiatCurrency === 'USDT') {
+    const canUseUsdtNow = canUseUsdt || offerType === 'BUY';
+    if (!canUseUsdtNow && offerFiatCurrency === 'USDT') {
       setOfferFiatCurrency('INR');
     }
-  }, [canUseUsdt, offerFiatCurrency, setOfferFiatCurrency]);
+  }, [canUseUsdt, offerType, offerFiatCurrency, setOfferFiatCurrency]);
 
   const loadPaymentMethods = async () => {
     if (!auth) return;
@@ -222,6 +223,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   const activePaymentMethodIds = paymentMethods
     .filter((pm) => pm.is_active)
     .map((pm) => pm.id);
+  const canUseUsdtNow = canUseUsdt || offerType === 'BUY';
   const selectedActivePaymentMethodCount = selectedPaymentMethodIds.filter((id) =>
     activePaymentMethodIds.includes(id),
   ).length;
@@ -234,12 +236,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
     !offerAmount ||
     !offerPrice ||
     Number(offerPrice) < effectiveMinPricePerFda ||
-    ((offerType === 'SELL' &&
+    (offerType === 'SELL' &&
       sellRequiresProfilePaymentMethods &&
-      selectedActivePaymentMethodCount === 0) ||
-      (offerType === 'BUY' &&
-        offerFiatCurrency === 'INR' &&
-        !offerPaymentMethods.trim()));
+      selectedActivePaymentMethodCount === 0);
   const createOfferDisabledReason =
     !offerAmount
       ? 'Enter FDA amount.'
@@ -251,11 +250,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             sellRequiresProfilePaymentMethods &&
             selectedActivePaymentMethodCount === 0
           ? 'Select at least one active payment method (required for INR / UPI).'
-          : offerType === 'BUY' &&
-            offerFiatCurrency === 'INR' &&
-            !offerPaymentMethods.trim()
-            ? 'Select payment methods for INR.'
-            : '';
+          : '';
 
   // UX: when SELL + INR has active methods but nothing selected, preselect first one.
   React.useEffect(() => {
@@ -559,7 +554,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                   onChange={(e) => setOfferFiatCurrency(e.target.value)}
                 >
                   <option value="INR">INR</option>
-                  {canUseUsdt ? <option value="USDT">USDT</option> : null}
+                  {canUseUsdtNow ? <option value="USDT">USDT</option> : null}
                 </select>
                 {offerFiatCurrency === 'INR' && (
                   <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">UPI / QR from Profile.</p>
@@ -567,7 +562,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                 {offerFiatCurrency === 'USDT' && (
                   <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">USDT from your saved payout address.</p>
                 )}
-                {!canUseUsdt && (
+                {!canUseUsdtNow && (
                   <p className="text-[11px] text-amber-300/90 mt-1.5 leading-snug">
                     Add a USDT (BEP20) address under Payment Methods for USDT.
                   </p>

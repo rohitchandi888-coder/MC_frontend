@@ -2310,18 +2310,18 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
-    if (offerFiatCurrency === 'USDT') {
+    if (offerFiatCurrency === 'USDT' && offerType === 'SELL') {
       const addr = (p2pUsdtPayoutAddress || '').trim();
       if (!/^0x[a-fA-F0-9]{40}$/i.test(addr)) {
         showErrorModal(
-          'Add a valid USDT (BEP20) payout address under Payment Methods before creating USDT offers.',
+          'Add a valid USDT (BEP20) payout address under Payment Methods before creating USDT SELL offers.',
         );
         return;
       }
     }
 
     // Check for active payment methods if currency is INR
-    if (offerFiatCurrency === 'INR') {
+    if (offerType === 'SELL' && offerFiatCurrency === 'INR') {
       try {
         const paymentMethodsRes = await fetch(getApiUrl('payment-methods'), {
           headers: { Authorization: `Bearer ${auth.token}` },
@@ -3022,6 +3022,60 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  type OnchainHistoryItem = {
+    id: string;
+    kind: 'onchain';
+    assetSymbol: string;
+    tokenAddress?: string;
+    txHash: string;
+    fromAddress: string;
+    toAddress: string;
+    amount: string;
+    createdAt: string;
+  };
+
+  const pushOnchainHistory = (item: Omit<OnchainHistoryItem, 'id' | 'kind' | 'createdAt'>) => {
+    try {
+      const userId = auth?.user?.id ?? 'guest';
+      const key = `onchain_transfer_history_${userId}`;
+      const raw = localStorage.getItem(key);
+      const rows: OnchainHistoryItem[] = raw ? JSON.parse(raw) : [];
+      const next: OnchainHistoryItem = {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind: 'onchain',
+        createdAt: new Date().toISOString(),
+        ...item,
+      };
+      localStorage.setItem(key, JSON.stringify([next, ...rows].slice(0, 500)));
+    } catch (err) {
+      console.warn('Failed to save on-chain transfer history locally:', err);
+    }
+  };
+
+  const logOnchainTransferServer = async (payload: {
+    fromAddress: string;
+    toAddress: string;
+    amount: string;
+    txHash: string;
+    assetSymbol: string;
+    tokenAddress?: string;
+    chain?: string;
+  }) => {
+    if (!auth?.token) return;
+    try {
+      await fetch(getApiUrl('onchain/transfers'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.warn('Failed to persist on-chain transfer to server:', err);
+    }
+  };
+
   const handleSend = async () => {
 
     // Handle internal FDA transfers (zero fee)
@@ -3168,8 +3222,38 @@ export const Dashboard: React.FC = () => {
         const receipt = await tx.wait();
         if (receipt) {
           showSuccessModal(`✅ Transaction confirmed! Block: ${receipt.blockNumber}. Tx hash: ${tx.hash}`);
+          pushOnchainHistory({
+            assetSymbol: 'BNB',
+            txHash: tx.hash,
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+          });
+          void logOnchainTransferServer({
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+            txHash: tx.hash,
+            assetSymbol: 'BNB',
+            chain: 'BNB',
+          });
         } else {
           showSuccessModal(`✅ Transaction sent! Tx hash: ${tx.hash}`);
+          pushOnchainHistory({
+            assetSymbol: 'BNB',
+            txHash: tx.hash,
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+          });
+          void logOnchainTransferServer({
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+            txHash: tx.hash,
+            assetSymbol: 'BNB',
+            chain: 'BNB',
+          });
         }
 
         setTimeout(() => {
@@ -3214,8 +3298,42 @@ export const Dashboard: React.FC = () => {
         const receipt = await tx.wait();
         if (receipt) {
           showSuccessModal(`✅ Transaction confirmed! Block: ${receipt.blockNumber}. Tx hash: ${tx.hash}`);
+          pushOnchainHistory({
+            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            tokenAddress: tokenAddress.trim(),
+            txHash: tx.hash,
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+          });
+          void logOnchainTransferServer({
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+            txHash: tx.hash,
+            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            tokenAddress: tokenAddress.trim(),
+            chain: 'BNB',
+          });
         } else {
           showSuccessModal(`✅ Transaction sent! Tx hash: ${tx.hash}`);
+          pushOnchainHistory({
+            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            tokenAddress: tokenAddress.trim(),
+            txHash: tx.hash,
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+          });
+          void logOnchainTransferServer({
+            fromAddress: walletAddress,
+            toAddress: sendTo.trim(),
+            amount: sendAmount,
+            txHash: tx.hash,
+            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            tokenAddress: tokenAddress.trim(),
+            chain: 'BNB',
+          });
         }
         setTimeout(() => {
           window.location.reload();

@@ -83,6 +83,8 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   // yeh line add karo (edit karte waqt type yaad rakhne ke liye)
   const [editType, setEditType] = useState<'UPI' | 'QR' | null>(null);
+  const [methodIdsInActiveOffers, setMethodIdsInActiveOffers] = useState<Set<number>>(new Set());
+  const [hasActiveUsdtOffers, setHasActiveUsdtOffers] = useState(false);
 
   useEffect(() => {
     if (auth) {
@@ -144,6 +146,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
         }));
 
         setPaymentMethods(formatted);
+        await loadMethodsLockedByActiveOffers(formatted);
 
       }
 
@@ -155,6 +158,71 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
       setLoading(false);
 
+    }
+  };
+
+  const loadMethodsLockedByActiveOffers = async (methods: PaymentMethod[]) => {
+    if (!auth) return;
+    if (!methods.length) {
+      setMethodIdsInActiveOffers(new Set());
+      return;
+    }
+    try {
+      const res = await fetch(getApiUrl('offers'), {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      if (!res.ok) {
+        setMethodIdsInActiveOffers(new Set());
+        return;
+      }
+      const offers = await res.json().catch(() => []);
+      const locked = new Set<number>();
+      const myOpenOffers = (Array.isArray(offers) ? offers : []).filter((offer: any) => {
+        const status = String(offer?.status || 'OPEN').toUpperCase().trim();
+        const makerId = Number(offer?.maker?.id ?? offer?.maker_id);
+        return status === 'OPEN' && makerId === Number(auth.user.id);
+      });
+      const hasUsdt = myOpenOffers.some((offer: any) => {
+        const fiat = String(offer?.fiatCurrency || offer?.fiat_currency || '').toUpperCase().trim();
+        return fiat === 'USDT';
+      });
+      setHasActiveUsdtOffers(hasUsdt);
+
+      for (const offer of myOpenOffers) {
+        const type = String(offer?.type || '').toUpperCase().trim();
+        if (type !== 'SELL') continue;
+        const raw = String(offer?.paymentMethods || offer?.payment_methods || '').trim();
+        const tokens = raw
+          ? raw.split(',').map((t: string) => String(t || '').trim().toLowerCase()).filter(Boolean)
+          : [];
+        const sellerMethods = Array.isArray(offer?.sellerPaymentMethods) ? offer.sellerPaymentMethods : [];
+        const sellerMethodIds = new Set<number>(
+          sellerMethods
+            .map((m: any) => Number(m?.id))
+            .filter((id: number) => Number.isFinite(id) && id > 0),
+        );
+
+        for (const method of methods) {
+          const methodId = Number(method.id);
+          if (!Number.isFinite(methodId) || methodId <= 0) continue;
+          const paymentName = String(method.paymentname || '').trim().toLowerCase();
+          const upi = String(method.upi_id || '').trim().toLowerCase();
+          const qrToken = `qr:${methodId}`;
+          if (
+            sellerMethodIds.has(methodId) ||
+            tokens.includes(qrToken) ||
+            (!!upi && tokens.includes(upi)) ||
+            (!!paymentName && tokens.includes(paymentName))
+          ) {
+            locked.add(methodId);
+          }
+        }
+      }
+      setMethodIdsInActiveOffers(locked);
+    } catch (err) {
+      console.error('Failed to check active-offer payment method usage:', err);
+      setMethodIdsInActiveOffers(new Set());
+      setHasActiveUsdtOffers(false);
     }
   };
 
@@ -207,6 +275,10 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
 
   const clearUsdtPayout = async () => {
     if (!auth) return;
+    if (hasActiveUsdtOffers) {
+      alert('Cannot remove USDT payout address while you have active USDT offers. Close/cancel those offers first.');
+      return;
+    }
     setUsdtSaving(true);
     try {
       const res = await putUsdtPayoutAddress('');
@@ -552,14 +624,20 @@ const handleAdd = async () => {
           >
             {usdtSaving ? 'Saving…' : 'Save address'}
           </button>
-          <button
-            type="button"
-            className="btn btn-gray min-h-10 flex-1 sm:flex-none px-4"
-            onClick={() => void clearUsdtPayout()}
-            disabled={usdtSaving || !hasSavedUsdt}
-          >
-            Remove
-          </button>
+          {!hasActiveUsdtOffers ? (
+            <button
+              type="button"
+              className="btn btn-gray min-h-10 flex-1 sm:flex-none px-4"
+              onClick={() => void clearUsdtPayout()}
+              disabled={usdtSaving || !hasSavedUsdt}
+            >
+              Remove
+            </button>
+          ) : (
+            <p className="text-[11px] text-amber-300 self-center">
+              Active USDT offers found. Remove is hidden until those offers are closed.
+            </p>
+          )}
         </div>
       </div>
 
@@ -793,20 +871,26 @@ const handleAdd = async () => {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      className="btn btn-yellow text-xs min-h-10"
-                      onClick={() => startEdit(method)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-red text-xs min-h-10"
-                      onClick={() => handleDelete(method.id!)}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  {method.id && methodIdsInActiveOffers.has(method.id) ? (
+                    <p className="text-[11px] text-amber-300 mt-2">
+                      In use by active offer. Edit and Delete are hidden until offer is closed.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        className="btn btn-yellow text-xs min-h-10"
+                        onClick={() => startEdit(method)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-red text-xs min-h-10"
+                        onClick={() => handleDelete(method.id!)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>

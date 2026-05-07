@@ -3,7 +3,9 @@ import { type AuthState } from '../types';
 import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
 
-const ADMIN_TRADES_PER_PAGE = 12;
+const ADMIN_TRADES_PER_PAGE_DESKTOP = 12;
+const ADMIN_TRADES_PER_PAGE_MOBILE = 6;
+const BREAK_REQUESTS_PER_PAGE = 8;
 
 interface AdminPanelProps {
   auth: AuthState | null;
@@ -89,6 +91,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [breakRequests, setBreakRequests] = useState<any[]>([]);
   const [loadingBreakRequests, setLoadingBreakRequests] = useState(false);
   const [decidingBreakId, setDecidingBreakId] = useState<number | null>(null);
+  const [breakRequestsPage, setBreakRequestsPage] = useState(1);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false,
+  );
+  const [breakDecisionModal, setBreakDecisionModal] = useState<{
+    open: boolean;
+    holdingId: number | null;
+    decision: 'APPROVE' | 'REJECT' | null;
+    note: string;
+  }>({ open: false, holdingId: null, decision: null, note: '' });
   const pushSuccess = (text: string) => {
     if (onShowSuccessModal) onShowSuccessModal(text);
     else setNotice({ type: 'success', text });
@@ -97,16 +109,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (onShowErrorModal) onShowErrorModal(text);
     else setNotice({ type: 'error', text });
   };
-  const totalAdminTradesPages = Math.max(1, Math.ceil(adminTrades.length / ADMIN_TRADES_PER_PAGE));
+  const adminTradesPerPage = isMobileViewport ? ADMIN_TRADES_PER_PAGE_MOBILE : ADMIN_TRADES_PER_PAGE_DESKTOP;
+  const totalAdminTradesPages = Math.max(1, Math.ceil(adminTrades.length / adminTradesPerPage));
   const paginatedAdminTrades = adminTrades.slice(
-    (adminTradesPage - 1) * ADMIN_TRADES_PER_PAGE,
-    adminTradesPage * ADMIN_TRADES_PER_PAGE
+    (adminTradesPage - 1) * adminTradesPerPage,
+    adminTradesPage * adminTradesPerPage
+  );
+  const totalBreakRequestPages = Math.max(1, Math.ceil(breakRequests.length / BREAK_REQUESTS_PER_PAGE));
+  const paginatedBreakRequests = breakRequests.slice(
+    (breakRequestsPage - 1) * BREAK_REQUESTS_PER_PAGE,
+    breakRequestsPage * BREAK_REQUESTS_PER_PAGE,
   );
   useEffect(() => {
     if (adminTradesPage > totalAdminTradesPages && totalAdminTradesPages > 0) {
       setAdminTradesPage(totalAdminTradesPages);
     }
   }, [adminTrades.length, totalAdminTradesPages, adminTradesPage]);
+  useEffect(() => {
+    if (breakRequestsPage > totalBreakRequestPages && totalBreakRequestPages > 0) {
+      setBreakRequestsPage(totalBreakRequestPages);
+    }
+  }, [breakRequests.length, totalBreakRequestPages, breakRequestsPage]);
+  useEffect(() => {
+    const onResize = () => setIsMobileViewport(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   if (!auth?.user.isAdmin) {
     return (
@@ -414,6 +442,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const data = await res.json().catch(() => []);
       if (!res.ok) throw new Error(data?.error || 'Failed to load break requests');
       setBreakRequests(Array.isArray(data) ? data : []);
+      setBreakRequestsPage(1);
     } catch (err: any) {
       pushError(err?.message || 'Failed to load break requests');
     } finally {
@@ -421,14 +450,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const decideBreakRequest = async (holdingId: number, decision: 'APPROVE' | 'REJECT') => {
+  const openBreakDecisionModal = (holdingId: number, decision: 'APPROVE' | 'REJECT') => {
+    setBreakDecisionModal({
+      open: true,
+      holdingId,
+      decision,
+      note: '',
+    });
+  };
+
+  const closeBreakDecisionModal = () => {
+    setBreakDecisionModal({ open: false, holdingId: null, decision: null, note: '' });
+  };
+
+  const submitBreakDecision = async () => {
     if (!auth?.token) return;
-    const note = window.prompt(
-      decision === 'APPROVE'
-        ? 'Optional admin note for approval'
-        : 'Optional admin note for rejection',
-      '',
-    ) ?? '';
+    if (!breakDecisionModal.holdingId || !breakDecisionModal.decision) return;
+    const holdingId = breakDecisionModal.holdingId;
+    const decision = breakDecisionModal.decision;
+    const note = breakDecisionModal.note;
     setDecidingBreakId(holdingId);
     try {
       const res = await fetch(getApiUrl(`admin/holdings/${holdingId}/break-decision`), {
@@ -443,6 +483,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (!res.ok) throw new Error(data?.error || 'Failed to update break request');
       pushSuccess(data?.message || `Break request ${decision.toLowerCase()}d`);
       await loadBreakRequests();
+      closeBreakDecisionModal();
     } catch (err: any) {
       pushError(err?.message || 'Failed to update break request');
     } finally {
@@ -886,7 +927,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <p className="text-xs text-gray-700">No break requests found.</p>
           ) : (
             <div className="space-y-2">
-              {breakRequests.map((req) => (
+              {paginatedBreakRequests.map((req) => (
                 <div key={req.id} className="card-dark p-3 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span>
@@ -906,7 +947,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <button
                         type="button"
                         className={`btn btn-success ${decidingBreakId === req.id ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        onClick={() => decideBreakRequest(req.id, 'APPROVE')}
+                        onClick={() => openBreakDecisionModal(req.id, 'APPROVE')}
                         disabled={decidingBreakId === req.id}
                       >
                         Approve Unlock
@@ -914,7 +955,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <button
                         type="button"
                         className={`btn btn-red ${decidingBreakId === req.id ? 'opacity-60 cursor-not-allowed' : ''}`}
-                        onClick={() => decideBreakRequest(req.id, 'REJECT')}
+                        onClick={() => openBreakDecisionModal(req.id, 'REJECT')}
                         disabled={decidingBreakId === req.id}
                       >
                         Reject
@@ -923,10 +964,94 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   )}
                 </div>
               ))}
+              <SitePagination
+                id="break-requests-pagination"
+                currentPage={breakRequestsPage}
+                totalPages={totalBreakRequestPages}
+                onPageChange={setBreakRequestsPage}
+              />
             </div>
           )}
         </div>
       </div>
+
+      {breakDecisionModal.open && (
+        <div
+          role="presentation"
+          onClick={closeBreakDecisionModal}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10050,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            background: 'rgba(15, 23, 42, 0.55)',
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="break-decision-title"
+            className="card-dark"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '28rem',
+              padding: '1rem',
+              borderRadius: '14px',
+              border: '1px solid #475569',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+            }}
+          >
+            <h3 id="break-decision-title" className="text-base font-semibold text-white mb-2">
+              {breakDecisionModal.decision === 'APPROVE' ? 'Approve unlock request' : 'Reject unlock request'}
+            </h3>
+            <p className="text-xs text-slate-300 mb-3">
+              Holding #{breakDecisionModal.holdingId}
+            </p>
+            <label className="block text-xs text-slate-300 mb-2">
+              Optional admin note
+            </label>
+            <textarea
+              className="form-input w-full mb-3"
+              rows={4}
+              value={breakDecisionModal.note}
+              onChange={(e) =>
+                setBreakDecisionModal((prev) => ({ ...prev, note: e.target.value }))
+              }
+              placeholder={
+                breakDecisionModal.decision === 'APPROVE'
+                  ? 'Note for approval (optional)'
+                  : 'Reason for rejection (optional)'
+              }
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary w-full"
+                onClick={closeBreakDecisionModal}
+                disabled={decidingBreakId === breakDecisionModal.holdingId}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`btn ${breakDecisionModal.decision === 'APPROVE' ? 'btn-success' : 'btn-red'} w-full`}
+                onClick={submitBreakDecision}
+                disabled={decidingBreakId === breakDecisionModal.holdingId}
+              >
+                {decidingBreakId === breakDecisionModal.holdingId
+                  ? 'Submitting...'
+                  : breakDecisionModal.decision === 'APPROVE'
+                    ? 'Approve'
+                    : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 

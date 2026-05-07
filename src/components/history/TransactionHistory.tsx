@@ -16,6 +16,18 @@ interface Transaction {
   from_phone?: string;
   to_email?: string;
   to_phone?: string;
+  source?: 'internal' | 'onchain';
+  tx_hash?: string;
+  asset_symbol?: string;
+}
+interface OnchainTransfer {
+  id: number;
+  from_wallet_address: string;
+  to_wallet_address: string;
+  amount: string | number;
+  created_at: string;
+  tx_hash: string;
+  asset_symbol: string;
 }
 
 interface TransactionHistoryProps {
@@ -84,7 +96,64 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
         });
       }
 
-      setTransactions(dedupeTransactionsById(filteredTransactions));
+      const internalRows = dedupeTransactionsById(filteredTransactions).map((tx) => ({
+        ...tx,
+        source: 'internal' as const,
+      }));
+      let serverOnchainRows: Transaction[] = [];
+      try {
+        const onchainRes = await fetch(getApiUrl('onchain/transfers'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        });
+        if (onchainRes.ok) {
+          const onchainData: OnchainTransfer[] = await onchainRes.json().catch(() => []);
+          if (Array.isArray(onchainData)) {
+            serverOnchainRows = onchainData.map((row) => ({
+              id: Number(row.id),
+              from_address: row.from_wallet_address || null,
+              to_address: row.to_wallet_address || null,
+              amount: String(row.amount ?? '0'),
+              created_at: row.created_at,
+              from_user_id: auth?.user?.id ?? 0,
+              to_user_id: 0,
+              source: 'onchain',
+              tx_hash: row.tx_hash,
+              asset_symbol: row.asset_symbol || 'TOKEN',
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load server on-chain history:', err);
+      }
+      const userId = auth?.user?.id ?? 'guest';
+      const localKey = `onchain_transfer_history_${userId}`;
+      const localRaw = localStorage.getItem(localKey);
+      const localRows = localRaw ? JSON.parse(localRaw) : [];
+      const onchainRows: Transaction[] = Array.isArray(localRows)
+        ? localRows.map((row: any) => ({
+          id: Number(row.id || Date.now()),
+          from_address: row.fromAddress || null,
+          to_address: row.toAddress || null,
+          amount: String(row.amount || '0'),
+          created_at: row.createdAt || new Date().toISOString(),
+          from_user_id: auth?.user?.id ?? 0,
+          to_user_id: 0,
+          source: 'onchain',
+          tx_hash: row.txHash ? String(row.txHash) : undefined,
+          asset_symbol: row.assetSymbol ? String(row.assetSymbol) : 'TOKEN',
+        }))
+        : [];
+      const merged = [...internalRows, ...onchainRows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      const mergedWithServer = [...internalRows, ...serverOnchainRows, ...onchainRows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      const deduped = mergedWithServer.filter((row, idx, arr) => {
+        if (row.source !== 'onchain' || !row.tx_hash) return true;
+        return arr.findIndex((x) => x.source === 'onchain' && x.tx_hash === row.tx_hash) === idx;
+      });
+      setTransactions(deduped);
     } catch (err: any) {
       console.error('Failed to load transactions:', err);
       setError('Unable to load transactions. Please try again.');
@@ -159,8 +228,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
       <div className="section-header">
         <h2 className="section-title">Transaction History</h2>
         <p className="section-subtitle">
-          Internal FDA (custodial) transfers between MC wallets. Quantities are always FDA. On-chain token
-          movements (e.g. JW) are not listed here — use a block explorer for those.
+          Internal FDA transfers and on-chain sends from this device/session are listed here.
         </p>
       </div>
 
@@ -250,13 +318,18 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
                     }}
                   >
                     <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#94a3b8' }}>
-                      Quantity (FDA)
+                      Quantity ({tx.source === 'onchain' ? (tx.asset_symbol || 'TOKEN') : 'FDA'})
                     </div>
                     <div className="text-xl font-bold mt-1" style={{ color: qtyColor }}>
                       {isFromUser ? '-' : '+'}
-                      {parseFloat(tx.amount).toFixed(4)} FDA
+                      {parseFloat(tx.amount).toFixed(4)} {tx.source === 'onchain' ? (tx.asset_symbol || 'TOKEN') : 'FDA'}
                     </div>
                   </div>
+                  {tx.source === 'onchain' && tx.tx_hash ? (
+                    <div className="text-xs mb-2" style={{ color: '#94a3b8' }}>
+                      Tx: {tx.tx_hash.slice(0, 10)}...{tx.tx_hash.slice(-8)}
+                    </div>
+                  ) : null}
 
                   <div className="space-y-2">
                         {isFromUser && (

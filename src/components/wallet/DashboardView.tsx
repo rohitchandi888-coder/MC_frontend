@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { AuthState } from '../types';
 import type { CustomToken, WalletMeta } from '../../walletStorage';
+import { getApiUrl } from '../../config';
 
 const popularTokens = [
   {
@@ -66,6 +67,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSetActiveTab,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [holdingSnapshot, setHoldingSnapshot] = useState<{
+    usableForNewHold: number;
+    activeHoldingsAmount: number;
+  } | null>(null);
   const activeAddress = storedMeta?.address || checkAddress;
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
   const copyToClipboard = (text: string) => {
@@ -129,6 +134,41 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, []);
+useEffect(() => {
+  const loadHoldingSnapshot = async () => {
+    if (!auth?.token || !activeAddress) {
+      setHoldingSnapshot(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${getApiUrl('internal/holdings/reward-status')}?wallet_address=${encodeURIComponent(activeAddress)}`,
+        {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        },
+      );
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const s = data?.holdingBalanceSummary;
+      if (s && typeof s.usableForNewHold === 'number') {
+        setHoldingSnapshot({
+          usableForNewHold: Number(s.usableForNewHold),
+          activeHoldingsAmount: Number(s.activeHoldingsAmount || 0),
+        });
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+  void loadHoldingSnapshot();
+}, [auth?.token, activeAddress]);
+
+  const lockedFdaAmount = Math.max(0, Number(holdingSnapshot?.activeHoldingsAmount || 0));
+  const availableInternalFda = Math.max(
+    0,
+    Number(holdingSnapshot ? holdingSnapshot.usableForNewHold : internalFdaBalance || 0),
+  );
+
   return (
     <>
       <div
@@ -288,7 +328,7 @@ useEffect(() => {
       {/* Balance Display Section */}
       {(storedMeta?.address || checkAddress) && (
         <div className="mt-6">
-          <div className="grid grid-cols-2 gap-5 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-5">
             <div className="balance-card">
               <p className="text-xs text-slate-400 mb-2">Native Balance (BNB)</p>
               <p className="text-lg font-semibold text-slate-50">
@@ -301,17 +341,40 @@ useEffect(() => {
                 {balanceLoading ? 'Loading...' : fdaBalance !== null ? `${parseFloat(fdaBalance).toFixed(2)} FDA` : '—'}
               </p>
             </div>
+            {auth && internalFdaBalance !== null && (
+              <div className="balance-card-green">
+                <p className="text-slate-200 mb-2" style={{ fontWeight: '700' }}>✅ Available Internal FDA</p>
+                <p className="text-lg font-semibold" style={{ color: "#fff" }}>
+                  {availableInternalFda.toFixed(2)} FDA
+                </p>
+              </div>
+            )}
+            {auth && internalFdaBalance !== null && (
+              <div
+                className="balance-card"
+                style={{ borderColor: '#7f1d1d', background: 'linear-gradient(160deg,#450a0a,#1f2937)' }}
+              >
+                <p className="text-xs mb-2" style={{ color: '#fecaca', fontWeight: 700 }}>🔒 Locked FDA (Hold)</p>
+                <p className="text-lg font-semibold" style={{ color: '#fff' }}>
+                  {lockedFdaAmount.toFixed(2)} FDA
+                </p>
+                {lockedFdaAmount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary w-full mt-2"
+                    style={{ minHeight: 34 }}
+                    onClick={() => onSetActiveTab('hold-fda')}
+                  >
+                    View Holds
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           {auth && internalFdaBalance !== null && (
-            <div className="balance-card-green">
-              <p className="text-slate-200 mb-2" style={{ fontWeight: '700' }}>🔄 Internal FDA Balance (Zero Fee Transfers)</p>
-              <p className="text-lg font-semibold" style={{ color: "#fff" }}>
-                {internalFdaBalance.toFixed(2)} FDA
-              </p>
-              <p className="text-xs mt-2" style={{ color: '#fff' }}>
-                Available for instant internal transfers between MC wallets
-              </p>
-            </div>
+            <p className="text-xs mt-2 text-slate-300">
+              Internal total: {internalFdaBalance.toFixed(2)} FDA · Available and Locked are shown separately.
+            </p>
           )}
           {customTokens.length > 0 && (
             <div className="mt-6">

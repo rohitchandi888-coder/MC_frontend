@@ -150,10 +150,14 @@ const SvgFilter = ({ size = 18 }: { size?: number }) => (
 const OverlayIcon = ({
   mainIcon,
   subIcon,
+  symbol,
 }: {
   mainIcon: string;
   subIcon?: string;
+  symbol?: string;
 }) => {
+  const [mainFailed, setMainFailed] = useState(false);
+  const fallbackLabel = (symbol || "?").slice(0, 2).toUpperCase();
   return (
     <div
       style={{
@@ -165,18 +169,41 @@ const OverlayIcon = ({
         justifyContent: "center",
       }}
     >
-      <img
-        src={mainIcon}
-        alt=""
-        style={{
-          width: 40,
-          height: 40,
-          objectFit: "contain",
-          borderRadius: "50%",
-          backgroundColor: "#fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        }}
-      />
+      {!mainFailed ? (
+        <img
+          src={mainIcon}
+          alt=""
+          onError={() => setMainFailed(true)}
+          style={{
+            width: 40,
+            height: 40,
+            objectFit: "contain",
+            borderRadius: "50%",
+            backgroundColor: "#fff",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          }}
+        />
+      ) : (
+        <div
+          aria-hidden
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #1d4ed8, #0ea5e9)",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          {fallbackLabel}
+        </div>
+      )}
       {subIcon && (
         <img
           src={subIcon}
@@ -980,6 +1007,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                         <OverlayIcon
                           mainIcon={row.mainIcon}
                           subIcon={row.subIcon}
+                          symbol={row.symbol}
                         />
                         <div style={{ minWidth: 0 }}>
                           <div
@@ -1066,6 +1094,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
                           subIcon={
                             HomePageImage[i % HomePageImage.length].sub
                           }
+                          symbol={pair.baseToken?.symbol}
                         />
                         <div>
                           <div
