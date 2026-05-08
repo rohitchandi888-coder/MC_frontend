@@ -7,6 +7,7 @@ const MY_TRADES_PER_PAGE = 12;
 
 interface TradeListingProps {
   auth: AuthState | null;
+  inMobileShell?: boolean;
   p2pFeeRate: number;
   filteredOffers: any[];
   paginatedOffers: any[];
@@ -36,10 +37,12 @@ interface TradeListingProps {
   cancelTrade: (tradeId: number) => Promise<void>;
   openDisputeModal: (trade: any) => void;
   openReleaseConfirmModal: (trade: any) => void;
+  openTradeChatModal: (trade: any) => void;
 }
 
 export const TradeListing: React.FC<TradeListingProps> = ({
   auth,
+  inMobileShell = false,
   p2pFeeRate,
   filteredOffers,
   paginatedOffers,
@@ -69,6 +72,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   cancelTrade,
   openDisputeModal,
   openReleaseConfirmModal,
+  openTradeChatModal,
 }) => {
   const [myTradesSearch, setMyTradesSearch] = useState('');
   const [isCompactMobile, setIsCompactMobile] = useState<boolean>(
@@ -155,12 +159,12 @@ const renderPaymentMethod = (methods: any) => {
     return (
       <div key={index} style={{ marginBottom: '12px' }}>
 
-        <p style={{ fontSize: '12px', fontWeight: '600' }}>
+        <p style={{ fontSize: '12px', fontWeight: '600', color: isCompactMobile && inMobileShell ? '#e2e8f0' : undefined }}>
           {pm.paymentname || 'Unknown'}
         </p>
 
         {pm.upi_id && (
-          <span style={{ display: 'block', fontSize: '11px' }}>
+          <span style={{ display: 'block', fontSize: '11px', color: isCompactMobile && inMobileShell ? '#cbd5e1' : undefined }}>
             {pm.upi_id}
           </span>
         )}
@@ -223,10 +227,14 @@ const renderPaymentMethod = (methods: any) => {
   return (
     <div>
       <div className="section-header">
-        <h2 className="section-title-light" style={{ padding: '0.5rem 1rem' }}>📊 Trade Listing</h2>
-        <p className="section-subtitle-light" style={{ padding: '0.5rem 1rem' }}>
-          Browse all available offers and manage your trades. All trades are MC Wallet to MC Wallet only.
-        </p>
+        <h2 className="section-title-light" style={{ padding: '0.5rem 1rem' }}>
+          {isCompactMobile && inMobileShell ? 'P2P' : '📊 Trade Listing'}
+        </h2>
+        {!isCompactMobile && (
+          <p className="section-subtitle-light" style={{ padding: '0.5rem 1rem' }}>
+            Browse all available offers and manage your trades. All trades are MC Wallet to MC Wallet only.
+          </p>
+        )}
       </div>
 
       {!auth && (
@@ -256,28 +264,87 @@ const renderPaymentMethod = (methods: any) => {
 
             {/* Search and Filters */}
             <div className="search-filter-container">
-              <input
-                type="text"
-                className="search-input"
-                placeholder="🔍 Search by currency, payment method..."
-                value={offersSearch}
-                onChange={(e) => {
-                  setOffersSearch(e.target.value);
-                  setOffersPage(1);
-                }}
-              />
-              <select
-                className="filter-select"
-                value={offersFilterType}
-                onChange={(e) => {
-                  setOffersFilterType(e.target.value as 'ALL' | 'SELL');
-                  setOffersPage(1);
-                }}
-              >
-                <option value="ALL">All Offers</option>
-                <option value="BUY">Buy Offers</option>
-                <option value="SELL">Sell Offers</option>
-              </select>
+              {isCompactMobile && inMobileShell ? (
+                <div style={{ width: '100%', display: 'grid', gap: 10 }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      padding: 4,
+                      borderRadius: 999,
+                      border: '1px solid #334155',
+                      background: '#0f172a',
+                      width: 'fit-content',
+                      gap: 4,
+                    }}
+                  >
+                    {(['BUY', 'SELL'] as const).map((t) => {
+                      const active = offersFilterType === t;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            setOffersFilterType(t);
+                            setOffersPage(1);
+                          }}
+                          style={{
+                            borderRadius: 999,
+                            border: 'none',
+                            minWidth: 66,
+                            height: 30,
+                            background: active ? '#f8fafc' : 'transparent',
+                            color: active ? '#0f172a' : '#cbd5e1',
+                            fontWeight: 700,
+                            fontSize: 12,
+                          }}
+                        >
+                          {t === 'BUY' ? 'Buy' : 'Sell'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search by payment / currency..."
+                    value={offersSearch}
+                    onChange={(e) => {
+                      setOffersSearch(e.target.value);
+                      setOffersPage(1);
+                    }}
+                    style={{
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      color: '#e2e8f0',
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="🔍 Search by currency, payment method..."
+                    value={offersSearch}
+                    onChange={(e) => {
+                      setOffersSearch(e.target.value);
+                      setOffersPage(1);
+                    }}
+                  />
+                  <select
+                    className="filter-select"
+                    value={offersFilterType}
+                    onChange={(e) => {
+                      setOffersFilterType(e.target.value as 'ALL' | 'SELL');
+                      setOffersPage(1);
+                    }}
+                  >
+                    <option value="ALL">All Offers</option>
+                    <option value="BUY">Buy Offers</option>
+                    <option value="SELL">Sell Offers</option>
+                  </select>
+                </>
+              )}
             </div>
 
             {loadingOffers ? (
@@ -305,40 +372,51 @@ const renderPaymentMethod = (methods: any) => {
                 <div className="offers-grid mb-4">
                   {paginatedOffers.map((offer) => {
                     const isMyOffer = offer.maker?.id === auth?.user.id;
-                    const minValue = (offer.minLimit || offer.min_limit || 0) * (offer.price || 0);
-                    const maxValue = (offer.maxLimit || offer.max_limit || 0) * (offer.price || 0);
+                    const priceNum = Number(offer.price || 0);
+                    const remainingNum = Number(offer.remaining || offer.available_amount || 0);
+                    const minRaw = Number(offer.minLimit ?? offer.min_limit ?? 0);
+                    const maxRaw = Number(offer.maxLimit ?? offer.max_limit ?? 0);
+                    /**
+                     * Backward compatibility:
+                     * - Some rows store min/max in FDA units (legacy): convert to fiat via × price.
+                     * - New rows already store min/max in fiat: show as-is.
+                     */
+                    const minValue = minRaw > 0 && minRaw <= remainingNum ? minRaw * priceNum : minRaw;
+                    const maxValue = maxRaw > 0 && maxRaw <= remainingNum ? maxRaw * priceNum : maxRaw;
+                    const offerType = (offer.type || offer.offer_type || 'SELL').toUpperCase();
+                    const makerName =
+                      offer?.maker?.name ||
+                      offer?.maker?.label ||
+                      offer?.maker?.email ||
+                      offer?.maker?.address ||
+                      `Trader ${offer.id}`;
 
                     return (
                       <div
                         key={offer.id}
                         className={`offer-card-listing ${isMyOffer ? 'offer-card-listing-my' : 'offer-card-listing-other'}`}
+                        style={
+                          isCompactMobile && inMobileShell
+                            ? {
+                                background: '#111827',
+                                border: '1px solid #1f2937',
+                                borderRadius: 14,
+                                boxShadow: 'none',
+                              }
+                            : undefined
+                        }
                       >
                         <div className="flex-1 flex flex-col">
                           <div className="offer-card-header-listing">
                             <div className="buyAndOffer">
-                              {(() => {
-                                const offerType = (offer.type || offer.offer_type || 'SELL').toUpperCase();
-                                // Debug log for first offer
-                                if (offer.id === filteredOffers[0]?.id) {
-                                  console.log('[TradeListing] Offer type debug:', {
-                                    id: offer.id,
-                                    rawType: offer.type,
-                                    offer_type: offer.offer_type,
-                                    normalized: offerType,
-                                    fullOffer: offer
-                                  });
-                                }
-                                return (
-                                  <div className='buy'>
-                                    <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
-                                      {offerType}
-                                    </span>
-                                    <span className='buyTxt'>
-                                      {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
+                              <div className='buy'>
+                                <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
+                                  {offerType}
+                                </span>
+                                <span className='buyTxt' style={isCompactMobile && inMobileShell ? { color: '#cbd5e1' } : undefined}>
+                                  {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
+                                </span>
+                              </div>
 
                               {isMyOffer && (
                                 <span className="yourOffer">
@@ -346,40 +424,58 @@ const renderPaymentMethod = (methods: any) => {
                                 </span>
                               )}
                             </div>
-                            <div className={`${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}>
+                            {isCompactMobile && inMobileShell && (
+                              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
+                                {makerName}
+                              </div>
+                            )}
+                            <div
+                              className={`${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}
+                              style={
+                                isCompactMobile && inMobileShell
+                                  ? {
+                                      background: '#0f172a',
+                                      border: '1px solid #334155',
+                                      borderRadius: 10,
+                                    }
+                                  : undefined
+                              }
+                            >
                               <div className='perItemParent'>
-                                <p className="offer-price-large">
+                                <p className="offer-price-large" style={isCompactMobile && inMobileShell ? { color: '#f8fafc' } : undefined}>
                                   {offer.price} <span className="offer-price-currency">{offer.fiatCurrency || offer.fiat_currency}</span>
                                 </p>
-                                <p className="perItemBottonCorner">per {offer.assetSymbol || offer.asset_symbol}</p>
+                                <p className="perItemBottonCorner" style={isCompactMobile && inMobileShell ? { color: '#9ca3af' } : undefined}>
+                                  per {offer.assetSymbol || offer.asset_symbol}
+                                </p>
                               </div>
                             </div>
                             <div className="offer-info-list">
                               <div className="offer-info-row">
-                                <span className="offer-info-label">Available:</span>
-                                <span className="offer-info-value">
+                                <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Available:</span>
+                                <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
                                   {offer.remaining || offer.available_amount || 0} {offer.assetSymbol || offer.asset_symbol}
                                 </span>
                               </div>
                               {(offer.minLimit || offer.min_limit) ? (
                                 <>
                                   <div className="offer-info-row">
-                                    <span className="offer-info-label">Min:</span>
-                                    <span className="offer-info-value">
+                                    <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Min:</span>
+                                    <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
                                       {minValue.toFixed(2)} {offer.fiatCurrency || offer.fiat_currency}
                                     </span>
                                   </div>
                                   <div className="offer-info-row">
-                                    <span className="offer-info-label">Max:</span>
-                                    <span className="offer-info-value">
+                                    <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Max:</span>
+                                    <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
                                       {maxValue.toFixed(2)} {offer.fiatCurrency || offer.fiat_currency}
                                     </span>
                                   </div>
                                 </>
                               ) : null}
                               <div className="offer-info-row offer-info-divider">
-                                <span className="offer-info-label">Payment:</span>
-                                <span className="offer-info-value">
+                                <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Payment:</span>
+                                <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
                                   {/* {offer.paymentMethods || offer.payment_method || 'Not specified'} */}
 {                                  renderPaymentMethod(
   offer.paymentMethods ||
@@ -409,10 +505,11 @@ const renderPaymentMethod = (methods: any) => {
                                 style={{
                                   whiteSpace: 'nowrap',
                                   minWidth: '120px',
-                                  boxShadow: acceptingOffer === offer.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.4)'
+                                  boxShadow: acceptingOffer === offer.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.4)',
+                                  borderRadius: isCompactMobile && inMobileShell ? 8 : undefined,
                                 }}
                               >
-                                {acceptingOffer === offer.id ? 'Accepting...' : (offer.type || offer.offer_type || 'SELL').toUpperCase() === 'SELL' ? '📥 Buy Now' : '📤 Sell Now'}
+                                {acceptingOffer === offer.id ? 'Accepting...' : offerType === 'SELL' ? 'Buy' : 'Sell'}
                               </button>
                             )}
                             {offer.status === 'CANCELLED' && (
@@ -477,6 +574,7 @@ const renderPaymentMethod = (methods: any) => {
                     {paginatedMyTrades.map((trade) => {
                       const isBuyer = trade.buyer_id === auth?.user.id;
                       const isSeller = trade.seller_id === auth?.user.id;
+                      const chatClosed = ['COMPLETED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase());
                       const feeAmount = parseFloat(trade.fee_amount) || 0;
                       const amountReceived = parseFloat(trade.amount) - feeAmount;
                       return (
@@ -494,6 +592,14 @@ const renderPaymentMethod = (methods: any) => {
                             <span style={{ color: '#6b7280' }}>Status</span><span style={{ color: '#334155', textAlign: 'right' }}>{trade.status}</span>
                           </div>
                           <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                            <button
+                              type="button"
+                              className="btn w-full text-xs py-2"
+                              onClick={() => openTradeChatModal(trade)}
+                              style={{ background: chatClosed ? '#94a3b8' : '#2563eb', color: '#fff' }}
+                            >
+                              {chatClosed ? '💬 Chat Closed' : '💬 Chat'}
+                            </button>
                             {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
                               <>
                                 <button
@@ -653,6 +759,7 @@ const renderPaymentMethod = (methods: any) => {
                       {paginatedMyTrades.map((trade) => {
                         const isBuyer = trade.buyer_id === auth?.user.id;
                         const isSeller = trade.seller_id === auth?.user.id;
+                        const chatClosed = ['COMPLETED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase());
                         const feeAmount = parseFloat(trade.fee_amount) || 0;
                         const amountReceived = parseFloat(trade.amount) - feeAmount;
 
@@ -743,6 +850,22 @@ const renderPaymentMethod = (methods: any) => {
                             {/* Actions */}
                             <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'center', minWidth: '120px' }}>
+                                <button
+                                  onClick={() => openTradeChatModal(trade)}
+                                  style={{
+                                    padding: '0.375rem 0.75rem',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '600',
+                                    background: chatClosed ? '#94a3b8' : '#2563eb',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    width: '100%',
+                                  }}
+                                >
+                                  {chatClosed ? '💬 Chat Closed' : '💬 Chat'}
+                                </button>
                                 {isBuyer && (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
                                   <>
                                     <button

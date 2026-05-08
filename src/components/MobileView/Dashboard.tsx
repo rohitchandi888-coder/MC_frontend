@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { WalletMeta } from "../../walletStorage";
 import type { CustomToken } from "../../walletStorage";
 import NetworkModal from "./Modal/NetworkModal";
+import { getApiUrl } from "../../config";
 
 import { AuthState, Tab, FDA_TOKEN_ADDRESS } from "../types";
 import AddCustomTokenModal from "./Modal/AddCustomTokenModal";
@@ -259,6 +260,7 @@ interface MobileDashboardProps {
   allWallets: WalletMeta[];
   indiAction: () => void;
   internalFdaBalance: number | null;
+  walletAddress?: string | null;
   setActiveTab: (tab: Tab | string) => void;
   tokens?: PopularToken[];
   tokenPrices?: Record<string, number>;
@@ -318,6 +320,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
   actions,
   indiAction,
   internalFdaBalance,
+  walletAddress = null,
   setActiveTab,
   nativeBalance,
   fdaBalance,
@@ -344,6 +347,57 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
   const close = () => setSearchBar(false);
   const filteredTabs = allTabs.filter((tab) =>
     tab.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const [holdingSnapshot, setHoldingSnapshot] = useState<{
+    usableForNewHold: number;
+    activeHoldingsAmount: number;
+  } | null>(null);
+
+  const refreshHoldingSnapshot = useCallback(async () => {
+    if (!auth?.token || !walletAddress) {
+      setHoldingSnapshot(null);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${getApiUrl('internal/holdings/reward-status')}?wallet_address=${encodeURIComponent(
+          String(walletAddress),
+        )}`,
+        { headers: { Authorization: `Bearer ${auth.token}` } },
+      );
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const s = data?.holdingBalanceSummary;
+      if (s && typeof s.usableForNewHold === 'number') {
+        setHoldingSnapshot({
+          usableForNewHold: Number(s.usableForNewHold),
+          activeHoldingsAmount: Number(s.activeHoldingsAmount || 0),
+        });
+      } else {
+        setHoldingSnapshot(null);
+      }
+    } catch {
+      // non-blocking
+    }
+  }, [auth?.token, walletAddress]);
+
+  useEffect(() => {
+    void refreshHoldingSnapshot();
+  }, [refreshHoldingSnapshot]);
+
+  useEffect(() => {
+    const handler = () => {
+      void refreshHoldingSnapshot();
+    };
+    window.addEventListener('holding-fda-updated', handler);
+    return () => window.removeEventListener('holding-fda-updated', handler);
+  }, [refreshHoldingSnapshot]);
+
+  const lockedFdaAmount = Math.max(0, Number(holdingSnapshot?.activeHoldingsAmount || 0));
+  const availableInternalFda = Math.max(
+    0,
+    Number(holdingSnapshot ? holdingSnapshot.usableForNewHold : internalFdaBalance || 0),
   );
 
   const priceForAddress = (addr: string): number => {
@@ -412,7 +466,30 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
       });
     }
 
+    // Merge token sources so tokens added via import modal are never missed.
+    const mergedCustomTokenMap = new Map<string, { address: string; symbol: string; name?: string }>();
     for (const t of customTokens) {
+      const addr = String(t.address || "").trim();
+      if (!addr) continue;
+      mergedCustomTokenMap.set(addr.toLowerCase(), {
+        address: addr,
+        symbol: t.symbol || "?",
+        name: t.name,
+      });
+    }
+    for (const t of userTokens) {
+      const addr = String(t?.address || t?.contract_address || "").trim();
+      if (!addr) continue;
+      const normalized = addr.toLowerCase();
+      const existing = mergedCustomTokenMap.get(normalized);
+      mergedCustomTokenMap.set(normalized, {
+        address: addr,
+        symbol: existing?.symbol || t?.symbol || t?.token_symbol || "?",
+        name: existing?.name || t?.name || t?.token_name || t?.symbol || t?.token_symbol || "Token",
+      });
+    }
+
+    for (const t of Array.from(mergedCustomTokenMap.values())) {
       const addr = t.address;
       const balStr =
         customTokenBalances[addr.toLowerCase()] ??
@@ -464,6 +541,7 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
     internalFdaBalance,
     tokenPrices,
     customTokens,
+    userTokens,
     customTokenBalances,
     price,
   ]);
@@ -704,6 +782,83 @@ const MobileDashboard: React.FC<MobileDashboardProps> = ({
             {change}
           </span>
         </div>
+
+        {/* Locked/Available FDA summary for selected wallet (Mobile) */}
+        {auth && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginTop: 10,
+              marginBottom: 4,
+            }}
+          >
+            <div
+              style={{
+                borderRadius: 12,
+                padding: "12px 12px",
+                border: "1px solid #1f2937",
+                background: "linear-gradient(160deg,#0b3b1a,#0f172a)",
+              }}
+            >
+              <div style={{ color: "#d1fae5", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                ✅ Available FDA
+              </div>
+              <div style={{ color: "#ffffff", fontSize: 18, fontWeight: 800 }}>
+                {availableInternalFda.toFixed(2)} FDA
+              </div>
+            </div>
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveTab("hold-fda")}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                setActiveTab("hold-fda");
+              }}
+              style={{
+                borderRadius: 12,
+                padding: "12px 12px",
+                border: "1px solid #7f1d1d",
+                background: "linear-gradient(160deg,#450a0a,#111827)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ color: "#fecaca", fontSize: 12, fontWeight: 800, marginBottom: 6 }}>
+                🔒 Locked FDA (Hold)
+              </div>
+              <div style={{ color: "#ffffff", fontSize: 18, fontWeight: 800 }}>
+                {lockedFdaAmount.toFixed(2)} FDA
+              </div>
+              {lockedFdaAmount > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTab("hold-fda");
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    background: "#fecaca",
+                    color: "#7f1d1d",
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    minHeight: 34,
+                  }}
+                >
+                  View Holds
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div
           style={{

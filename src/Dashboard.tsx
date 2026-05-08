@@ -237,6 +237,7 @@ import {
 import MobileDashboard from './components/MobileView/Dashboard';
 import WalletModal from './components/MobileView/Modal/WalletModal';
 import SwapWalletModal from './components/MobileView/Modal/Swap';
+import { TradeChatModal } from './components/modals/TradeChatModal';
 
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -254,6 +255,7 @@ export const Dashboard: React.FC = () => {
   const [unlockExtraWord, setUnlockExtraWord] = useState('');
   const [selectedUnlockWalletId, setSelectedUnlockWalletId] = useState<string>('');
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<'success' | 'error' | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.innerWidth <= 768,
@@ -344,6 +346,8 @@ export const Dashboard: React.FC = () => {
   // Dispute modal
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [selectedTradeToDispute, setSelectedTradeToDispute] = useState<any | null>(null);
+  const [showTradeChatModal, setShowTradeChatModal] = useState(false);
+  const [selectedTradeForChat, setSelectedTradeForChat] = useState<any | null>(null);
 
   // Offers pagination and filters
   const [offersPage, setOffersPage] = useState(1);
@@ -655,17 +659,20 @@ export const Dashboard: React.FC = () => {
 
   const showErrorModal = (errorMessage: string) => {
     setMessage(errorMessage);
+    setMessageVariant('error');
     setShowMessageModal(true);
   };
 
   const showSuccessModal = (successMessage: string) => {
     setMessage(successMessage);
+    setMessageVariant('success');
     setShowMessageModal(true);
   };
 
   const closeMessageModal = () => {
     setShowMessageModal(false);
     setMessage(null);
+    setMessageVariant(null);
   };
 
   /** JWT rejected by API (expired, rotated, or invalid) — clear session and go to login. */
@@ -2731,6 +2738,12 @@ export const Dashboard: React.FC = () => {
       if (res.ok) {
         closeReleaseConfirmModal();
         showErrorModal('✅ Tokens released to buyer successfully!');
+        setSelectedTradeForChat((prev: any) =>
+          prev && Number(prev.id) === Number(tradeId) ? { ...prev, status: 'COMPLETED' } : prev,
+        );
+        setShowTradeChatModal((prev) =>
+          selectedTradeForChat && Number(selectedTradeForChat.id) === Number(tradeId) ? false : prev,
+        );
         await loadMyTrades();
         if (storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address);
@@ -2787,6 +2800,9 @@ export const Dashboard: React.FC = () => {
 
   const cancelOffer = async () => {
     if (!auth || !selectedOfferToCancel) return;
+    const offerType = String(selectedOfferToCancel.type || selectedOfferToCancel.offer_type || '').toUpperCase();
+    const assetSymbol = String(selectedOfferToCancel.assetSymbol || selectedOfferToCancel.asset_symbol || '').toUpperCase();
+    const returnsLockedFda = offerType === 'SELL' && assetSymbol === 'FDA';
 
     setCancellingOffer(selectedOfferToCancel.id);
     try {
@@ -2799,10 +2815,14 @@ export const Dashboard: React.FC = () => {
       if (res.ok) {
         closeCancelOfferModal();
         await loadOffers();
-        if (storedMeta?.address) {
+        if (returnsLockedFda && storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address); // Refresh balance since locked amount will be returned
         }
-        showErrorModal('✅ Offer cancelled successfully. Your locked FDA balance has been returned.');
+        showErrorModal(
+          returnsLockedFda
+            ? '✅ Offer cancelled successfully. Your locked FDA balance has been returned.'
+            : '✅ Offer cancelled successfully.',
+        );
       } else {
         const data = await res.json();
         showErrorModal(`❌ ${data.error || 'Failed to cancel offer'}`);
@@ -2823,6 +2843,16 @@ export const Dashboard: React.FC = () => {
   const closeDisputeModal = () => {
     setShowDisputeModal(false);
     setSelectedTradeToDispute(null);
+  };
+
+  const openTradeChatModal = (trade: any) => {
+    setSelectedTradeForChat(trade);
+    setShowTradeChatModal(true);
+  };
+
+  const closeTradeChatModal = () => {
+    setShowTradeChatModal(false);
+    setSelectedTradeForChat(null);
   };
 
   const createDispute = async (reason: string) => {
@@ -4129,6 +4159,101 @@ export const Dashboard: React.FC = () => {
     setSidebarOpen(false);
   }
 };
+
+const normalizePaymentLabel = (raw: any) => {
+  const text = String(raw || '').trim();
+  if (!text) return 'Payment method';
+  const parts = text.split('|').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2) return parts[1];
+  return text;
+};
+
+const normalizeOfferPaymentMethods = (offer: any) => {
+  const raw = offer?.sellerPaymentMethods ?? offer?.paymentMethods ?? offer?.payment_method ?? null;
+  if (!raw) return [] as any[];
+  let methods: any = raw;
+  if (typeof methods === 'string') {
+    try {
+      methods = JSON.parse(methods);
+    } catch {
+      return String(methods)
+        .split(',')
+        .map((m) => m.trim())
+        .filter(Boolean)
+        .map((m) => ({ paymentname: normalizePaymentLabel(m), payment_method: m }));
+    }
+  }
+  if (!Array.isArray(methods)) methods = [methods];
+  return methods.filter(Boolean);
+};
+
+const copyFieldValue = async (value: string, label = 'Value') => {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch (_err) {
+    // Keep copy action silent to avoid blocking popup overlays.
+  }
+};
+
+const resolveQrCodeValue = (pm: any) => {
+  const possible = [
+    pm?.qr_code,
+    pm?.qrCode,
+    pm?.qr,
+    pm?.qr_image,
+    pm?.qrImage,
+    pm?.image,
+    pm?.image_url,
+    pm?.imageUrl,
+  ];
+  const raw = possible.find((v) => String(v || '').trim().length > 0);
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  if (text.startsWith('data:image') || text.startsWith('http://') || text.startsWith('https://')) {
+    return text;
+  }
+  // Support relative/static image paths returned by backend (e.g. /uploads/qr.png).
+  if (text.startsWith('/')) return text;
+  if (text.startsWith('uploads/') || text.startsWith('./uploads/')) return `/${text.replace(/^\.?\//, '')}`;
+  // Some rows store raw base64 without data URI prefix.
+  if (/^[A-Za-z0-9+/=\s]+$/.test(text)) {
+    return `data:image/png;base64,${text.replace(/\s+/g, '')}`;
+  }
+  return '';
+};
+
+const formatPaymentFieldLabel = (key: string) => {
+  const k = String(key || '').trim().toLowerCase();
+  if (k === 'upi_id') return 'UPI ID';
+  if (k === 'ifsc' || k === 'ifsc_code') return 'IFSC Code';
+  if (k === 'payment_method') return 'Payment Method';
+  if (k === 'paymentname') return 'Payment';
+  return k
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+};
+
+const getPaymentDetailRows = (pm: any) => {
+  if (!pm || typeof pm !== 'object') return [] as Array<{ key: string; label: string; value: string }>;
+  const skip = new Set([
+    'id', 'user_id', 'is_active', 'created_at', 'updated_at',
+    'qr_code', 'qrCode', 'qr', 'qr_image', 'qrImage', 'image', 'image_url', 'imageUrl',
+  ]);
+  const orderedKeys = [
+    'upi_id', 'name', 'account_holder', 'bank_account', 'account_number', 'card_number',
+    'ifsc', 'ifsc_code', 'bank_name', 'account_type', 'branch', 'opening_branch',
+  ];
+  const allKeys = Object.keys(pm);
+  const finalKeys = [
+    ...orderedKeys.filter((k) => allKeys.includes(k)),
+    ...allKeys.filter((k) => !orderedKeys.includes(k)),
+  ];
+  return finalKeys
+    .filter((k) => !skip.has(k))
+    .map((k) => ({ key: k, label: formatPaymentFieldLabel(k), value: String(pm[k] ?? '').trim() }))
+    .filter((r) => r.value.length > 0 && r.value.toLowerCase() !== 'null');
+};
+
   return (
     <>
     <div
@@ -4261,6 +4386,7 @@ export const Dashboard: React.FC = () => {
               auth={auth}
               price={fdaPrice}
               change="0 (-0.01%)"
+              walletAddress={storedMeta?.address || null}
               actions={[
                 { label: "Buy", icon: "fa-solid fa-dollar-sign", changeTab: () => handleChangeTab('p2p') },
                 { label: "Swap", icon: "fa-solid fa-right-left", changeTab: () => setShowSwapModal(true) },
@@ -4653,6 +4779,7 @@ export const Dashboard: React.FC = () => {
           {activeTab === 'trade-listing' && (
             <TradeListing
               auth={auth}
+              inMobileShell={isMobile}
               p2pFeeRate={p2pFeeRate}
               filteredOffers={filteredOffers}
               paginatedOffers={paginatedOffers}
@@ -4681,6 +4808,7 @@ export const Dashboard: React.FC = () => {
               openCancelOfferModal={openCancelOfferModal}
               cancelTrade={cancelTrade}
               openDisputeModal={openDisputeModal}
+              openTradeChatModal={openTradeChatModal}
               openReleaseConfirmModal={openReleaseConfirmModal}
             />
           )}
@@ -4730,6 +4858,7 @@ export const Dashboard: React.FC = () => {
             <TransactionHistory
               auth={auth}
               userWalletAddresses={userWalletAddresses}
+              walletOptions={allWallets.map((w) => ({ address: w.address, label: w.label }))}
             />
           )}
 
@@ -4927,7 +5056,7 @@ export const Dashboard: React.FC = () => {
           </nav>
         )}
       {/* Error/Message Modal */}
-      <MessageModal show={showMessageModal} message={message} onClose={closeMessageModal} />
+      <MessageModal show={showMessageModal} message={message} variant={messageVariant} onClose={closeMessageModal} />
 
       {/* Accept Offer Modal */}
       {showAcceptModal && selectedOffer && (
@@ -4945,41 +5074,90 @@ export const Dashboard: React.FC = () => {
               </p>
               <div className="modal-text">
                 Payment:
-                {Array.isArray(selectedOffer.sellerPaymentMethods) && selectedOffer.sellerPaymentMethods.length > 0 ? (
-                  <div style={{ marginTop: 6, display: 'grid', gap: 8 }}>
-                    {selectedOffer.sellerPaymentMethods.map((pm: any, i: number) => (
-                      <div key={`${pm?.id ?? 'pm'}-${i}`} style={{ border: '1px solid #334155', borderRadius: 8, padding: 8 }}>
-                        <strong style={{ display: 'block' }}>
-                          {pm?.paymentname || pm?.upi_id || 'Payment method'}
-                        </strong>
-                        {pm?.upi_id && (
-                          <span style={{ display: 'block', marginTop: 2, color: '#cbd5e1' }}>
-                            {pm.upi_id}
-                          </span>
-                        )}
-                        {pm?.qr_code && (
-                          <img
-                            src={pm.qr_code}
-                            alt="Payment QR"
-                            style={{ marginTop: 6, width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 6 }}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : String(selectedOffer.paymentMethods || selectedOffer.payment_method || '').trim() ? (
-                  <div style={{ marginTop: 6, display: 'grid', gap: 4 }}>
-                    {String(selectedOffer.paymentMethods || selectedOffer.payment_method || '')
-                      .split(',')
-                      .map((m) => m.trim())
-                      .filter(Boolean)
-                      .map((pm, i) => (
-                        <strong key={`${pm}-${i}`} style={{ display: 'block' }}>{pm}</strong>
-                      ))}
-                  </div>
-                ) : (
-                  <strong> Not specified</strong>
-                )}
+                {(() => {
+                  const methods = normalizeOfferPaymentMethods(selectedOffer);
+                  if (!methods.length) return <strong> Not specified</strong>;
+                  return (
+                    <div style={{ marginTop: 6, display: 'grid', gap: 8 }}>
+                      {methods.map((pm: any, i: number) => {
+                        const methodLabel = normalizePaymentLabel(pm?.paymentname || pm?.payment_method || pm?.method || 'Payment method');
+                        const detailRows = getPaymentDetailRows(pm);
+                        const qrCode = resolveQrCodeValue(pm);
+                        const hasQr = !!qrCode;
+                        return (
+                          <div key={`${pm?.id ?? 'pm'}-${i}`} style={{ border: '1px solid #334155', borderRadius: 8, padding: 8 }}>
+                            <strong style={{ display: 'block', marginBottom: detailRows.length ? 4 : 0 }}>{methodLabel}</strong>
+                            {detailRows.length > 0 && (
+                              <div style={{ display: 'grid', gap: 0 }}>
+                                {detailRows.map((row, rowIndex) => (
+                                  <div
+                                    key={`${row.key}-${rowIndex}`}
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: '1fr auto',
+                                      gap: 8,
+                                      alignItems: 'center',
+                                      padding: '6px 0',
+                                      borderBottom: rowIndex < detailRows.length - 1 ? '1px solid #1f2937' : 'none',
+                                    }}
+                                  >
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ color: '#94a3b8', fontSize: 11 }}>{row.label}</div>
+                                      <div style={{ color: '#e2e8f0', fontSize: 12, wordBreak: 'break-word' }}>{row.value}</div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      title={`Copy ${row.label}`}
+                                      onClick={() => void copyFieldValue(row.value, row.label)}
+                                      style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        color: '#cbd5e1',
+                                        cursor: 'pointer',
+                                        width: 20,
+                                        height: 20,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        opacity: 0.95,
+                                      }}
+                                    >
+                                      <span style={{ fontSize: 14, fontWeight: 700 }}>⧉</span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {detailRows.length > 0 && hasQr && (
+                              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 7, marginBottom: 2, textAlign: 'center' }}>
+                                OR
+                              </div>
+                            )}
+                            {hasQr && (
+                              <img
+                                src={qrCode}
+                                alt="Payment QR"
+                                style={{ marginTop: 8, width: '100%', maxHeight: 140, objectFit: 'contain', borderRadius: 6 }}
+                                onClick={() => {
+                                  const win = window.open();
+                                  if (!win) return;
+                                  win.document.write(`
+                                    <html>
+                                      <head><title>Payment QR</title></head>
+                                      <body style="margin:0;display:flex;align-items:center;justify-content:center;background:#0f172a;min-height:100vh;">
+                                        <img src="${qrCode}" style="max-width:95vw;max-height:95vh;border-radius:10px;" />
+                                      </body>
+                                    </html>
+                                  `);
+                                }}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
               <label className="modal-label">
                 Amount to {selectedOffer.type === 'SELL' ? 'buy' : 'sell'} (FDA):
@@ -5122,6 +5300,13 @@ export const Dashboard: React.FC = () => {
         disputingTrade={disputingTrade}
         onClose={closeDisputeModal}
         onConfirm={createDispute}
+      />
+      <TradeChatModal
+        show={showTradeChatModal}
+        trade={selectedTradeForChat}
+        auth={auth}
+        onClose={closeTradeChatModal}
+        onError={showErrorModal}
       />
 
       {/* OLD Cancel Offer Modal - TO BE REMOVED AFTER TESTING */}

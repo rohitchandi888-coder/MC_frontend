@@ -33,6 +33,7 @@ interface OnchainTransfer {
 interface TransactionHistoryProps {
   auth: AuthState | null;
   userWalletAddresses: string[];
+  walletOptions?: Array<{ address: string; label?: string }>;
 }
 
 /** API may return the same transfer row more than once; keep first per id for stable UI. */
@@ -45,11 +46,31 @@ function dedupeTransactionsById(rows: Transaction[]): Transaction[] {
   });
 }
 
-export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, userWalletAddresses }) => {
+export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
+  auth,
+  userWalletAddresses,
+  walletOptions = [],
+}) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
+  const [selectedWalletAddress, setSelectedWalletAddress] = useState<string>('ALL');
+
+  const walletFilterOptions = useMemo(() => {
+    const byAddress = new Map<string, { address: string; label?: string }>();
+    for (const w of walletOptions) {
+      const addr = String(w.address || '').trim();
+      if (!addr) continue;
+      byAddress.set(addr.toLowerCase(), { address: addr, label: w.label });
+    }
+    for (const addr of userWalletAddresses) {
+      const a = String(addr || '').trim();
+      if (!a) continue;
+      if (!byAddress.has(a.toLowerCase())) byAddress.set(a.toLowerCase(), { address: a });
+    }
+    return Array.from(byAddress.values());
+  }, [walletOptions, userWalletAddresses]);
 
 
   const loadTransactions = async () => {
@@ -168,6 +189,14 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
     }
   }, [auth, userWalletAddresses.length]);
 
+  useEffect(() => {
+    if (selectedWalletAddress === 'ALL') return;
+    const stillExists = userWalletAddresses.some(
+      (addr) => addr.toLowerCase() === selectedWalletAddress.toLowerCase(),
+    );
+    if (!stillExists) setSelectedWalletAddress('ALL');
+  }, [selectedWalletAddress, userWalletAddresses]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
@@ -192,9 +221,19 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
     return isFromUser ? 'Sent' : 'Received';
   };
 
+  const walletScopedTransactions = useMemo(() => {
+    if (selectedWalletAddress === 'ALL') return transactions;
+    const selected = selectedWalletAddress.toLowerCase();
+    return transactions.filter((tx) => {
+      const from = String(tx.from_address || '').toLowerCase();
+      const to = String(tx.to_address || '').toLowerCase();
+      return from === selected || to === selected;
+    });
+  }, [transactions, selectedWalletAddress]);
+
   const filterTransaction = useMemo(() => {
     const s = search.toLowerCase();
-    const onSearchFind = transactions.filter((e) =>
+    const onSearchFind = walletScopedTransactions.filter((e) =>
       String(e.created_at || '').toLowerCase().includes(s) ||
       String(e.amount || '').toLowerCase().includes(s) ||
       String(e.from_fda_user_id || '').toLowerCase().includes(s) ||
@@ -205,7 +244,7 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
       String(e.to_phone || '').toLowerCase().includes(s)
     );
     return onSearchFind
-  }, [transactions, search])
+  }, [walletScopedTransactions, search])
 
   if (!auth) {
     return (
@@ -237,8 +276,8 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
           <div>
             <div className="flex items-center gap-4">
               <p className="text-xs text-slate-400">
-                {transactions.length > 0
-                  ? `Showing ${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`
+                {walletScopedTransactions.length > 0
+                  ? `Showing ${walletScopedTransactions.length} transaction${walletScopedTransactions.length !== 1 ? 's' : ''}`
                   : userWalletAddresses.length > 0
                     ? `Showing transactions for ${userWalletAddresses.length} wallet address${userWalletAddresses.length !== 1 ? 'es' : ''}`
                     : 'Showing all your transactions'}
@@ -263,6 +302,23 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({ auth, us
           </div>
 
         </div>
+        {userWalletAddresses.length > 0 && (
+          <div className="mb-3">
+            <label className="text-xs text-slate-300 block mb-1">Wallet filter</label>
+            <select
+              className="form-select-dark w-full py-2"
+              value={selectedWalletAddress}
+              onChange={(e) => setSelectedWalletAddress(e.target.value)}
+            >
+              <option value="ALL">All Wallets</option>
+              {walletFilterOptions.map((w) => (
+                <option key={w.address} value={w.address}>
+                  {w.label ? `${w.label} - ` : ''}{w.address.slice(0, 10)}...{w.address.slice(-4)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <input type="text" placeholder='Search in Transaction....' style={{ width: '100%', paddingInline: 10, marginBlock: 15, paddingBlock: 15 }} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 

@@ -3,17 +3,18 @@ import React from 'react';
 interface MessageModalProps {
   show: boolean;
   message: string | null;
+  variant?: 'success' | 'error' | null;
   onClose: () => void;
 }
 
-export const MessageModal: React.FC<MessageModalProps> = ({ show, message, onClose }) => {
+export const MessageModal: React.FC<MessageModalProps> = ({ show, message, variant, onClose }) => {
   if (!show || !message) return null;
 
-  const isError = message.includes('❌') || 
+  const inferredError = message.includes('❌') ||
     message.includes('⚠️') ||
-    message.toLowerCase().includes('error') || 
-    message.toLowerCase().includes('failed') || 
-    message.toLowerCase().includes('invalid') || 
+    message.toLowerCase().includes('error') ||
+    message.toLowerCase().includes('failed') ||
+    message.toLowerCase().includes('invalid') ||
     message.toLowerCase().includes('please enter') ||
     message.toLowerCase().includes('unlock your wallet') ||
     message.toLowerCase().includes('required') ||
@@ -22,6 +23,7 @@ export const MessageModal: React.FC<MessageModalProps> = ({ show, message, onClo
     message.toLowerCase().includes('at least') ||
     message.toLowerCase().includes('incorrect') ||
     message.toLowerCase().includes('do not match');
+  const isError = variant ? variant === 'error' : inferredError;
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>

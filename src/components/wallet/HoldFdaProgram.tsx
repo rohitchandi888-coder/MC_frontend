@@ -39,6 +39,7 @@ type HoldingSettings = {
   merchantBuyRewardRate: number;
   merchantBuyRewardMinAmount: number;
   merchantBuyRewardPeriodMonths: number;
+  merchantBuyEligible: boolean;
   fdaPrice: number;
 };
 
@@ -58,8 +59,8 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
   onShowSuccessModal,
   onShowErrorModal,
 }) => {
-  const [amount, setAmount] = useState('25');
-  const [holdPlan, setHoldPlan] = useState<HoldPlan>('standard');
+  const [amount, setAmount] = useState('10');
+  const [holdPlan, setHoldPlan] = useState<HoldPlan>('merchant_buy');
   const [settings, setSettings] = useState<HoldingSettings>({
     rewardRate: 5,
     rewardMinAmount: 25,
@@ -67,6 +68,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     merchantBuyRewardRate: 2,
     merchantBuyRewardMinAmount: 10,
     merchantBuyRewardPeriodMonths: 12,
+    merchantBuyEligible: false,
     fdaPrice: 0,
   });
   const [holdings, setHoldings] = useState<RewardStatusRow[]>([]);
@@ -99,6 +101,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
 
   const activeRewardRate = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardRate : settings.rewardRate;
   const activeMinAmount = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardMinAmount : settings.rewardMinAmount;
+  const activeMaxAmount = holdPlan === 'merchant_buy' ? 50 : undefined;
   const activePeriodMonths = holdPlan === 'merchant_buy' ? settings.merchantBuyRewardPeriodMonths : settings.rewardPeriodMonths;
 
   const estimatedReward = useMemo(() => {
@@ -163,6 +166,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
         merchantBuyRewardRate: Number(data?.settings?.merchantBuyRewardRate ?? 2),
         merchantBuyRewardMinAmount: Math.max(10, Number(data?.settings?.merchantBuyRewardMinAmount ?? 10)),
         merchantBuyRewardPeriodMonths: Math.max(12, Number(data?.settings?.merchantBuyRewardPeriodMonths ?? 12)),
+        merchantBuyEligible: Boolean(data?.settings?.merchantBuyEligible),
         fdaPrice,
       });
       setPendingReward(Number(data?.pendingReward ?? 0));
@@ -190,6 +194,22 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     loadRewardStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth?.token, walletAddress, historyScope]);
+
+  useEffect(() => {
+    if (holdPlan === 'merchant_buy' && !settings.merchantBuyEligible) {
+      setHoldPlan('standard');
+    }
+  }, [holdPlan, settings.merchantBuyEligible]);
+
+  useEffect(() => {
+    setAmount((prev) => {
+      const parsed = Number(prev);
+      if (!Number.isFinite(parsed) || parsed <= 0) return String(activeMinAmount);
+      if (parsed < activeMinAmount) return String(activeMinAmount);
+      if (typeof activeMaxAmount === 'number' && parsed > activeMaxAmount) return String(activeMaxAmount);
+      return prev;
+    });
+  }, [activeMinAmount, activeMaxAmount, holdPlan]);
 
   useEffect(() => {
     const loadWalletLabels = async () => {
@@ -227,6 +247,14 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       pushError(`⚠️ Minimum hold amount for ${holdPlan === 'merchant_buy' ? 'Merchant Buy' : 'Standard'} plan is ${activeMinAmount} FDA.`);
       return;
     }
+    if (holdPlan === 'merchant_buy' && parsedAmount > 50) {
+      pushError('⚠️ Merchant Buy maximum hold amount is 50 FDA per user.');
+      return;
+    }
+    if (holdPlan === 'merchant_buy' && !settings.merchantBuyEligible) {
+      pushError('Merchant Buy hold is allowed only for users who completed at least 10 FDA buy on MerchantCoinWallet.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -244,9 +272,15 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to start holding');
-      pushSuccess(`✅ Holding started. Estimated maturity total: ${data?.holding?.estimatedTotalAfterMaturity ?? 0} FDA`);
+      const createdPlanRaw = String(data?.holding?.plan || holdPlan).toLowerCase();
+      const createdPlanLabel = createdPlanRaw === 'merchant_buy' ? 'Merchant Buy' : 'Standard';
+      pushSuccess(
+        `✅ Holding started in ${createdPlanLabel} plan. Estimated maturity total: ${data?.holding?.estimatedTotalAfterMaturity ?? 0} FDA`,
+      );
       setAmount(String(activeMinAmount));
       await loadRewardStatus();
+      // Notify mobile dashboard so it refreshes Locked/Available cards immediately.
+      window.dispatchEvent(new Event('holding-fda-updated'));
       onHoldingStarted?.();
     } catch (err: any) {
       pushError(err?.message || 'Failed to start holding');
@@ -415,36 +449,112 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
 
         <div className="mb-3">
           <label className="modal-label">Hold Plan</label>
-          <div className="flex gap-2">
+          <div
+            className="flex gap-2"
+            style={{
+              padding: 3,
+              borderRadius: 999,
+              background: '#e2e8f0',
+              border: '1px solid #cbd5e1',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)',
+            }}
+          >
             <button
               type="button"
-              className={`btn ${holdPlan === 'standard' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setHoldPlan('standard')}
+              className="btn"
+              onClick={() => {
+                setHoldPlan('standard');
+                setAmount(String(Math.max(0, Number(settings.rewardMinAmount) || 25)));
+              }}
+              style={{
+                flex: 1,
+                minHeight: 34,
+                padding: '8px 12px',
+                borderRadius: 999,
+                border: holdPlan === 'standard' ? '1px solid #facc15' : '1px solid transparent',
+                background: holdPlan === 'standard' ? '#facc15' : 'transparent',
+                color: holdPlan === 'standard' ? '#111827' : '#475569',
+                fontWeight: 800,
+                fontSize: 12,
+                lineHeight: 1.2,
+                boxShadow: holdPlan === 'standard' ? '0 2px 8px rgba(250,204,21,0.35)' : 'none',
+                transition: 'all 0.16s ease',
+              }}
             >
-              Standard ({settings.rewardRate}% / {settings.rewardPeriodMonths}m, min {settings.rewardMinAmount})
+              Standard
             </button>
             <button
               type="button"
-              className={`btn ${holdPlan === 'merchant_buy' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setHoldPlan('merchant_buy')}
+              className="btn"
+              onClick={() => {
+                setHoldPlan('merchant_buy');
+                setAmount(String(Math.max(10, Number(settings.merchantBuyRewardMinAmount) || 10)));
+              }}
+              disabled={!settings.merchantBuyEligible}
+              title={!settings.merchantBuyEligible ? 'Not eligible for Merchant Buy hold plan' : undefined}
+              style={{
+                flex: 1,
+                minHeight: 34,
+                padding: '8px 12px',
+                borderRadius: 999,
+                border: holdPlan === 'merchant_buy' ? '1px solid #facc15' : '1px solid transparent',
+                background: holdPlan === 'merchant_buy' ? '#facc15' : 'transparent',
+                color: holdPlan === 'merchant_buy' ? '#111827' : '#475569',
+                fontWeight: 800,
+                fontSize: 12,
+                lineHeight: 1.2,
+                opacity: settings.merchantBuyEligible ? 1 : 0.55,
+                cursor: settings.merchantBuyEligible ? 'pointer' : 'not-allowed',
+                boxShadow:
+                  holdPlan === 'merchant_buy' && settings.merchantBuyEligible
+                    ? '0 2px 8px rgba(250,204,21,0.35)'
+                    : 'none',
+                transition: 'all 0.16s ease',
+              }}
             >
-              Merchant Buy (2% monthly, min 10, min 1 year)
+              Merchant
             </button>
           </div>
-          <p className="text-xs text-gray-600 mt-1">
-            Use Merchant Buy plan when FDA was bought inside MerchantCoinWallet.
+          <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+            {holdPlan === 'merchant_buy'
+              ? `Merchant: ${settings.merchantBuyRewardRate}% / ${settings.merchantBuyRewardPeriodMonths}m, min ${settings.merchantBuyRewardMinAmount}, max 50`
+              : `Standard: ${settings.rewardRate}% / ${settings.rewardPeriodMonths}m, min ${settings.rewardMinAmount}`}
           </p>
+          <p className="text-xs text-gray-600 mt-1">
+            Use Merchant Buy only if you bought at least 10 FDA inside MerchantCoinWallet.
+          </p>
+          {!settings.merchantBuyEligible && (
+            <p className="text-xs mt-1" style={{ color: '#ef4444' }}>
+              Merchant Buy plan is locked for this account.
+            </p>
+          )}
         </div>
 
         <div className="mb-3">
-          <label className="modal-label">Hold Amount (FDA)</label>
+          <label className="modal-label" style={{ color: '#334155', fontWeight: 700 }}>
+            Hold Amount (FDA)
+          </label>
           <input
             type="number"
             min={activeMinAmount}
+            max={activeMaxAmount}
             step="0.000000000000000001"
             className="form-input w-full"
+            inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter FDA amount"
+            style={{
+              background: '#ffffff',
+              color: '#0f172a',
+              border: '1px solid #94a3b8',
+              fontSize: 16,
+              fontWeight: 700,
+              lineHeight: 1.3,
+              opacity: 1,
+              caretColor: '#0f172a',
+              WebkitTextFillColor: '#0f172a',
+            }}
           />
           <p className="text-xs text-gray-600 mt-1">
             Estimated on maturity: {Number(parseFloat(amount || '0') + estimatedReward).toFixed(8)} FDA
@@ -489,6 +599,9 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
+        <p className="text-xs text-gray-600 mt-2">
+          Selected plan right now: <strong>{holdPlan === 'merchant_buy' ? 'Merchant Buy' : 'Standard'}</strong>
+        </p>
       </div>
 
       <div className="offer-form-card">

@@ -42,6 +42,7 @@ function networkChipStyle(active: boolean): React.CSSProperties {
   };
 }
 
+
 const NetworkModal: React.FC<NetworkModalProps> = ({
   auth,
   isOpen,

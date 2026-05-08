@@ -16,6 +16,9 @@ export const CancelOfferModal: React.FC<CancelOfferModalProps> = ({
   onConfirm,
 }) => {
   if (!show || !offer) return null;
+  const offerType = String(offer.type || offer.offer_type || '').toUpperCase();
+  const assetSymbol = String(offer.assetSymbol || offer.asset_symbol || '').toUpperCase();
+  const showsLockedReturnNote = offerType === 'SELL' && assetSymbol === 'FDA';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -38,9 +41,15 @@ export const CancelOfferModal: React.FC<CancelOfferModalProps> = ({
             <p className="modal-info-text">
               <strong>Remaining:</strong> {offer.remaining || offer.available_amount || 0} FDA
             </p>
-            <p className="modal-info-text-small">
-              ⚠️ The locked amount ({offer.remaining || offer.available_amount || 0} FDA) will be returned to your balance.
-            </p>
+            {showsLockedReturnNote ? (
+              <p className="modal-info-text-small">
+                ⚠️ The locked amount ({offer.remaining || offer.available_amount || 0} FDA) will be returned to your balance.
+              </p>
+            ) : (
+              <p className="modal-info-text-small">
+                ℹ️ Cancelling this offer closes it immediately. No locked FDA is returned for this offer type.
+              </p>
+            )}
           </div>
         </div>
         <div className="modal-actions">
