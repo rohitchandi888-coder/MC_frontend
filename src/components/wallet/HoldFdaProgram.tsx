@@ -252,7 +252,7 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
       return;
     }
     if (holdPlan === 'merchant_buy' && !settings.merchantBuyEligible) {
-      pushError('Merchant Buy hold is allowed only for users who completed at least 10 FDA buy on MerchantCoinWallet.');
+      pushError('Merchant Buy hold is allowed only on wallets that completed at least 10 FDA buy on MerchantCoinWallet.');
       return;
     }
 
@@ -521,11 +521,11 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
               : `Standard: ${settings.rewardRate}% / ${settings.rewardPeriodMonths}m, min ${settings.rewardMinAmount}`}
           </p>
           <p className="text-xs text-gray-600 mt-1">
-            Use Merchant Buy only if you bought at least 10 FDA inside MerchantCoinWallet.
+            Use Merchant Buy only on the wallet that bought at least 10 FDA inside MerchantCoinWallet.
           </p>
           {!settings.merchantBuyEligible && (
             <p className="text-xs mt-1" style={{ color: '#ef4444' }}>
-              Merchant Buy plan is locked for this account.
+              Merchant Buy plan is locked for this wallet.
             </p>
           )}
         </div>
