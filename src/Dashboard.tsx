@@ -636,14 +636,26 @@ export const Dashboard: React.FC = () => {
 
       const balances: Record<string, string> = {};
       for (const token of tokens) {
-        const key = token.address.toLowerCase();
+        const rawAddress = String(token.address || '').trim();
+        const key = rawAddress.toLowerCase();
+        if (!rawAddress || !ethers.isAddress(rawAddress)) {
+          // Skip non-EVM / malformed addresses (e.g. Solana/Tron style) on EVM provider.
+          balances[key] = 'N/A';
+          continue;
+        }
         try {
-          const tokenContract = new ethers.Contract(token.address, ERC20_ABI, provider);
+          const code = await provider.getCode(rawAddress);
+          if (!code || code === '0x') {
+            // Address exists in UI list but no contract deployed on this chain.
+            balances[key] = 'N/A';
+            continue;
+          }
+          const tokenContract = new ethers.Contract(rawAddress, ERC20_ABI, provider);
           const decimals = await tokenContract.decimals();
           const tokenBal = await tokenContract.balanceOf(address);
           balances[key] = ethers.formatUnits(tokenBal, decimals);
         } catch (err) {
-          console.error(`Failed to fetch balance for ${token.symbol}:`, err);
+          console.warn(`Skipped balance fetch for ${token.symbol || rawAddress}:`, err);
           balances[key] = 'Error';
         }
       }

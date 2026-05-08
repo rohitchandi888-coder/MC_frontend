@@ -213,6 +213,16 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
+  const copyWalletAddress = async (address: string | null | undefined) => {
+    const value = String(address || '').trim();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // best-effort only
+    }
+  };
+
   const getTransactionType = (tx: Transaction) => {
     if (!tx.from_address) return 'Received';
     const isFromUser = userWalletAddresses.some(
@@ -349,6 +359,9 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
               const isToUser = tx.to_address ? userWalletAddresses.some(
                 (addr) => addr.toLowerCase() === tx.to_address?.toLowerCase()
               ) : false;
+              const isSentTx = isFromUser && !isToUser;
+              const isReceivedTx = isToUser && !isFromUser;
+              const isSelfTx = isFromUser && isToUser;
 
               const rowKey = `${tx.id}-${tx.created_at}-${tx.amount}-${tx.from_address ?? ""}-${tx.to_address ?? ""}-${rowIndex}`;
 
@@ -388,14 +401,25 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                   ) : null}
 
                   <div className="space-y-2">
-                        {isFromUser && (
+                        {(isReceivedTx || isSelfTx) && (
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm  font-semibold" style={{ color: '#fff' }}>From:</span>
                               {tx.from_address && (
-                                <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
-                                  {formatAddress(tx.from_address)}
-                                </span>
+                                <>
+                                  <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
+                                    {formatAddress(tx.from_address)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="text-sm font-semibold px-1.5 py-0.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-700"
+                                    onClick={() => void copyWalletAddress(tx.from_address)}
+                                    title="Copy wallet address"
+                                    aria-label="Copy wallet address"
+                                  >
+                                    ⧉
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
@@ -411,14 +435,25 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
                           </div>
                         )}
 
-                        {isToUser && (
+                        {(isSentTx || isSelfTx) && (
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm  font-semibold" style={{ color: '#fff' }}>To:</span>
                               {tx.to_address && (
-                                <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
-                                  {formatAddress(tx.to_address)}
-                                </span>
+                                <>
+                                  <span className="text-sm text-white font-mono bg-slate-800 px-2 py-0.5 rounded" style={{ color: '#fff' }}>
+                                    {formatAddress(tx.to_address)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="text-sm font-semibold px-1.5 py-0.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-700"
+                                    onClick={() => void copyWalletAddress(tx.to_address)}
+                                    title="Copy wallet address"
+                                    aria-label="Copy wallet address"
+                                  >
+                                    ⧉
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
