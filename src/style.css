@@ -3527,6 +3527,8 @@ ul:not([style*="padding"]) li {
 
 
 
+/* Cream card: only when JS adds .offer-card-listing-my (your offer). Do not override with inline styles on mobile. */
+
 .offer-card-listing-my {
 
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);

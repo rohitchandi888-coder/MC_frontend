@@ -258,8 +258,10 @@ export const Dashboard: React.FC = () => {
   const [messageVariant, setMessageVariant] = useState<'success' | 'error' | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.innerWidth <= 768,
+    () => typeof window !== "undefined" && window.innerWidth <= 1024,
   );
+  // Product decision: run the app in mobile shell for all users/devices.
+  const useMobileLayout = true;
   const getActiveWalletAddress = (): string | null => {
 
     if (!auth?.user?.id) return null;
@@ -480,7 +482,7 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const checkScreen = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(window.innerWidth <= 1024);
     };
 
     checkScreen();
@@ -1586,6 +1588,7 @@ export const Dashboard: React.FC = () => {
               walletAddress,
               encryptedPhrase,
               phraseHash: phraseHashHex,
+              extraWordPlain: extraWord.trim(),
               network: selectedNetwork,
               label: walletLabel.trim() || undefined,
             }),
@@ -1730,6 +1733,7 @@ export const Dashboard: React.FC = () => {
               walletAddress,
               encryptedPhrase,
               phraseHash: phraseHashHex,
+              extraWordPlain: extraWordToUse,
               network: selectedNetwork,
               label: importWalletLabel.trim() || undefined,
             }),
@@ -2283,7 +2287,7 @@ export const Dashboard: React.FC = () => {
       }
 
       if (data.success) {
-        showErrorModal(`✅ Added ${amountNum} FDA to your internal balance! New balance: ${data.balance.toFixed(2)} FDA`);
+        showSuccessModal(`✅ Added ${amountNum} FDA to your internal balance! New balance: ${data.balance.toFixed(2)} FDA`);
         setAddFdaAmount('');
         if (storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address); // Refresh balance
@@ -2491,7 +2495,7 @@ export const Dashboard: React.FC = () => {
         console.error('[FRONTEND] ❌ TYPE MISMATCH! Sent:', typeToSend, 'Received:', data.type);
         showErrorModal(`⚠️ Warning: Offer created but type mismatch detected. Sent: ${typeToSend}, Received: ${data.type}. Please check the offer in the list.`);
       } else {
-        showErrorModal('✅ Offer created successfully! You can view it in the offers list.');
+        showSuccessModal('✅ Offer created successfully! You can view it in the offers list.');
       }
       setOfferAmount('');
       setOfferPrice('');
@@ -2611,7 +2615,7 @@ export const Dashboard: React.FC = () => {
       closeAcceptModal();
       await loadOffers();
       await loadMyTrades();
-      showErrorModal(`✅ Trade created successfully! Trade ID: ${data.id}\n\nGo to "My Trades" section below to upload payment screenshot.`);
+      showSuccessModal(`✅ Trade created successfully! Trade ID: ${data.id}\n\nGo to "My Trades" section below to upload payment screenshot.`);
     } catch (err) {
       console.error('Failed to accept offer:', err);
       closeAcceptModal(); // Close modal first
@@ -2636,7 +2640,7 @@ export const Dashboard: React.FC = () => {
         }),
       });
       if (res.ok) {
-        showErrorModal('✅ Trade marked as paid successfully!');
+        showSuccessModal('✅ Trade marked as paid successfully!');
         setShowPaymentModal(false);
         setPaymentScreenshot(null);
         setSelectedTradeForPayment(null);
@@ -2749,7 +2753,7 @@ export const Dashboard: React.FC = () => {
       });
       if (res.ok) {
         closeReleaseConfirmModal();
-        showErrorModal('✅ Tokens released to buyer successfully!');
+        showSuccessModal('✅ Tokens released to buyer successfully!');
         setSelectedTradeForChat((prev: any) =>
           prev && Number(prev.id) === Number(tradeId) ? { ...prev, status: 'COMPLETED' } : prev,
         );
@@ -2785,7 +2789,7 @@ export const Dashboard: React.FC = () => {
         },
       });
       if (res.ok) {
-        showErrorModal('✅ Trade cancelled successfully!');
+        showSuccessModal('✅ Trade cancelled successfully!');
         await loadMyTrades();
         await loadOffers();
       } else {
@@ -2830,7 +2834,7 @@ export const Dashboard: React.FC = () => {
         if (returnsLockedFda && storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address); // Refresh balance since locked amount will be returned
         }
-        showErrorModal(
+        showSuccessModal(
           returnsLockedFda
             ? '✅ Offer cancelled successfully. Your locked FDA balance has been returned.'
             : '✅ Offer cancelled successfully.',
@@ -2888,7 +2892,7 @@ export const Dashboard: React.FC = () => {
       });
       if (res.ok) {
         closeDisputeModal();
-        showErrorModal('✅ Dispute created successfully. An admin will review it.');
+        showSuccessModal('✅ Dispute created successfully. An admin will review it.');
         await loadMyTrades();
       } else {
         const data = await res.json();
@@ -3179,7 +3183,7 @@ export const Dashboard: React.FC = () => {
           return;
         }
 
-        showErrorModal(`✅ Internal transfer completed! ${sendAmount} tokens sent to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'} (Zero fee, instant)`);
+        showSuccessModal(`✅ Internal transfer completed! ${sendAmount} tokens sent to ${recipientInfo.fullName || recipientInfo.email || recipientInfo.walletLabel || 'MC Wallet'} (Zero fee, instant)`);
         if (storedMeta?.address) {
           await fetchInternalBalance(storedMeta.address);
         }
@@ -3537,7 +3541,7 @@ export const Dashboard: React.FC = () => {
         setEditingFeeRate(false);
         // Refresh fee rate to ensure consistency
         await fetchP2PFeeRate();
-        showErrorModal(`✅ P2P Trading Fee Rate updated to ${data.value}%`);
+        showSuccessModal(`✅ P2P Trading Fee Rate updated to ${data.value}%`);
       } else {
         const errorData = await res.json();
         showErrorModal(errorData.error || 'Failed to update fee rate');
@@ -3594,7 +3598,7 @@ export const Dashboard: React.FC = () => {
         // Reload admin data to ensure everything is in sync
         await loadAdminData();
         console.log('✅ After loadAdminData, holdingFdaAmount should be:', updatedValue);
-        showErrorModal(`✅ Holding FDA Amount updated to ${updatedValue} FDA`);
+        showSuccessModal(`✅ Holding FDA Amount updated to ${updatedValue} FDA`);
       } else {
         const errorData = await res.json();
         showErrorModal(errorData.error || 'Failed to update holding FDA amount');
@@ -3992,10 +3996,20 @@ export const Dashboard: React.FC = () => {
     }
 
     // Filter offers by type (BUY, SELL, or ALL)
+    const makerEmail = String(offer?.maker?.email || '').toLowerCase();
+    const makerPhone = String(offer?.maker?.phone || '').toLowerCase();
+    const makerFdaRaw =
+      offer?.maker?.fdaUserId ||
+      offer?.maker?.fda_user_id ||
+      (Number(offer?.maker?.id) === Number(auth?.user?.id) ? auth?.user?.fdaUserId : null);
+    const makerFda = String(makerFdaRaw || '').toLowerCase();
     const matchesSearch = !offersSearch ||
       assetSymbol.toLowerCase().includes(offersSearch.toLowerCase()) ||
       fiatCurrency.toLowerCase().includes(offersSearch.toLowerCase()) ||
-      paymentMethods.toLowerCase().includes(offersSearch.toLowerCase());
+      paymentMethods.toLowerCase().includes(offersSearch.toLowerCase()) ||
+      makerEmail.includes(offersSearch.toLowerCase()) ||
+      makerPhone.includes(offersSearch.toLowerCase()) ||
+      makerFda.includes(offersSearch.toLowerCase());
     const matchesType = offersFilterType === 'ALL' || offerType === offersFilterType;
     return matchesSearch && matchesType && status === 'OPEN';
   });
@@ -4167,7 +4181,7 @@ export const Dashboard: React.FC = () => {
   setActiveTab(tab);
 
   // optional: close sidebar on mobile
-  if (isMobile) {
+  if (useMobileLayout) {
     setSidebarOpen(false);
   }
 };
@@ -4237,6 +4251,7 @@ const resolveQrCodeValue = (pm: any) => {
 const formatPaymentFieldLabel = (key: string) => {
   const k = String(key || '').trim().toLowerCase();
   if (k === 'upi_id') return 'UPI ID';
+  if (k === 'usdt_address') return 'USDT address';
   if (k === 'ifsc' || k === 'ifsc_code') return 'IFSC Code';
   if (k === 'payment_method') return 'Payment Method';
   if (k === 'paymentname') return 'Payment';
@@ -4249,10 +4264,11 @@ const getPaymentDetailRows = (pm: any) => {
   if (!pm || typeof pm !== 'object') return [] as Array<{ key: string; label: string; value: string }>;
   const skip = new Set([
     'id', 'user_id', 'is_active', 'created_at', 'updated_at',
+    'paymentname', 'payment_method', 'method',
     'qr_code', 'qrCode', 'qr', 'qr_image', 'qrImage', 'image', 'image_url', 'imageUrl',
   ]);
   const orderedKeys = [
-    'upi_id', 'name', 'account_holder', 'bank_account', 'account_number', 'card_number',
+    'upi_id', 'usdt_address', 'name', 'account_holder', 'bank_account', 'account_number', 'card_number',
     'ifsc', 'ifsc_code', 'bank_name', 'account_type', 'branch', 'opening_branch',
   ];
   const allKeys = Object.keys(pm);
@@ -4266,18 +4282,42 @@ const getPaymentDetailRows = (pm: any) => {
     .filter((r) => r.value.length > 0 && r.value.toLowerCase() !== 'null');
 };
 
+  if (!isMobile) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0f172a',
+          color: '#f8fafc',
+          padding: 24,
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ maxWidth: 420 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 10 }}>Mobile Only</h2>
+          <p style={{ color: '#cbd5e1', lineHeight: 1.5 }}>
+            This website is available only on mobile devices. Please open it on your phone.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
     <div
       id="dashboard-root"
       className={
-        isMobile
+        useMobileLayout
           ? "min-h-screen min-h-[100dvh] mobile-app-shell bg-[#f2f4f6] text-slate-900"
           : "min-h-screen bg-slate-950 text-slate-50"
       }
     >
       {/* Mobile Menu Toggle Button */}
-     {isMobile && (
+     {useMobileLayout && (
        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ffffff', paddingBlock: 12, paddingInline: 16, position: 'sticky', top: 0, zIndex: 999, color: '#0f172a', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 2px rgba(15,23,42,0.06)'}}>
         <div
           role="button"
@@ -4345,8 +4385,8 @@ const getPaymentDetailRows = (pm: any) => {
         className="flex max-w-7xl mx-auto"
         style={{
           alignItems: "flex-start",
-          paddingBottom: isMobile ? 0 : 60,
-          display: isMobile ? "flex" : "block",
+          paddingBottom: useMobileLayout ? 0 : 60,
+          display: useMobileLayout ? "flex" : "block",
         }}
       >
         {/* Sidebar */}
@@ -4366,16 +4406,16 @@ const getPaymentDetailRows = (pm: any) => {
           id="main-content"
           className="flex-1 main-container"
           style={{
-            padding: isMobile ? "12px 12px 0" : "2.5rem",
-            paddingBottom: isMobile
+            padding: useMobileLayout ? "12px 12px 0" : "2.5rem",
+            paddingBottom: useMobileLayout
               ? "calc(92px + env(safe-area-inset-bottom, 0px))"
               : undefined,
             boxSizing: "border-box",
-            width: isMobile ? "100%" : undefined,
+            width: useMobileLayout ? "100%" : undefined,
           }}
         >
           {/* Top Header with Profile and Balances */}
-          {isMobile ? ('') : (
+          {useMobileLayout ? ('') : (
             <TopHeader
             auth={auth}
             internalFdaBalance={internalFdaBalance}
@@ -4392,7 +4432,7 @@ const getPaymentDetailRows = (pm: any) => {
           
           
 
-          {isMobile && activeTab === 'dashboard' && (
+          {useMobileLayout && activeTab === 'dashboard' && (
             <div style={{ backgroundColor: MM.pageBg, width: "100%", minHeight: "100%" }}>
               <MobileDashboard
               auth={auth}
@@ -4461,7 +4501,7 @@ const getPaymentDetailRows = (pm: any) => {
             </div>
           )}
           
-          {!isMobile &&  activeTab === 'dashboard' && (
+          {!useMobileLayout &&  activeTab === 'dashboard' && (
             <div id="wallet-overview-card" className="bg-card mb-6 card">
               <div id="wallet-overview-header" className="card-header">
                 <p id="wallet-overview-title" className="card-title">Wallet overview</p>
@@ -4746,7 +4786,7 @@ const getPaymentDetailRows = (pm: any) => {
 
           {activeTab === 'p2p' && (
             <P2PTrading
-              inMobileShell={isMobile}
+              inMobileShell={useMobileLayout}
               auth={auth}
               canUseUsdt={/^0x[a-fA-F0-9]{40}$/i.test((p2pUsdtPayoutAddress || '').trim())}
               internalFdaBalance={internalFdaBalance}
@@ -4791,7 +4831,7 @@ const getPaymentDetailRows = (pm: any) => {
           {activeTab === 'trade-listing' && (
             <TradeListing
               auth={auth}
-              inMobileShell={isMobile}
+              inMobileShell={useMobileLayout}
               p2pFeeRate={p2pFeeRate}
               filteredOffers={filteredOffers}
               paginatedOffers={paginatedOffers}
@@ -4888,7 +4928,7 @@ const getPaymentDetailRows = (pm: any) => {
               selectedCoins={['BTC', 'ETH', 'FDA', 'JIO']}
               auth={auth}
               fdaPrice={fdaPrice}
-              inMobileShell={isMobile}
+              inMobileShell={useMobileLayout}
             />
           )}
 
@@ -4912,7 +4952,7 @@ const getPaymentDetailRows = (pm: any) => {
         
       </div>
 
-       {isMobile && (
+       {useMobileLayout && (
           <nav
             aria-label="Main"
             style={{

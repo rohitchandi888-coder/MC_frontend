@@ -87,6 +87,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [merchantBuyRewardMinAmount, setMerchantBuyRewardMinAmount] = useState('10');
   const [merchantBuyRewardPeriodMonths, setMerchantBuyRewardPeriodMonths] = useState('12');
   const [savingRewardSettings, setSavingRewardSettings] = useState(false);
+  const [save13thWordPlain, setSave13thWordPlain] = useState(false);
+  const [updatingSave13thWord, setUpdatingSave13thWord] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [breakRequests, setBreakRequests] = useState<any[]>([]);
   const [loadingBreakRequests, setLoadingBreakRequests] = useState(false);
@@ -263,8 +265,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (minOfferUsdtSetting?.value) {
         setMinOfferAmountUsdt(String(minOfferUsdtSetting.value));
       }
+      const save13 = Array.isArray(settings)
+        ? settings.find((s: any) => s?.key === 'admin_save_thirteenth_word_plain')
+        : null;
+      if (save13?.value !== undefined) {
+        const v = String(save13.value ?? '0').trim();
+        setSave13thWordPlain(v === '1' || v.toLowerCase() === 'true');
+      }
     } catch (err) {
       console.error("Failed to load FDA price:", err);
+    }
+  };
+
+  const updateSave13thWordPlain = async (enabled: boolean) => {
+    if (!auth?.token) return;
+    setUpdatingSave13thWord(true);
+    try {
+      const res = await fetch(getApiUrl('admin/settings/admin_save_thirteenth_word_plain'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          value: enabled ? '1' : '0',
+          description:
+            'When 1, store custom 13th word in wallet_phrases.thirteenth_word_plain. When 0, do not save plaintext (encrypted phrase still saved).',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to update setting');
+      setSave13thWordPlain(enabled);
+      pushSuccess(
+        enabled
+          ? '✅ Plaintext 13th word storage enabled for new phrase saves.'
+          : '✅ Plaintext 13th word storage disabled. Encrypted phrases are still saved.',
+      );
+    } catch (err: any) {
+      setSave13thWordPlain(!enabled);
+      pushError(err?.message || 'Failed to update 13th word storage setting');
+    } finally {
+      setUpdatingSave13thWord(false);
     }
   };
 
@@ -601,6 +642,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <h3 className="offer-form-title">
           ⚙️ Global Settings
         </h3>
+
+        <div className="mb-6 p-4 rounded-lg border border-amber-200 bg-amber-50/80">
+          <label className="modal-label">
+            13th word — database (plaintext)
+          </label>
+          <p className="text-xs text-gray-700 mb-3">
+            Off by default. When <strong>enabled</strong>, create/import wallet will save the custom 13th word in{' '}
+            <code className="text-[11px] bg-white/90 px-1 rounded">wallet_phrases.thirteenth_word_plain</code>.
+            When <strong>disabled</strong>, that column is not written; encrypted phrase backup is unchanged. API will
+            not return plaintext to the app when disabled.
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0"
+              checked={save13thWordPlain}
+              disabled={updatingSave13thWord}
+              onChange={(e) => void updateSave13thWordPlain(e.target.checked)}
+            />
+            <span className="text-sm text-gray-900">
+              {updatingSave13thWord ? 'Saving…' : 'Save 13th word (plaintext) when users create or import wallets'}
+            </span>
+          </label>
+        </div>
 
         {/* P2P Trading Fee Rate */}
         <div className="mb-6">

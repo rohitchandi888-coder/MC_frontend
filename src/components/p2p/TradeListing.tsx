@@ -105,6 +105,42 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     return now.getTime() <= deadline.getTime();
   };
 
+  const formatParticipantFdaId = (fdaUserId: unknown, userId: unknown) => {
+    if (fdaUserId != null && String(fdaUserId).trim() !== '') return String(fdaUserId).trim();
+    if (userId != null && String(userId).trim() !== '') return String(userId);
+    return '—';
+  };
+
+  const formatTradeDateTime = (value: unknown) => {
+    if (value == null || String(value).trim() === '') return '—';
+    const d = new Date(value as string | number | Date);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  };
+
+  /** Public FDA user id only (e.g. 88474) — never substitute internal DB user id. */
+  const formatFdaUserIdPublic = (fdaUserId: unknown) => {
+    if (fdaUserId == null) return '—';
+    const s = String(fdaUserId).trim();
+    return s !== '' ? s : '—';
+  };
+
+  /** Maker FDA id from API; if missing but this is your offer, use session (same profile id). */
+  const resolveMakerFdaUserIdForOffer = (offer: any): unknown => {
+    const fromApi = offer?.maker?.fdaUserId ?? offer?.maker?.fda_user_id;
+    if (fromApi != null && String(fromApi).trim() !== '') return fromApi;
+    const mid = offer?.maker?.id;
+    const uid = auth?.user?.id;
+    if (mid != null && uid != null && Number(mid) === Number(uid)) {
+      return auth?.user?.fdaUserId ?? null;
+    }
+    return null;
+  };
+
+  /** FDA USER ID of whoever created the offer (maker), not the counterparty row. */
+  const formatOfferMakerFdaId = (trade: any) =>
+    formatFdaUserIdPublic(trade.offer_maker_fda_user_id);
+
   const [myTradesPage, setMyTradesPage] = useState(1);
 
 
@@ -130,56 +166,6 @@ export const TradeListing: React.FC<TradeListingProps> = ({
 //   }
 // };
 
-const renderPaymentMethod = (methods: any) => {
-
-  if (!methods) return 'Not specified';
-
-  if (typeof methods === 'string') {
-    try {
-      methods = JSON.parse(methods);
-    } catch {
-      return <span>{methods}</span>;
-    }
-  }
-
-  if (!Array.isArray(methods)) {
-    methods = [methods];
-  }
-
-  if (!methods.length) return 'Not specified';
-
-  return methods.map((pm: any, index: number) => {
-    if (!pm) return null;
-
-    const isValidQR =
-      pm.qr_code &&
-      (pm.qr_code.startsWith('data:image') ||
-       pm.qr_code.startsWith('http'));
-
-    return (
-      <div key={index} style={{ marginBottom: '12px' }}>
-
-        <p style={{ fontSize: '12px', fontWeight: '600', color: isCompactMobile && inMobileShell ? '#e2e8f0' : undefined }}>
-          {pm.paymentname || 'Unknown'}
-        </p>
-
-        {pm.upi_id && (
-          <span style={{ display: 'block', fontSize: '11px', color: isCompactMobile && inMobileShell ? '#cbd5e1' : undefined }}>
-            {pm.upi_id}
-          </span>
-        )}
-
-        {isValidQR && (
-          <img
-            src={pm.qr_code}
-            alt="QR"
-            style={{ width: '80px', height: '80px', cursor: 'pointer' }}
-          />
-        )}
-      </div>
-    );
-  });
-};
   const filteredMyTrades = useMemo(() => {
     if (!myTradesSearch.trim()) return myTrades;
 
@@ -193,8 +179,14 @@ const renderPaymentMethod = (methods: any) => {
       ${trade.status}
       ${trade.buyer_name || ''}
       ${trade.buyer_email || ''}
+      ${trade.buyer_phone || ''}
       ${trade.seller_name || ''}
       ${trade.seller_email || ''}
+      ${trade.seller_phone || ''}
+      ${trade.buyer_fda_user_id || ''}
+      ${trade.seller_fda_user_id || ''}
+      ${trade.offer_maker_fda_user_id || ''}
+      ${trade.created_at || ''}
     `.toLowerCase();
 
       return combined.includes(s);
@@ -384,27 +376,12 @@ const renderPaymentMethod = (methods: any) => {
                     const minValue = minRaw > 0 && minRaw <= remainingNum ? minRaw * priceNum : minRaw;
                     const maxValue = maxRaw > 0 && maxRaw <= remainingNum ? maxRaw * priceNum : maxRaw;
                     const offerType = (offer.type || offer.offer_type || 'SELL').toUpperCase();
-                    const makerName =
-                      offer?.maker?.name ||
-                      offer?.maker?.label ||
-                      offer?.maker?.email ||
-                      offer?.maker?.address ||
-                      `Trader ${offer.id}`;
+                    const makerFdaDisplay = formatFdaUserIdPublic(resolveMakerFdaUserIdForOffer(offer));
 
                     return (
                       <div
                         key={offer.id}
                         className={`offer-card-listing ${isMyOffer ? 'offer-card-listing-my' : 'offer-card-listing-other'}`}
-                        style={
-                          isCompactMobile && inMobileShell
-                            ? {
-                                background: '#111827',
-                                border: '1px solid #1f2937',
-                                borderRadius: 14,
-                                boxShadow: 'none',
-                              }
-                            : undefined
-                        }
                       >
                         <div className="flex-1 flex flex-col">
                           <div className="offer-card-header-listing">
@@ -413,7 +390,7 @@ const renderPaymentMethod = (methods: any) => {
                                 <span className={offerType === 'SELL' ? 'offer-badge-sell' : 'offer-badge-buy'}>
                                   {offerType}
                                 </span>
-                                <span className='buyTxt' style={isCompactMobile && inMobileShell ? { color: '#cbd5e1' } : undefined}>
+                                <span className='buyTxt'>
                                   {offer.assetSymbol || offer.asset_symbol} / {offer.fiatCurrency || offer.fiat_currency}
                                 </span>
                               </div>
@@ -424,66 +401,53 @@ const renderPaymentMethod = (methods: any) => {
                                 </span>
                               )}
                             </div>
-                            {isCompactMobile && inMobileShell && (
-                              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>
-                                {makerName}
-                              </div>
-                            )}
                             <div
                               className={`${isMyOffer ? 'offer-price-box-my' : 'offer-price-box-other'}`}
-                              style={
-                                isCompactMobile && inMobileShell
-                                  ? {
-                                      background: '#0f172a',
-                                      border: '1px solid #334155',
-                                      borderRadius: 10,
-                                    }
-                                  : undefined
-                              }
                             >
                               <div className='perItemParent'>
-                                <p className="offer-price-large" style={isCompactMobile && inMobileShell ? { color: '#f8fafc' } : undefined}>
+                                <p className="offer-price-large">
                                   {offer.price} <span className="offer-price-currency">{offer.fiatCurrency || offer.fiat_currency}</span>
                                 </p>
-                                <p className="perItemBottonCorner" style={isCompactMobile && inMobileShell ? { color: '#9ca3af' } : undefined}>
+                                <p className="perItemBottonCorner">
                                   per {offer.assetSymbol || offer.asset_symbol}
                                 </p>
                               </div>
                             </div>
                             <div className="offer-info-list">
                               <div className="offer-info-row">
-                                <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Available:</span>
-                                <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
+                                <span className="offer-info-label">FDA USER ID:</span>
+                                <span className="offer-info-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                  {makerFdaDisplay}
+                                </span>
+                              </div>
+                              <div className="offer-info-row">
+                                <span className="offer-info-label">Created:</span>
+                                <span className="offer-info-value" style={{ fontSize: 12 }}>
+                                  {formatTradeDateTime(offer.created_at)}
+                                </span>
+                              </div>
+                              <div className="offer-info-row">
+                                <span className="offer-info-label">Available:</span>
+                                <span className="offer-info-value">
                                   {offer.remaining || offer.available_amount || 0} {offer.assetSymbol || offer.asset_symbol}
                                 </span>
                               </div>
                               {(offer.minLimit || offer.min_limit) ? (
                                 <>
                                   <div className="offer-info-row">
-                                    <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Min:</span>
-                                    <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
+                                    <span className="offer-info-label">Min:</span>
+                                    <span className="offer-info-value">
                                       {minValue.toFixed(2)} {offer.fiatCurrency || offer.fiat_currency}
                                     </span>
                                   </div>
                                   <div className="offer-info-row">
-                                    <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Max:</span>
-                                    <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
+                                    <span className="offer-info-label">Max:</span>
+                                    <span className="offer-info-value">
                                       {maxValue.toFixed(2)} {offer.fiatCurrency || offer.fiat_currency}
                                     </span>
                                   </div>
                                 </>
                               ) : null}
-                              <div className="offer-info-row offer-info-divider">
-                                <span className="offer-info-label" style={isCompactMobile && inMobileShell ? { color: '#94a3b8' } : undefined}>Payment:</span>
-                                <span className="offer-info-value" style={isCompactMobile && inMobileShell ? { color: '#e2e8f0' } : undefined}>
-                                  {/* {offer.paymentMethods || offer.payment_method || 'Not specified'} */}
-{                                  renderPaymentMethod(
-  offer.paymentMethods ||
-  offer.payment_method ||
-  offer.seller_payment_methods
-)}
-                                </span>
-                              </div>
                             </div>
                           </div>
                           <div className="offer-card-actions-listing">
@@ -506,7 +470,6 @@ const renderPaymentMethod = (methods: any) => {
                                   whiteSpace: 'nowrap',
                                   minWidth: '120px',
                                   boxShadow: acceptingOffer === offer.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.4)',
-                                  borderRadius: isCompactMobile && inMobileShell ? 8 : undefined,
                                 }}
                               >
                                 {acceptingOffer === offer.id ? 'Accepting...' : offerType === 'SELL' ? 'Buy' : 'Sell'}
@@ -577,6 +540,21 @@ const renderPaymentMethod = (methods: any) => {
                       const chatClosed = ['COMPLETED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase());
                       const feeAmount = parseFloat(trade.fee_amount) || 0;
                       const amountReceived = parseFloat(trade.amount) - feeAmount;
+                      const statusUpper = String(trade.status || '').toUpperCase();
+                      const statusColor =
+                        statusUpper === 'COMPLETED'
+                          ? '#059669'
+                          : statusUpper === 'CANCELLED'
+                            ? '#991b1b'
+                            : statusUpper === 'PAID_PENDING_RELEASE'
+                              ? '#c2410c'
+                              : statusUpper === 'DISPUTED'
+                                ? '#b45309'
+                                : '#334155';
+                      const counterpartyDisplay = isBuyer
+                        ? trade.seller_name || trade.seller_email || trade.seller_phone || '—'
+                        : trade.buyer_name || trade.buyer_email || trade.buyer_phone || '—';
+                      const offerCreatorFdaDisplay = formatOfferMakerFdaId(trade);
                       return (
                         <div key={trade.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -585,12 +563,80 @@ const renderPaymentMethod = (methods: any) => {
                               {isBuyer ? 'BUY' : 'SELL'}
                             </span>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12 }}>
-                            <span style={{ color: '#6b7280' }}>Amount</span><span style={{ color: '#111827', textAlign: 'right' }}>{parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}</span>
-                            <span style={{ color: '#6b7280' }}>Price</span><span style={{ color: '#111827', textAlign: 'right' }}>{parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}</span>
-                            <span style={{ color: '#6b7280' }}>Total</span><span style={{ color: '#111827', textAlign: 'right', fontWeight: 700 }}>{(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}</span>
-                            <span style={{ color: '#6b7280' }}>Status</span><span style={{ color: '#334155', textAlign: 'right' }}>{trade.status}</span>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                              gap: '6px 10px',
+                              fontSize: 12,
+                              alignItems: 'baseline',
+                            }}
+                          >
+                            <span style={{ color: '#6b7280' }}>Amount</span>
+                            <span style={{ color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Price</span>
+                            <span style={{ color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Total</span>
+                            <span style={{ color: '#111827', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                              {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Status</span>
+                            <span style={{ color: statusColor, textAlign: 'right', fontWeight: 700, fontSize: 11, letterSpacing: '0.02em' }}>
+                              {trade.status}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Created</span>
+                            <span
+                              style={{
+                                color: '#334155',
+                                textAlign: 'right',
+                                fontSize: 11,
+                                lineHeight: 1.35,
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {formatTradeDateTime(trade.created_at)}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Counterparty</span>
+                            <span style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#111827', wordBreak: 'break-word', fontWeight: 500 }}>{counterpartyDisplay}</div>
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                                Offer creator FDA USER ID {offerCreatorFdaDisplay}
+                              </div>
+                            </span>
                           </div>
+                          {String(trade.status || '').toUpperCase() === 'PAID_PENDING_RELEASE' && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: '8px 10px',
+                                background: '#f8fafc',
+                                borderRadius: 8,
+                                fontSize: 11,
+                                color: '#334155',
+                                lineHeight: 1.45,
+                                border: '1px solid #e2e8f0',
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Release step</div>
+                              <div style={{ color: '#334155' }}>
+                                <strong>Seller</strong> must release FDA to the buyer after confirming payment.
+                              </div>
+                              {isSeller && (
+                                <div style={{ marginTop: 6, color: '#b45309', fontWeight: 600 }}>
+                                  You are the seller — tap Release after you confirm payment.
+                                </div>
+                              )}
+                              {isBuyer && (
+                                <div style={{ marginTop: 6, color: '#1d4ed8', fontWeight: 600 }}>
+                                  You are the buyer — wait for the seller to release FDA.
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
                             <button
                               type="button"
@@ -721,7 +767,10 @@ const renderPaymentMethod = (methods: any) => {
                             )}
                             {trade.status === 'COMPLETED' && (
                               <span style={{ fontSize: 12, color: '#059669', fontWeight: 600, textAlign: 'center' }}>
-                                ✅ Received {feeAmount > 0 ? `${amountReceived.toFixed(4)} FDA` : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                                ✅ {isBuyer ? 'Received' : 'Sent'}{' '}
+                                {isBuyer && feeAmount > 0
+                                  ? `${amountReceived.toFixed(4)} FDA`
+                                  : `${parseFloat(trade.amount).toFixed(4)} FDA`}
                               </span>
                             )}
                             {trade.status === 'DISPUTED' && (
@@ -751,7 +800,7 @@ const renderPaymentMethod = (methods: any) => {
                         <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Total</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Status</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Counterparty</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Date</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Created</th>
                         <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Actions</th>
                       </tr>
                     </thead>
@@ -837,14 +886,23 @@ const renderPaymentMethod = (methods: any) => {
                               </span>
                             </td>
 
-                            {/* Counterparty */}
+                            {/* Counterparty + offer creator FDA USER ID */}
                             <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
                               {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.35rem', lineHeight: 1.35 }}>
+                                Offer creator FDA USER ID{' '}
+                                <strong style={{ color: '#334155' }}>{formatOfferMakerFdaId(trade)}</strong>
+                              </div>
+                              {String(trade.status || '').toUpperCase() === 'PAID_PENDING_RELEASE' && (
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.35rem', lineHeight: 1.35 }}>
+                                  Release: seller must release FDA.
+                                </div>
+                              )}
                             </td>
 
-                            {/* Date */}
-                            <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
-                              {trade.created_at ? new Date(trade.created_at).toLocaleDateString() : '-'}
+                            {/* Created (date & time) */}
+                            <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {formatTradeDateTime(trade.created_at)}
                             </td>
 
                             {/* Actions */}
@@ -1027,7 +1085,12 @@ const renderPaymentMethod = (methods: any) => {
                                   </>
                                 )}
                                 {trade.status === 'COMPLETED' && (
-                                  <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>
+                                    ✅ {isBuyer ? 'Received' : 'Sent'}{' '}
+                                    {isBuyer && feeAmount > 0
+                                      ? `${amountReceived.toFixed(4)} FDA`
+                                      : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                                  </span>
                                 )}
                                 {trade.status === 'DISPUTED' && (
                                   <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>

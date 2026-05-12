@@ -141,6 +141,28 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
     return Date.now() <= deadline.getTime();
   };
 
+  const formatParticipantFdaId = (fdaUserId: unknown, userId: unknown) => {
+    if (fdaUserId != null && String(fdaUserId).trim() !== '') return String(fdaUserId).trim();
+    if (userId != null && String(userId).trim() !== '') return String(userId);
+    return '—';
+  };
+
+  const formatFdaUserIdPublic = (fdaUserId: unknown) => {
+    if (fdaUserId == null) return '—';
+    const s = String(fdaUserId).trim();
+    return s !== '' ? s : '—';
+  };
+
+  const formatTradeDateTime = (value: unknown) => {
+    if (value == null || String(value).trim() === '') return '—';
+    const d = new Date(value as string | number | Date);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  };
+
+  const formatOfferMakerFdaId = (trade: any) =>
+    formatFdaUserIdPublic(trade.offer_maker_fda_user_id);
+
   // Load payment methods from database
   React.useEffect(() => {
     if (auth) {
@@ -1021,6 +1043,17 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                             : trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT'
                               ? '⏳ PENDING'
                               : trade.status;
+                      const statusUpper = String(trade.status || '').toUpperCase();
+                      const statusToneClass =
+                        statusUpper === 'COMPLETED'
+                          ? 'text-emerald-400 font-semibold'
+                          : statusUpper === 'CANCELLED'
+                            ? 'text-red-400 font-semibold'
+                            : statusUpper === 'PAID_PENDING_RELEASE'
+                              ? 'text-orange-400 font-semibold'
+                              : statusUpper === 'DISPUTED'
+                                ? 'text-amber-400 font-semibold'
+                                : 'text-slate-200 font-medium';
                       return (
                         <div key={trade.id} className="card-dark p-3 rounded-xl border border-slate-700">
                           <div className="flex items-start justify-between gap-2 mb-2">
@@ -1031,20 +1064,33 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                               {isBuyer ? 'BUY' : 'SELL'}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs items-baseline">
                             <span className="text-slate-400">Amount</span>
-                            <span className="text-right text-slate-100">{parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}</span>
+                            <span className="text-right text-slate-100 tabular-nums">{parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}</span>
                             <span className="text-slate-400">Price</span>
-                            <span className="text-right text-slate-100">{parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}</span>
+                            <span className="text-right text-slate-100 tabular-nums">{parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}</span>
                             <span className="text-slate-400">Total</span>
-                            <span className="text-right text-slate-100 font-semibold">{(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}</span>
+                            <span className="text-right text-slate-100 font-semibold tabular-nums">{(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}</span>
                             <span className="text-slate-400">Status</span>
-                            <span className="text-right text-slate-200">{statusLabel}</span>
+                            <span className={`text-right text-[11px] leading-snug ${statusToneClass}`}>{statusLabel}</span>
+                            <span className="text-slate-400">Created</span>
+                            <span className="text-right text-slate-200 text-[11px] leading-snug break-words">{formatTradeDateTime(trade.created_at)}</span>
                             <span className="text-slate-400">Counterparty</span>
-                            <span className="text-right text-slate-200 break-words">{isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}</span>
-                            <span className="text-slate-400">Received</span>
+                            <span className="text-right text-slate-200 break-words">
+                              <span className="block">{isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}</span>
+                              <span className="block text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                                Offer creator FDA USER ID {formatOfferMakerFdaId(trade)}
+                              </span>
+                            </span>
+                            <span className="text-slate-400">
+                              {trade.status === 'COMPLETED' ? (isBuyer ? 'Received' : 'Sent') : 'Received'}
+                            </span>
                             <span className="text-right text-slate-200">
-                              {trade.status === 'COMPLETED' && feeAmount > 0 ? `${amountReceived.toFixed(4)} FDA` : trade.status === 'COMPLETED' ? `${parseFloat(trade.amount).toFixed(4)} FDA` : '-'}
+                              {trade.status === 'COMPLETED' && feeAmount > 0 && isBuyer
+                                ? `${amountReceived.toFixed(4)} FDA`
+                                : trade.status === 'COMPLETED'
+                                  ? `${parseFloat(trade.amount).toFixed(4)} FDA`
+                                  : '-'}
                             </span>
                           </div>
                           <div className="mt-3 space-y-2">
@@ -1163,7 +1209,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                               </button>
                             )}
                             {trade.status === 'COMPLETED' && (
-                              <p className="text-xs text-emerald-400 font-semibold text-center">✅ Done</p>
+                              <p className="text-xs text-emerald-400 font-semibold text-center">
+                                ✅ {isBuyer ? 'Received' : 'Sent'}{' '}
+                                {isBuyer && feeAmount > 0
+                                  ? `${amountReceived.toFixed(4)} FDA`
+                                  : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                              </p>
                             )}
                             {trade.status === 'DISPUTED' && (
                               <p className="text-xs text-amber-400 font-semibold text-center">⚠️ Disputed</p>
@@ -1188,7 +1239,8 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                         <th style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Total</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Status</th>
                         <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Counterparty</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Received</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Created</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>FDA (you)</th>
                         <th style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase' }}>Actions</th>
                       </tr>
                     </thead>
@@ -1276,20 +1328,38 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                             {/* Counterparty */}
                             <td style={{ padding: '0.75rem', fontSize: '0.875rem', color: '#111827' }}>
                               {isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}
+                              <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.35rem', lineHeight: 1.35 }}>
+                                Offer creator FDA USER ID{' '}
+                                <strong style={{ color: '#334155' }}>{formatOfferMakerFdaId(trade)}</strong>
+                              </div>
                             </td>
 
-                            {/* Received */}
+                            {/* Created */}
+                            <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                              {formatTradeDateTime(trade.created_at)}
+                            </td>
+
+                            {/* FDA settled from your perspective (buyer = received net, seller = sent gross) */}
                             <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
-                              {trade.status === 'COMPLETED' && feeAmount > 0 ? (
+                              {trade.status === 'COMPLETED' && isBuyer && feeAmount > 0 ? (
                                 <span>
+                                  <span style={{ fontSize: '0.65rem', color: '#64748b', display: 'block', marginBottom: 2 }}>Received</span>
                                   {amountReceived.toFixed(4)} FDA
                                   <br />
                                   <span style={{ fontSize: '0.65rem', color: '#9ca3af' }}>
                                     (fee: {feeAmount.toFixed(4)})
                                   </span>
                                 </span>
-                              ) : trade.status === 'COMPLETED' ? (
-                                <span>{parseFloat(trade.amount).toFixed(4)} FDA</span>
+                              ) : trade.status === 'COMPLETED' && isBuyer ? (
+                                <span>
+                                  <span style={{ fontSize: '0.65rem', color: '#64748b', display: 'block', marginBottom: 2 }}>Received</span>
+                                  {parseFloat(trade.amount).toFixed(4)} FDA
+                                </span>
+                              ) : trade.status === 'COMPLETED' && isSeller ? (
+                                <span>
+                                  <span style={{ fontSize: '0.65rem', color: '#64748b', display: 'block', marginBottom: 2 }}>Sent</span>
+                                  {parseFloat(trade.amount).toFixed(4)} FDA
+                                </span>
                               ) : (
                                 <span>-</span>
                               )}
@@ -1481,7 +1551,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                   </button>
                                 )}
                                 {trade.status === 'COMPLETED' && (
-                                  <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>✅ Done</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>
+                                    ✅ {isBuyer ? 'Received' : 'Sent'}{' '}
+                                    {isBuyer && feeAmount > 0
+                                      ? `${amountReceived.toFixed(4)} FDA`
+                                      : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                                  </span>
                                 )}
                                 {trade.status === 'DISPUTED' && (
                                   <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: '600' }}>⚠️ Disputed</span>
