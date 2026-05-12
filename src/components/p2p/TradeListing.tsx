@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { type AuthState } from '../types';
 import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
+import { buyerCanDisputeAfterPaid, getReleaseTimeline } from './p2pTradeTimers';
 
 const MY_TRADES_PER_PAGE = 12;
 
@@ -84,26 +85,6 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     return () => window.removeEventListener('resize', onResize);
   }, []);
   // const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-  // Helper function to check if buyer can create dispute (within 2 hours of payment upload)
-  const canBuyerCreateDispute = (trade: any) => {
-    if (trade.status !== 'PAID_PENDING_RELEASE') return false;
-    if (!trade.paid_at) return false;
-
-    const paidAt = new Date(trade.paid_at);
-    const now = new Date();
-
-    // Validate date parsing
-    if (isNaN(paidAt.getTime())) {
-      console.error('Invalid paid_at date:', trade.paid_at);
-      return false;
-    }
-
-    // Calculate deadline: paid_at + 2 hours
-    const deadline = new Date(paidAt.getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours in milliseconds
-
-    // Return true if current time is BEFORE or EQUAL to deadline (within 2 hours)
-    return now.getTime() <= deadline.getTime();
-  };
 
   const formatParticipantFdaId = (fdaUserId: unknown, userId: unknown) => {
     if (fdaUserId != null && String(fdaUserId).trim() !== '') return String(fdaUserId).trim();
@@ -202,19 +183,18 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     if (myTradesPage > totalMyTradesPages && totalMyTradesPages > 0) setMyTradesPage(totalMyTradesPages);
   }, [myTrades.length, totalMyTradesPages, myTradesPage]);
 
-  const getHoursRemainingForDispute = (trade: any) => {
-    if (!trade.paid_at) return 0;
-    const paidAt = new Date(trade.paid_at);
-    const now = new Date();
-
-    if (isNaN(paidAt.getTime())) return 0;
-
-    // Calculate deadline: paid_at + 2 hours
-    const deadline = new Date(paidAt.getTime() + (2 * 60 * 60 * 1000)); // Add 2 hours in milliseconds
-    const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
-    return Math.max(0, hoursRemaining);
-  };
-
+  const needsPaidReleaseClock = useMemo(
+    () =>
+      myTrades.some((t) => String(t.status || '').toUpperCase() === 'PAID_PENDING_RELEASE'),
+    [myTrades],
+  );
+  const [paidReleaseClock, setPaidReleaseClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!needsPaidReleaseClock) return;
+    setPaidReleaseClock(Date.now());
+    const id = window.setInterval(() => setPaidReleaseClock(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, [needsPaidReleaseClock]);
 
   return (
     <div>
@@ -541,6 +521,10 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                       const feeAmount = parseFloat(trade.fee_amount) || 0;
                       const amountReceived = parseFloat(trade.amount) - feeAmount;
                       const statusUpper = String(trade.status || '').toUpperCase();
+                      const releaseTl =
+                        statusUpper === 'PAID_PENDING_RELEASE'
+                          ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
+                          : null;
                       const statusColor =
                         statusUpper === 'COMPLETED'
                           ? '#059669'
@@ -608,23 +592,24 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                               </div>
                             </span>
                           </div>
-                          {String(trade.status || '').toUpperCase() === 'PAID_PENDING_RELEASE' && (
+                          {String(trade.status || '').toUpperCase() === 'PAID_PENDING_RELEASE' && releaseTl && (
                             <div
                               style={{
                                 marginTop: 8,
                                 padding: '8px 10px',
-                                background: '#f8fafc',
+                                background: releaseTl.overdue ? '#fef2f2' : '#f8fafc',
                                 borderRadius: 8,
                                 fontSize: 11,
                                 color: '#334155',
                                 lineHeight: 1.45,
-                                border: '1px solid #e2e8f0',
+                                border: `1px solid ${releaseTl.overdue ? '#fecaca' : '#e2e8f0'}`,
                               }}
                             >
                               <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Release step</div>
-                              <div style={{ color: '#334155' }}>
-                                <strong>Seller</strong> must release FDA to the buyer after confirming payment.
+                              <div style={{ fontWeight: 700, color: releaseTl.overdue ? '#b91c1c' : '#0f172a' }}>
+                                {releaseTl.headline}
                               </div>
+                              <div style={{ marginTop: 6, color: '#475569' }}>{releaseTl.detail}</div>
                               {isSeller && (
                                 <div style={{ marginTop: 6, color: '#b45309', fontWeight: 600 }}>
                                   You are the seller — tap Release after you confirm payment.
@@ -679,10 +664,10 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                 type="button"
                                 className="btn w-full text-xs py-2"
                                 onClick={() => openDisputeModal(trade)}
-                                disabled={disputingTrade === trade.id || !canBuyerCreateDispute(trade)}
+                                disabled={disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)}
                                 style={{
                                   background:
-                                    disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                    disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                       ? '#d1d5db'
                                       : '#f59e0b',
                                   color: '#fff',
@@ -808,6 +793,11 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                       {paginatedMyTrades.map((trade) => {
                         const isBuyer = trade.buyer_id === auth?.user.id;
                         const isSeller = trade.seller_id === auth?.user.id;
+                        const statusUpper = String(trade.status || '').toUpperCase();
+                        const releaseTlDesktop =
+                          statusUpper === 'PAID_PENDING_RELEASE'
+                            ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
+                            : null;
                         const chatClosed = ['COMPLETED', 'CANCELLED'].includes(String(trade.status || '').toUpperCase());
                         const feeAmount = parseFloat(trade.fee_amount) || 0;
                         const amountReceived = parseFloat(trade.amount) - feeAmount;
@@ -893,9 +883,17 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                 Offer creator FDA USER ID{' '}
                                 <strong style={{ color: '#334155' }}>{formatOfferMakerFdaId(trade)}</strong>
                               </div>
-                              {String(trade.status || '').toUpperCase() === 'PAID_PENDING_RELEASE' && (
-                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.35rem', lineHeight: 1.35 }}>
-                                  Release: seller must release FDA.
+                              {releaseTlDesktop && (
+                                <div
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    color: releaseTlDesktop.overdue ? '#b91c1c' : '#64748b',
+                                    marginTop: '0.35rem',
+                                    lineHeight: 1.35,
+                                  }}
+                                >
+                                  <strong>{releaseTlDesktop.headline}</strong>
+                                  <div style={{ marginTop: 4, fontWeight: 400 }}>{releaseTlDesktop.detail}</div>
                                 </div>
                               )}
                             </td>
@@ -969,16 +967,16 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                                 {isBuyer && trade.status === 'PAID_PENDING_RELEASE' && (
                                   <button
                                     onClick={() => openDisputeModal(trade)}
-                                    disabled={disputingTrade === trade.id || !canBuyerCreateDispute(trade)}
-                                    style={{
+                                    disabled={disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)}
+                                      style={{
                                       padding: '0.375rem 0.75rem',
                                       fontSize: '0.7rem',
                                       fontWeight: '600',
-                                      background: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? '#d1d5db' : '#f59e0b',
+                                      background: disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade) ? '#d1d5db' : '#f59e0b',
                                       color: '#ffffff',
                                       border: 'none',
                                       borderRadius: '4px',
-                                      cursor: disputingTrade === trade.id || !canBuyerCreateDispute(trade) ? 'not-allowed' : 'pointer',
+                                      cursor: disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade) ? 'not-allowed' : 'pointer',
                                       width: '100%',
                                     }}
                                   >

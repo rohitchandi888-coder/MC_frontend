@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '../../config';
+import { getReleaseTimeline } from '../p2p/p2pTradeTimers';
 
 type TradeChatModalProps = {
   show: boolean;
@@ -30,6 +31,22 @@ export const TradeChatModal: React.FC<TradeChatModalProps> = ({ show, trade, aut
   const [draft, setDraft] = useState('');
 
   const closed = isClosedStatus(String(trade?.status || ''));
+  const statusUpper = String(trade?.status || '').toUpperCase();
+  const showReleaseTimeline = statusUpper === 'PAID_PENDING_RELEASE';
+  const viewerRole =
+    Number(auth?.user?.id) === Number(trade?.seller_id)
+      ? 'seller'
+      : Number(auth?.user?.id) === Number(trade?.buyer_id)
+        ? 'buyer'
+        : 'buyer';
+  const [releaseClock, setReleaseClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!show || !showReleaseTimeline) return;
+    setReleaseClock(Date.now());
+    const id = window.setInterval(() => setReleaseClock(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, [show, showReleaseTimeline, trade?.id]);
+  const releaseTl = showReleaseTimeline ? getReleaseTimeline(trade, releaseClock, viewerRole) : null;
 
   const paymentRows = useMemo(() => {
     let raw: any = trade?.seller_payment_methods || trade?.payment_method || trade?.paymentMethods || null;
@@ -120,6 +137,22 @@ export const TradeChatModal: React.FC<TradeChatModalProps> = ({ show, trade, aut
           <p className="modal-text">
             Status: <strong>{trade.status}</strong>
           </p>
+          {releaseTl && (
+            <div
+              style={{
+                marginBottom: 10,
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: `1px solid ${releaseTl.overdue ? '#fecaca' : '#334155'}`,
+                background: releaseTl.overdue ? '#450a0a' : '#0f172a',
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: releaseTl.overdue ? '#fecaca' : '#fde68a' }}>
+                {releaseTl.headline}
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{releaseTl.detail}</p>
+            </div>
+          )}
           {closed && (
             <p className="modal-info-text-small" style={{ color: '#f87171' }}>
               Chat closed because FDA has been released / trade is finished.

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
 import { MM } from '../../theme/metaMaskShell';
+import { buyerCanDisputeAfterPaid, getReleaseTimeline } from './p2pTradeTimers';
 
 interface P2PTradingProps {
   /** Light MetaMask-style cards/inputs on mobile (matches app shell). */
@@ -132,14 +133,18 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
     if (myTradesPage > totalMyTradesPages && totalMyTradesPages > 0) setMyTradesPage(totalMyTradesPages);
   }, [myTrades.length, totalMyTradesPages, myTradesPage]);
 
-  const canBuyerCreateDispute = (trade: any) => {
-    if (trade.status !== 'PAID_PENDING_RELEASE') return false;
-    if (!trade.paid_at) return false;
-    const paidAt = new Date(trade.paid_at);
-    if (Number.isNaN(paidAt.getTime())) return false;
-    const deadline = new Date(paidAt.getTime() + 2 * 60 * 60 * 1000);
-    return Date.now() <= deadline.getTime();
-  };
+  const needsPaidReleaseClock = useMemo(
+    () =>
+      myTrades.some((t: any) => String(t.status || '').toUpperCase() === 'PAID_PENDING_RELEASE'),
+    [myTrades],
+  );
+  const [paidReleaseClock, setPaidReleaseClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!needsPaidReleaseClock) return;
+    setPaidReleaseClock(Date.now());
+    const id = window.setInterval(() => setPaidReleaseClock(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, [needsPaidReleaseClock]);
 
   const formatParticipantFdaId = (fdaUserId: unknown, userId: unknown) => {
     if (fdaUserId != null && String(fdaUserId).trim() !== '') return String(fdaUserId).trim();
@@ -1054,6 +1059,10 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                               : statusUpper === 'DISPUTED'
                                 ? 'text-amber-400 font-semibold'
                                 : 'text-slate-200 font-medium';
+                      const releaseTl =
+                        statusUpper === 'PAID_PENDING_RELEASE'
+                          ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
+                          : null;
                       return (
                         <div key={trade.id} className="card-dark p-3 rounded-xl border border-slate-700">
                           <div className="flex items-start justify-between gap-2 mb-2">
@@ -1093,6 +1102,20 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                   : '-'}
                             </span>
                           </div>
+                          {releaseTl && (
+                            <div
+                              className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] leading-snug ${
+                                releaseTl.overdue
+                                  ? 'border-red-500/40 bg-red-950/30 text-red-200'
+                                  : 'border-amber-500/30 bg-slate-900/80 text-slate-200'
+                              }`}
+                            >
+                              <div className={`font-semibold ${releaseTl.overdue ? 'text-red-300' : 'text-amber-200'}`}>
+                                {releaseTl.headline}
+                              </div>
+                              <div className="mt-1 text-slate-400">{releaseTl.detail}</div>
+                            </div>
+                          )}
                           <div className="mt-3 space-y-2">
                             {isBuyer &&
                               (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
@@ -1194,12 +1217,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                 type="button"
                                 onClick={() => openDisputeModal(trade)}
                                 disabled={
-                                  disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                  disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                 }
                                 className="btn w-full text-xs py-2"
                                 style={{
                                   background:
-                                    disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                    disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                       ? '#9ca3af'
                                       : '#f59e0b',
                                   color: '#fff',
@@ -1248,6 +1271,11 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       {paginatedMyTrades.map((trade: any) => {
                         const isBuyer = trade.buyer_id === auth?.user.id;
                         const isSeller = trade.seller_id === auth?.user.id;
+                        const statusUpperRow = String(trade.status || '').toUpperCase();
+                        const releaseTlRow =
+                          statusUpperRow === 'PAID_PENDING_RELEASE'
+                            ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
+                            : null;
                         const feeAmount = parseFloat(trade.fee_amount || trade.fee || 0);
                         const amountReceived = parseFloat(trade.amount) - feeAmount;
 
@@ -1332,6 +1360,19 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                 Offer creator FDA USER ID{' '}
                                 <strong style={{ color: '#334155' }}>{formatOfferMakerFdaId(trade)}</strong>
                               </div>
+                              {releaseTlRow && (
+                                <div
+                                  style={{
+                                    fontSize: '0.65rem',
+                                    color: releaseTlRow.overdue ? '#b91c1c' : '#64748b',
+                                    marginTop: '0.35rem',
+                                    lineHeight: 1.35,
+                                  }}
+                                >
+                                  <strong>{releaseTlRow.headline}</strong>
+                                  <div style={{ marginTop: 4, fontWeight: 400 }}>{releaseTlRow.detail}</div>
+                                </div>
+                              )}
                             </td>
 
                             {/* Created */}
@@ -1527,21 +1568,21 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                                     type="button"
                                     onClick={() => openDisputeModal(trade)}
                                     disabled={
-                                      disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                      disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                     }
                                     style={{
                                       padding: '0.375rem 0.75rem',
                                       fontSize: '0.7rem',
                                       fontWeight: '600',
                                       background:
-                                        disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                        disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                           ? '#d1d5db'
                                           : '#f59e0b',
                                       color: '#ffffff',
                                       border: 'none',
                                       borderRadius: '4px',
                                       cursor:
-                                        disputingTrade === trade.id || !canBuyerCreateDispute(trade)
+                                        disputingTrade === trade.id || !buyerCanDisputeAfterPaid(trade)
                                           ? 'not-allowed'
                                           : 'pointer',
                                       width: '100%',
