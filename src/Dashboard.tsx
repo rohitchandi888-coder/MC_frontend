@@ -2422,9 +2422,15 @@ export const Dashboard: React.FC = () => {
     // Only check balance for SELL offers - must be explicitly SELL
     else if (isSell) {
       console.log('[FRONTEND] ✅ This is a SELL offer, checking balance...');
-      if (internalFdaBalance === null || internalFdaBalance < Number(offerAmount)) {
+      const fdaSellCap =
+        internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
+          ? Math.max(0, internalFdaUsable)
+          : internalFdaBalance;
+      if (fdaSellCap === null || fdaSellCap < Number(offerAmount)) {
         console.log('[FRONTEND] ❌ Balance check failed for SELL offer');
-        showErrorModal(`Insufficient FDA balance. You have ${internalFdaBalance || 0} FDA, but trying to sell ${offerAmount}.`);
+        showErrorModal(
+          `Insufficient FDA available for a new sell offer. You can list up to ${fdaSellCap ?? 0} FDA (active holds and minimum reserve are excluded).`,
+        );
         return;
       }
     } else {
@@ -2542,7 +2548,18 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const canAcceptAnotherOffer = useMemo(() => {
+    const done = new Set(['COMPLETED', 'CANCELLED']);
+    return !myTrades.some((t) => !done.has(String(t.status || '').trim().toUpperCase()));
+  }, [myTrades]);
+
   const openAcceptModal = (offer: any) => {
+    if (!canAcceptAnotherOffer) {
+      showErrorModal(
+        '⚠️ You already have an active trade. Complete it, cancel it, or wait for it to finish before accepting another offer.',
+      );
+      return;
+    }
     setSelectedOffer(offer);
     setAcceptAmount('');
     setShowAcceptModal(true);
@@ -2574,14 +2591,28 @@ export const Dashboard: React.FC = () => {
       return;
     }
 
+    if (!canAcceptAnotherOffer) {
+      closeAcceptModal();
+      showErrorModal(
+        '⚠️ You already have an active trade. Complete or cancel it before accepting another offer.',
+      );
+      return;
+    }
+
     // CRITICAL: Check FDA balance if accepting a BUY offer (user will be SELLER)
     // If accepting a SELL offer (user will be BUYER), no balance check needed (pays fiat)
     const offerType = (selectedOffer.type || selectedOffer.offer_type || 'SELL').toUpperCase();
     if (offerType === 'BUY' && selectedOffer.assetSymbol === 'FDA') {
       console.log('[FRONTEND] ✅ Accepting BUY offer - user will be SELLER, checking FDA balance...');
-      if (internalFdaBalance === null || internalFdaBalance < amountNum) {
+      const fdaSellCap =
+        internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
+          ? Math.max(0, internalFdaUsable)
+          : internalFdaBalance;
+      if (fdaSellCap === null || fdaSellCap < amountNum) {
         closeAcceptModal(); // Close modal first
-        showErrorModal(`❌ Insufficient FDA balance. You have ${internalFdaBalance || 0} FDA, but trying to sell ${amountNum} FDA.`);
+        showErrorModal(
+          `❌ Insufficient FDA available to sell into this offer. You can use up to ${fdaSellCap ?? 0} FDA (active holds and minimum reserve are excluded).`,
+        );
         return;
       }
     } else if (offerType === 'SELL') {
@@ -4790,6 +4821,7 @@ const getPaymentDetailRows = (pm: any) => {
               auth={auth}
               canUseUsdt={/^0x[a-fA-F0-9]{40}$/i.test((p2pUsdtPayoutAddress || '').trim())}
               internalFdaBalance={internalFdaBalance}
+              internalFdaUsable={internalFdaUsable}
               internalFdaLocked={internalFdaLocked}
               p2pFeeRate={p2pFeeRate}
               p2pMinPricePerFda={p2pMinPricePerFda}
@@ -4833,6 +4865,7 @@ const getPaymentDetailRows = (pm: any) => {
               auth={auth}
               inMobileShell={useMobileLayout}
               p2pFeeRate={p2pFeeRate}
+              canAcceptAnotherOffer={canAcceptAnotherOffer}
               filteredOffers={filteredOffers}
               paginatedOffers={paginatedOffers}
               totalPages={totalPages}
@@ -5124,6 +5157,11 @@ const getPaymentDetailRows = (pm: any) => {
               <p className="modal-text">
                 Available: <strong>{selectedOffer.remaining || selectedOffer.available_amount || 0} FDA</strong>
               </p>
+              {!canAcceptAnotherOffer && (
+                <p className="modal-text" style={{ color: '#fbbf24', fontWeight: 600 }}>
+                  You already have an active trade. Close this dialog and finish or cancel that trade first.
+                </p>
+              )}
               <div className="modal-text">
                 Payment:
                 {(() => {
@@ -5233,9 +5271,9 @@ const getPaymentDetailRows = (pm: any) => {
                 Cancel
               </button>
               <button
-                className={`modal-button ${(!acceptAmount || Number(acceptAmount) <= 0 || acceptingOffer === selectedOffer.id) ? 'modal-button-secondary' : 'modal-button-success'}`}
+                className={`modal-button ${(!acceptAmount || Number(acceptAmount) <= 0 || acceptingOffer === selectedOffer.id || !canAcceptAnotherOffer) ? 'modal-button-secondary' : 'modal-button-success'}`}
                 onClick={acceptOffer}
-                disabled={!acceptAmount || Number(acceptAmount) <= 0 || acceptingOffer === selectedOffer.id}
+                disabled={!acceptAmount || Number(acceptAmount) <= 0 || acceptingOffer === selectedOffer.id || !canAcceptAnotherOffer}
               >
                 {acceptingOffer === selectedOffer.id ? 'Accepting...' : 'Accept Offer'}
               </button>

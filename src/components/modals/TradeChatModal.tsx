@@ -2,6 +2,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '../../config';
 import { getReleaseTimeline } from '../p2p/p2pTradeTimers';
 
+/** Build https://wa.me/... from stored phone (digits only, optional India 10→91). */
+function buildWhatsAppLinkFromPhone(raw: unknown): { href: string; display: string } | null {
+  if (raw == null) return null;
+  const display = String(raw).trim();
+  if (!display) return null;
+  let d = display.replace(/\D/g, '');
+  if (!d) return null;
+  while (d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10 && /^[6-9]\d{9}$/.test(d)) d = `91${d}`;
+  if (d.length < 10 || d.length > 15) return null;
+  return { href: `https://wa.me/${d}`, display };
+}
+
 type TradeChatModalProps = {
   show: boolean;
   trade: any | null;
@@ -47,6 +60,23 @@ export const TradeChatModal: React.FC<TradeChatModalProps> = ({ show, trade, aut
     return () => window.clearInterval(id);
   }, [show, showReleaseTimeline, trade?.id]);
   const releaseTl = showReleaseTimeline ? getReleaseTimeline(trade, releaseClock, viewerRole) : null;
+
+  const counterpartyWhatsApp = useMemo(() => {
+    if (!trade || auth?.user?.id == null) return null;
+    const uid = Number(auth.user.id);
+    const isViewerBuyer = Number(trade.buyer_id) === uid;
+    const isViewerSeller = Number(trade.seller_id) === uid;
+    if (!isViewerBuyer && !isViewerSeller) return null;
+    const phoneRaw = isViewerBuyer ? trade.seller_phone : trade.buyer_phone;
+    const built = buildWhatsAppLinkFromPhone(phoneRaw);
+    if (!built) return null;
+    const roleLabel = isViewerBuyer ? 'Seller' : 'Buyer';
+    const name =
+      (isViewerBuyer ? trade.seller_name : trade.buyer_name) ||
+      (isViewerBuyer ? trade.seller_email : trade.buyer_email) ||
+      roleLabel;
+    return { ...built, roleLabel, name };
+  }, [trade, auth?.user?.id]);
 
   const paymentRows = useMemo(() => {
     let raw: any = trade?.seller_payment_methods || trade?.payment_method || trade?.paymentMethods || null;
@@ -170,6 +200,40 @@ export const TradeChatModal: React.FC<TradeChatModalProps> = ({ show, trade, aut
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {counterpartyWhatsApp && (
+            <div
+              style={{
+                border: '1px solid #15803d',
+                borderRadius: 8,
+                padding: '10px 10px',
+                marginBottom: 10,
+                background: '#052e16',
+              }}
+            >
+              <p style={{ margin: 0, marginBottom: 6, fontWeight: 700, color: '#bbf7d0', fontSize: 13 }}>
+                WhatsApp — {counterpartyWhatsApp.roleLabel} ({counterpartyWhatsApp.name})
+              </p>
+              <a
+                href={counterpartyWhatsApp.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: '#4ade80',
+                  textDecoration: 'underline',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {counterpartyWhatsApp.display}
+              </a>
+              <p style={{ margin: '8px 0 0', fontSize: 11, color: '#86efac', lineHeight: 1.35 }}>
+                Tap the number to open WhatsApp and chat with your {counterpartyWhatsApp.roleLabel.toLowerCase()}.
+              </p>
             </div>
           )}
 

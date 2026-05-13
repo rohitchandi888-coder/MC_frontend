@@ -22,12 +22,18 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
   const [tradeAction, setTradeAction] = useState<'release' | 'cancel' | 'none'>('none');
   const [disputeSearch, setDisputeSearch] = useState('');
 
+  /** Only disputes awaiting admin action (not RESOLVED / REJECTED / CLOSED). */
+  const openDisputesOnly = useMemo(
+    () => adminDisputes.filter((d) => String(d.status || '').trim().toUpperCase() === 'OPEN'),
+    [adminDisputes],
+  );
+
   const filteredDisputes = useMemo(() => {
-    if (!disputeSearch.trim()) return adminDisputes;
+    if (!disputeSearch.trim()) return openDisputesOnly;
 
     const s = disputeSearch.toLowerCase();
 
-    return adminDisputes.filter((d) => {
+    return openDisputesOnly.filter((d) => {
       const combined = `
       ${d.id}
       ${d.trade_id}
@@ -46,10 +52,9 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
 
       return combined.includes(s);
     });
-  }, [adminDisputes, disputeSearch]);
-  const DISPUTES_PER_PAGE = 12;
+  }, [openDisputesOnly, disputeSearch]);
+  const DISPUTES_PER_PAGE = 8;
   const [disputesPage, setDisputesPage] = useState(1);
-  // const totalDisputesPages = Math.max(1, Math.ceil(adminDisputes.length / DISPUTES_PER_PAGE));
   const totalDisputesPages = Math.max(1, Math.ceil(filteredDisputes.length / DISPUTES_PER_PAGE));
   const paginatedDisputes = filteredDisputes.slice(
     (disputesPage - 1) * DISPUTES_PER_PAGE,
@@ -59,7 +64,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
     if (disputesPage > totalDisputesPages && totalDisputesPages > 0) {
       setDisputesPage(totalDisputesPages);
     }
-  }, [adminDisputes.length, totalDisputesPages, disputesPage]);
+  }, [filteredDisputes.length, totalDisputesPages, disputesPage]);
 
   const openResolveModal = (dispute: any) => {
     setSelectedDispute(dispute);
@@ -129,14 +134,19 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
       <div className="section-header">
         <h2 className="section-title">⚠️ Disputes Management</h2>
         <p className="section-subtitle">
-          Review and manage all trade disputes
+          Open disputes only — resolve or reject from here. Resolved history stays in the database but is not listed.
         </p>
       </div>
 
-      <div className="offer-form-card mb-4">
-        <div className="flex justify-between items-center mb-2">
+      <div className="offer-form-card mb-4 disputes-panel-shell">
+        <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
           <h3 className="offer-form-title text-base">
-            Active Disputes {adminDisputes.length > 0 && <span className="text-gray-500 font-normal">({adminDisputes.length})</span>}
+            Open queue
+            {openDisputesOnly.length > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 ml-2 px-2 rounded-full bg-amber-100 text-amber-900 text-sm font-bold">
+                {openDisputesOnly.length}
+              </span>
+            )}
           </h3>
           <button
             className="btn btn-yellow text-sm py-2 px-4 flex items-center gap-2"
@@ -147,151 +157,169 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
         </div>
 
         <input
-          type="text"
-          placeholder="🔍 Search disputes..."
+          type="search"
+          className="disputes-search-input"
+          placeholder="Search by trade id, name, email, reason…"
           value={disputeSearch}
           onChange={(e) => {
             setDisputeSearch(e.target.value);
             setDisputesPage(1);
           }}
-          style={{
-            width: '100%',
-            padding: '10px',
-            marginBottom: '10px',
-            borderRadius: '6px',
-            border: '1px solid #e5e7eb'
-          }}
         />
-        {adminDisputes.length > 0 ? (
+        {openDisputesOnly.length === 0 ? (
+          <div className="py-12 px-6 rounded-xl bg-gray-50 border border-gray-200 text-center">
+            <div className="text-5xl mb-3">✅</div>
+            <p className="text-base font-semibold text-gray-800 mb-1">
+              No open disputes
+            </p>
+            <p className="text-sm text-gray-600">
+              Nothing needs admin action right now. Resolved disputes are kept in the database but not shown here.
+            </p>
+          </div>
+        ) : filteredDisputes.length === 0 ? (
+          <div className="py-10 px-6 rounded-xl bg-amber-50 border border-amber-200 text-center">
+            <p className="text-sm font-semibold text-amber-900 mb-1">No matches</p>
+            <p className="text-sm text-amber-800 mb-3">Try a different search term.</p>
+            <button type="button" className="btn btn-yellow text-sm py-2 px-4" onClick={() => setDisputeSearch('')}>
+              Clear search
+            </button>
+          </div>
+        ) : (
           <>
             <div className="disputes-grid">
               {paginatedDisputes.map((d) => {
                 const statusSlug = (d.status || '').toLowerCase();
-                const statusBadgeClass = statusSlug === 'open' ? 'dispute-status-badge--open' : statusSlug === 'resolved' ? 'dispute-status-badge--resolved' : statusSlug === 'rejected' ? 'dispute-status-badge--rejected' : statusSlug === 'closed' ? 'dispute-status-badge--closed' : 'dispute-status-badge--closed';
+                const statusBadgeClass =
+                  statusSlug === 'open'
+                    ? 'dispute-status-badge--open'
+                    : statusSlug === 'resolved'
+                      ? 'dispute-status-badge--resolved'
+                      : statusSlug === 'rejected'
+                        ? 'dispute-status-badge--rejected'
+                        : statusSlug === 'closed'
+                          ? 'dispute-status-badge--closed'
+                          : 'dispute-status-badge--closed';
+                const ts = String(d.trade_status || '').toUpperCase();
+                const tradeStatusClass =
+                  ts === 'DISPUTED'
+                    ? 'dispute-card__trade-status--disputed'
+                    : ts === 'COMPLETED'
+                      ? 'dispute-card__trade-status--completed'
+                      : ts === 'CANCELLED'
+                        ? 'dispute-card__trade-status--cancelled'
+                        : 'dispute-card__trade-status--other';
                 return (
                   <div
                     key={d.id}
                     className="dispute-card"
                     data-status={d.status || ''}
                   >
-                    {/* Header: Trade #, Dispute #, Status, Date */}
-                    <div className="flex justify-between items-start flex-wrap gap-0.5 mb-0.5">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="text-xs font-bold text-gray-900">Trade #{d.trade_id}</span>
+                    <div className="dispute-card__head">
+                      <div className="dispute-card__head-left">
+                        <div className="dispute-card__head-trade">Trade #{d.trade_id}</div>
+                        <div className="dispute-card__head-meta">Dispute #{d.id}</div>
+                        {d.created_at && (
+                          <div className="dispute-card__head-date">
+                            {new Date(d.created_at).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 flex-wrap" style={{ marginBlock: 10 }}>
-                      <span className="text-[10px] text-gray-500">#{d.id}</span>
-
                       {d.status && (
-                        <span className={`dispute-status-badge ${statusBadgeClass}`}>
+                        <span className={`dispute-status-badge ${statusBadgeClass}`} style={{ flexShrink: 0 }}>
                           {d.status}
                         </span>
                       )}
-                      <span className="text-[10px] text-gray-500">
-                        {d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A'}
-                      </span>
                     </div>
-                    {/* Trade amount & total */}
-                    <div className="mb-0.5 p-0.5 rounded bg-gray-50 border border-gray-100">
-                      <div className='amountCont' >
-                        <span className="amountSpan">
-                          Amount
+
+                    <div className="dispute-card__finance">
+                      <div className="dispute-card__finance-row">
+                        <span>Size &amp; rate</span>
+                        <span className="dispute-card__finance-value">
+                          {parseFloat(String(d.amount || 0)).toFixed(4)} {d.asset_symbol} @{' '}
+                          {parseFloat(String(d.price || 0)).toFixed(2)} {d.fiat_currency}
                         </span>
-                        <span className='font-semibold amountText'>{d.amount} {d.asset_symbol} @ {d.price} {d.fiat_currency}</span>
                       </div>
-                      <span className="totalPrice">
-                        Total: {(parseFloat(d.amount || 0) * parseFloat(d.price || 0)).toFixed(2)} {d.fiat_currency}
-                      </span>
-                      <p className="mt-0.5">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${d.trade_status === 'DISPUTED' ? 'bg-amber-100 text-amber-800' :
-                            d.trade_status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                              d.trade_status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-700'
-                          }`}>
-                          {d.trade_status}
+                      <div className="dispute-card__finance-row">
+                        <span>Order total</span>
+                        <span className="dispute-card__finance-total">
+                          {(parseFloat(String(d.amount || 0)) * parseFloat(String(d.price || 0))).toFixed(2)}{' '}
+                          {d.fiat_currency}
                         </span>
-                      </p>
+                      </div>
+                      <div className="dispute-card__finance-row" style={{ alignItems: 'center' }}>
+                        <span>Linked trade status</span>
+                        <span className={`dispute-card__trade-status ${tradeStatusClass}`}>{d.trade_status || '—'}</span>
+                      </div>
                     </div>
 
-                    {/* Parties */}
-                    <div className="mb-0.5 text-[10px]">
-                      <p className="font-semibold text-gray-600 mb-0 leading-tight">
-                        Raised by: <span className="text-gray-900 font-medium">{d.raised_by_name || d.raised_by_email || d.raised_by_phone || '—'}</span>
-                      </p>
-                      <p className="text-gray-600 truncate leading-tight" title={`Buyer: ${d.buyer_name || d.buyer_email || '—'} / Seller: ${d.seller_name || d.seller_email || '—'}`}>
-                        Buyer / Seller: {d.buyer_name || d.buyer_email || '—'} / {d.seller_name || d.seller_email || '—'}
-                      </p>
+                    <div className="dispute-card__people">
+                      <div className="dispute-card__people-row">
+                        <div className="dispute-card__people-label">Raised by</div>
+                        <div className="dispute-card__people-value">
+                          {d.raised_by_name || d.raised_by_email || d.raised_by_phone || '—'}
+                        </div>
+                      </div>
+                      <div className="dispute-card__people-row">
+                        <div className="dispute-card__people-label">Buyer</div>
+                        <div className="dispute-card__people-value">{d.buyer_name || d.buyer_email || d.buyer_phone || '—'}</div>
+                      </div>
+                      <div className="dispute-card__people-row">
+                        <div className="dispute-card__people-label">Seller</div>
+                        <div className="dispute-card__people-value">{d.seller_name || d.seller_email || d.seller_phone || '—'}</div>
+                      </div>
                     </div>
 
-                    {/* Reason */}
-                    <div className="mb-0.5 p-0.5 rounded bg-amber-50 border border-amber-200">
-                      <p className="text-[10px] font-semibold text-amber-900 mb-0 leading-tight">Reason</p>
-                      <p className={`text-[10px] text-gray-700 dispute-reason-clamp leading-tight`} title={d.reason || ''}>
+                    <div className="dispute-card__reason">
+                      <div className="dispute-card__reason-title">Dispute reason</div>
+                      <div className="dispute-card__reason-text dispute-reason-clamp" title={d.reason || ''}>
                         {d.reason || 'No reason provided'}
-                      </p>
+                      </div>
                     </div>
 
-                    {/* Payment Screenshot */}
                     {d.payment_screenshot && (
-                      <div className="mb-0.5">
-                        <p className="text-[10px] font-semibold text-gray-500 mb-0 leading-tight">Screenshot</p>
+                      <div className="dispute-card__screenshot">
+                        <div className="dispute-card__screenshot-label">Payment proof</div>
                         <img
                           src={d.payment_screenshot}
-                          alt="Payment"
-                          className="w-full max-h-8 object-contain rounded border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                          alt="Payment proof"
+                          className="dispute-card__screenshot-thumb"
                           onClick={() => {
                             const w = window.open();
-                            if (w) w.document.write(`<html><head><title>Payment - Trade #${d.trade_id}</title><style>body{margin:0;padding:20px;background:#f3f4f6;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;max-height:90vh;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15)}</style></head><body><img src="${d.payment_screenshot}" alt="Payment" /></body></html>`);
+                            if (w)
+                              w.document.write(
+                                `<html><head><title>Payment - Trade #${d.trade_id}</title><style>body{margin:0;padding:20px;background:#0f172a;display:flex;justify-content:center;align-items:center;min-height:100vh}img{max-width:100%;max-height:92vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.5)}</style></head><body><img src="${d.payment_screenshot}" alt="Payment" /></body></html>`,
+                              );
                           }}
                         />
+                        <div className="dispute-card__screenshot-hint">Tap image to open full size</div>
                       </div>
                     )}
 
-                    {/* Resolution note (when resolved/rejected/closed) */}
-                    {d.status !== 'OPEN' && d.resolution_note && (
-                      <div className="mb-0.5 p-0.5 rounded bg-blue-50 border border-blue-200">
-                        <p className="text-[10px] font-semibold text-blue-900 mb-0 leading-tight">Resolution</p>
-                        <p className="text-[10px] text-gray-700 dispute-reason-clamp leading-tight" title={d.resolution_note}>
-                          {d.resolution_note}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Resolve button - OPEN only */}
-                    {d.status === 'OPEN' && (
-                      <div className="mt-auto pt-0.5">
-                        <button
-                          type="button"
-                          onClick={() => openResolveModal(d)}
-                          className="dispute-resolve-btn"
-                        >
-                          Resolve dispute
-                        </button>
-                      </div>
-                    )}
+                    <div className="mt-auto pt-0.5">
+                      <button type="button" onClick={() => openResolveModal(d)} className="dispute-resolve-btn">
+                        Resolve dispute
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
-            <SitePagination
-              id="disputes-pagination"
-              currentPage={disputesPage}
-              totalPages={totalDisputesPages}
-              onPageChange={setDisputesPage}
-            />
+            {totalDisputesPages > 1 ? (
+              <SitePagination
+                id="disputes-pagination"
+                currentPage={disputesPage}
+                totalPages={totalDisputesPages}
+                onPageChange={setDisputesPage}
+              />
+            ) : (
+              <p className="text-center text-sm text-gray-500 mt-3 mb-1">
+                Showing {filteredDisputes.length} open dispute{filteredDisputes.length === 1 ? '' : 's'}
+              </p>
+            )}
           </>
-        ) : (
-          <div className="py-12 px-6 rounded-xl bg-gray-50 border border-gray-200 text-center">
-            <div className="text-5xl mb-3">✅</div>
-            <p className="text-base font-semibold text-gray-800 mb-1">
-              No active disputes
-            </p>
-            <p className="text-sm text-gray-600">
-              All disputes have been resolved or there are no disputes at this time.
-            </p>
-          </div>
         )}
       </div>
 

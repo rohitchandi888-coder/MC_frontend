@@ -12,6 +12,8 @@ interface P2PTradingProps {
   /** When false, USDT is hidden and any USDT selection is coerced to INR. */
   canUseUsdt?: boolean;
   internalFdaBalance: number | null;
+  /** FDA you can list in new SELL offers (excludes active holds + holding reserve). Matches home "Available". */
+  internalFdaUsable: number | null;
   internalFdaLocked: number | null;
   p2pFeeRate: number;
   /** Minimum price per FDA when offer fiat is INR. */
@@ -80,6 +82,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   auth,
   canUseUsdt = false,
   internalFdaBalance,
+  internalFdaUsable,
   internalFdaLocked,
   p2pFeeRate,
   p2pMinPricePerFda,
@@ -116,6 +119,13 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   openReleaseConfirmModal,
   openDisputeModal,
 }) => {
+  const sellableInternalFda =
+    internalFdaBalance === null
+      ? null
+      : internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
+        ? Math.max(0, internalFdaUsable)
+        : internalFdaBalance;
+
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = React.useState(false);
   const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = React.useState<number[]>([]);
@@ -470,14 +480,21 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
       {auth && (
         <>
           {/* Balance Info */}
-          {internalFdaBalance !== null && (
+          {sellableInternalFda !== null && (
             <div className="balance-display-card">
               <div className="balance-display-header">
                 <div>
                   <p className="balance-label">Available FDA Balance</p>
                   <p className="balance-amount">
-                    {internalFdaBalance.toFixed(2)} FDA
+                    {sellableInternalFda.toFixed(2)} FDA
                   </p>
+                  {internalFdaBalance !== null &&
+                    sellableInternalFda !== null &&
+                    internalFdaBalance > sellableInternalFda + 1e-9 && (
+                      <p className="balance-locked" style={{ fontSize: '0.7rem', lineHeight: 1.35 }}>
+                        {internalFdaBalance.toFixed(2)} FDA custodial · difference is active holds / minimum reserve
+                      </p>
+                    )}
                   {internalFdaLocked !== null && internalFdaLocked > 0 && (
                     <p className="balance-locked">
                       {internalFdaLocked.toFixed(2)} FDA locked in offers
@@ -606,9 +623,9 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
             >
               <div style={{ minWidth: 0 }}>
                 <p className="text-xs  mb-2 font-semibold p2p-subheading">
-                  Amount (FDA) {offerType === 'SELL' && internalFdaBalance !== null && (
+                  Amount (FDA) {offerType === 'SELL' && sellableInternalFda !== null && (
                     <span className="text-slate-200" style={{ fontSize: '0.7rem' }}>
-                      (Available: {internalFdaBalance.toFixed(2)})
+                      (Available: {sellableInternalFda.toFixed(2)})
                     </span>
                   )}
                   {offerType === 'BUY' && (
@@ -643,19 +660,19 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                         boxSizing: "border-box",
                       }}
                     />
-                    {offerType === "SELL" && internalFdaBalance !== null && (
+                    {offerType === "SELL" && sellableInternalFda !== null && (
                       <button
                         type="button"
                         className="btn btn-yellow text-sm py-3 w-full"
                         onClick={() =>
-                          setOfferAmount(internalFdaBalance.toFixed(2))
+                          setOfferAmount(sellableInternalFda.toFixed(2))
                         }
                         style={{
                           boxSizing: "border-box",
                           maxWidth: "100%",
                         }}
                       >
-                        Use max ({internalFdaBalance.toFixed(2)} FDA)
+                        Use max ({sellableInternalFda.toFixed(2)} FDA)
                       </button>
                     )}
                   </div>
@@ -680,12 +697,12 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                         maxWidth: "100%",
                       }}
                     />
-                    {offerType === "SELL" && internalFdaBalance !== null && (
+                    {offerType === "SELL" && sellableInternalFda !== null && (
                       <button
                         type="button"
                         className="btn btn-yellow text-xs py-3 px-4"
                         onClick={() =>
-                          setOfferAmount(internalFdaBalance.toFixed(2))
+                          setOfferAmount(sellableInternalFda.toFixed(2))
                         }
                         style={{
                           whiteSpace: "nowrap",

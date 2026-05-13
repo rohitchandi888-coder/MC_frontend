@@ -5918,23 +5918,25 @@ ul:not([style*="padding"]) li {
 
 .disputes-grid {
   display: grid;
-  /* grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); */
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 
 
 .dispute-card {
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  padding: 0.35rem 0.45rem;
+  padding: 0.65rem 0.75rem;
   background: #ffffff;
   color: #1f2937;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e5e7eb;
-  transition: box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid #e2e8f0;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dispute-card[data-status="OPEN"] { border-left: 4px solid #f59e0b; }
@@ -5944,7 +5946,8 @@ ul:not([style*="padding"]) li {
 .dispute-card:not([data-status]) { border-left: 4px solid #94a3b8; }
 
 .dispute-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.05);
+  border-color: #cbd5e1;
 }
 
 .dispute-status-badge { padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
@@ -5962,19 +5965,299 @@ ul:not([style*="padding"]) li {
 
 .dispute-resolve-btn {
   width: 100%;
-  padding: 0.2rem 0;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: #fff;
-  background: #10b981;
+  background: linear-gradient(165deg, #10b981 0%, #059669 100%);
   border: none;
   cursor: pointer;
-  transition: background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
 }
 
 .dispute-resolve-btn:hover {
-  background: #059669;
+  background: linear-gradient(165deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+  transform: translateY(-1px);
+}
+
+.dispute-resolve-btn:active {
+  transform: translateY(0);
+}
+
+/* Admin disputes panel shell */
+.disputes-panel-shell {
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 48%);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+}
+
+.disputes-search-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem 0.65rem 2.35rem;
+  margin-bottom: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 5-5 5 5 0 0 1-5 5z'/%3E%3C/svg%3E") no-repeat 0.75rem center;
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
+.disputes-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.disputes-search-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+/* Dispute card interior blocks */
+/* Scope under .dispute-card so these beat .main-container div/span { color: inherit } (0,1,1) */
+.dispute-card .dispute-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: -0.65rem -0.75rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #f8fafc;
+  border-radius: 12px 12px 0 0;
+}
+
+.dispute-card .dispute-card__head-left {
+  min-width: 0;
+  flex: 1 1 5rem;
+}
+
+.dispute-card .dispute-card__head-trade {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+.dispute-card .dispute-card__head-meta {
+  margin-top: 0.2rem;
+  font-size: 0.6875rem;
+  color: #e2e8f0;
+  font-weight: 600;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.dispute-card .dispute-card__head-date {
+  margin-top: 0.15rem;
+  font-size: 0.625rem;
+  color: #cbd5e1;
+  font-weight: 500;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+@media (max-width: 420px) {
+  .dispute-card .dispute-card__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dispute-card__head .dispute-status-badge {
+    align-self: flex-start;
+  }
+}
+
+.dispute-card__head .dispute-status-badge--open {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+.dispute-card__head .dispute-status-badge--resolved,
+.dispute-card__head .dispute-status-badge--rejected,
+.dispute-card__head .dispute-status-badge--closed {
+  background: rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.dispute-card__subhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.dispute-card__finance {
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.75rem;
+}
+
+.dispute-card__finance-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dispute-card__finance-row + .dispute-card__finance-row {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.dispute-card__finance-value {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dispute-card__finance-total {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.dispute-card__trade-status {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dispute-card__finance-row .dispute-card__trade-status {
+  margin-top: 0;
+  align-self: center;
+}
+
+.dispute-card__trade-status--disputed {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.dispute-card__trade-status--completed {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.dispute-card__trade-status--cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.dispute-card__trade-status--other {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.dispute-card__people {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.dispute-card__people-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 0.15rem;
+}
+
+.dispute-card__people-value {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.dispute-card__people-row + .dispute-card__people-row {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.dispute-card__reason {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fcd34d;
+  margin-bottom: 0.75rem;
+}
+
+.dispute-card__reason-title {
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #92400e;
+  margin-bottom: 0.35rem;
+}
+
+.dispute-card__reason-text {
+  font-size: 0.8125rem;
+  color: #422006;
+  line-height: 1.45;
+}
+
+.dispute-card__screenshot {
+  margin-bottom: 0.75rem;
+}
+
+.dispute-card__screenshot-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.dispute-card__screenshot-thumb {
+  width: 100%;
+  max-height: 7rem;
+  min-height: 4rem;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.dispute-card__screenshot-thumb:hover {
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+  transform: scale(1.01);
+}
+
+.dispute-card__screenshot-hint {
+  font-size: 0.625rem;
+  color: #94a3b8;
+  margin-top: 0.35rem;
 }
 
 /* Site-wide Pagination (Disputes, Trade Listing, Admin Panel, P2P Trading) */

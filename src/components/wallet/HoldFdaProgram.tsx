@@ -25,6 +25,9 @@ type RewardStatusRow = {
   rewardRate: number;
   rewardAmount: number;
   projectedTotal: number;
+  /** Present when API includes eligibility breakdown (e.g. merchant buy). */
+  fdaPrice?: number;
+  rewardValue?: number;
   breakRequestStatus?: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
   breakRequestNote?: string | null;
   breakRequestedAt?: string | null;
@@ -381,6 +384,12 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
     return label ? `${label} (${shortAddr})` : shortAddr;
   };
 
+  const formatHoldDate = (iso?: string | null) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold text-gray-900">🔒 Hold FDA Program</h2>
@@ -652,6 +661,48 @@ export const HoldFdaProgram: React.FC<HoldFdaProgramProps> = ({
                 {h.breakRequestNote ? (
                   <div className="text-slate-500 mt-1">Note: {h.breakRequestNote}</div>
                 ) : null}
+                <details className="mt-2 rounded-md border border-slate-600/80 bg-slate-900/35 px-2 py-1.5">
+                  <summary className="cursor-pointer select-none text-slate-200 text-[11px] font-semibold tracking-wide list-none [&::-webkit-details-marker]:hidden">
+                    Details
+                  </summary>
+                  <div className="mt-2 space-y-1.5 border-t border-slate-600/60 pt-2 text-[11px] leading-snug text-slate-400">
+                    <div>
+                      <span className="text-slate-500">Started</span>{' '}
+                      <span className="text-slate-200">{formatHoldDate(h.createdAt)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Maturity</span>{' '}
+                      <span className="text-slate-200">{formatHoldDate(h.expiresAt)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Claimed</span>{' '}
+                      <span className="text-slate-200">{h.claimedAt ? formatHoldDate(h.claimedAt) : '—'}</span>
+                    </div>
+                    {h.walletAddress ? (
+                      <div className="break-all">
+                        <span className="text-slate-500">Wallet address</span>
+                        <div className="mt-0.5 font-mono text-[10px] text-slate-300">{h.walletAddress}</div>
+                      </div>
+                    ) : null}
+                    {h.reason ? (
+                      <div>
+                        <span className="text-slate-500">Eligibility</span>
+                        <div className="mt-0.5 text-slate-300 whitespace-pre-wrap">{h.reason}</div>
+                      </div>
+                    ) : null}
+                    {h.plan === 'merchant_buy' && ((h.fdaPrice ?? 0) > 0 || (h.rewardValue ?? 0) > 0) ? (
+                      <div className="space-y-0.5">
+                        <span className="text-slate-500">Merchant hold pricing</span>
+                        {(h.fdaPrice ?? 0) > 0 ? (
+                          <div className="text-slate-300">FDA price at hold: {Number(h.fdaPrice).toFixed(4)}</div>
+                        ) : null}
+                        {(h.rewardValue ?? 0) > 0 ? (
+                          <div className="text-slate-300">Reward value (locked): {Number(h.rewardValue).toFixed(4)}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </details>
                 {h.breakRequestStatus !== 'PENDING' && h.breakRequestStatus !== 'APPROVED' && !h.eligible && (
                   <div className="mt-2">
                     <button

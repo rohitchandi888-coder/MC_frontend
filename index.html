@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <title>FDA Web Wallet & P2P Trading</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Silence verbose console output (runs before fix-url.js and the app). Set localStorage FDA_DEBUG_CONSOLE=1 and reload to restore log/debug/info. -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('FDA_DEBUG_CONSOLE') === '1') return;
+        } catch (_e) {}
+        var noop = function () {};
+        if (typeof console !== 'undefined') {
+          console.log = noop;
+          console.debug = noop;
+          console.info = noop;
+        }
+      })();
+    </script>
     <!-- Optional: Font Awesome for pages still using .fa-* classes; bottom nav uses inline SVG -->
     <link
       rel="stylesheet"

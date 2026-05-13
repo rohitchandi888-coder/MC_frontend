@@ -34,6 +34,8 @@ interface TradeListingProps {
   loadOffers: () => Promise<void>;
   loadMyTrades: () => Promise<void>;
   openAcceptModal: (offer: any) => void;
+  /** When false, user already has a non-terminal trade — hide/disable accepting other offers. */
+  canAcceptAnotherOffer?: boolean;
   openCancelOfferModal: (offer: any) => void;
   cancelTrade: (tradeId: number) => Promise<void>;
   openDisputeModal: (trade: any) => void;
@@ -69,6 +71,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   loadOffers,
   loadMyTrades,
   openAcceptModal,
+  canAcceptAnotherOffer = true,
   openCancelOfferModal,
   cancelTrade,
   openDisputeModal,
@@ -233,6 +236,22 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                 🔄 {loadingOffers ? 'Loading...' : 'Refresh'}
               </button>
             </div>
+
+            {!canAcceptAnotherOffer && (
+              <p
+                className="text-sm mb-3"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  background: '#fffbeb',
+                  border: '1px solid #fcd34d',
+                  color: '#92400e',
+                }}
+              >
+                You can only have <strong>one active trade</strong> at a time. Complete, cancel, or wait for your current
+                trade to finish before accepting another offer.
+              </p>
+            )}
 
             {/* Search and Filters */}
             <div className="search-filter-container">
@@ -443,16 +462,27 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                             )}
                             {!isMyOffer && (offer.status === 'OPEN' || !offer.status) && (
                               <button
-                                className={`btn btn-success w-full text-base font-bold py-3 btn-hover-lift ${acceptingOffer === offer.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                className={`btn btn-success w-full text-base font-bold py-3 btn-hover-lift ${acceptingOffer === offer.id || !canAcceptAnotherOffer ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 onClick={() => openAcceptModal(offer)}
-                                disabled={acceptingOffer === offer.id}
+                                disabled={acceptingOffer === offer.id || !canAcceptAnotherOffer}
+                                title={
+                                  !canAcceptAnotherOffer
+                                    ? 'Finish or cancel your current trade before accepting another offer'
+                                    : undefined
+                                }
                                 style={{
                                   whiteSpace: 'nowrap',
                                   minWidth: '120px',
                                   boxShadow: acceptingOffer === offer.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.4)',
                                 }}
                               >
-                                {acceptingOffer === offer.id ? 'Accepting...' : offerType === 'SELL' ? 'Buy' : 'Sell'}
+                                {acceptingOffer === offer.id
+                                  ? 'Accepting...'
+                                  : !canAcceptAnotherOffer
+                                    ? 'Active trade — wait'
+                                    : offerType === 'SELL'
+                                      ? 'Buy'
+                                      : 'Sell'}
                               </button>
                             )}
                             {offer.status === 'CANCELLED' && (
