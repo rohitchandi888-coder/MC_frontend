@@ -239,6 +239,32 @@ import WalletModal from './components/MobileView/Modal/WalletModal';
 import SwapWalletModal from './components/MobileView/Modal/Swap';
 import { TradeChatModal } from './components/modals/TradeChatModal';
 
+/** When /admin/disputes omits FDA ids (older API build), fill from /admin/users using `users.id`. */
+function enrichAdminDisputesFdaIds(disputes: unknown, users: unknown): any[] {
+  if (!Array.isArray(disputes)) return [];
+  if (!Array.isArray(users) || users.length === 0) return disputes as any[];
+  const fdaById = new Map<number, string>();
+  for (const u of users as any[]) {
+    const id = Number(u?.id);
+    const raw = u?.fda_user_id ?? u?.fdaUserId;
+    if (!Number.isFinite(id) || raw == null) continue;
+    const s = String(raw).trim();
+    if (s) fdaById.set(id, s);
+  }
+  const pick = (existing: unknown, userPk: unknown) => {
+    if (existing != null && String(existing).trim() !== '') return existing;
+    const id = Number(userPk);
+    if (!Number.isFinite(id)) return existing ?? null;
+    return fdaById.get(id) ?? existing ?? null;
+  };
+  return (disputes as any[]).map((d) => ({
+    ...d,
+    buyer_fda_user_id: pick(d.buyer_fda_user_id, d.buyer_id),
+    seller_fda_user_id: pick(d.seller_fda_user_id, d.seller_id),
+    raised_by_fda_user_id: pick(d.raised_by_fda_user_id, d.raised_by_id),
+  }));
+}
+
 export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [unlockReturnTab, setUnlockReturnTab] = useState<Tab>('dashboard');
@@ -3447,16 +3473,21 @@ export const Dashboard: React.FC = () => {
       return;
     }
     try {
-      const [tradesRes, disputesRes] = await Promise.all([
+      const [tradesRes, disputesRes, usersRes] = await Promise.all([
         fetch(getApiUrl('admin/trades'), {
           headers: { Authorization: `Bearer ${auth.token}` },
         }),
         fetch(getApiUrl('admin/disputes'), {
           headers: { Authorization: `Bearer ${auth.token}` },
         }),
+        fetch(getApiUrl('admin/users'), {
+          headers: { Authorization: `Bearer ${auth.token}` },
+        }),
       ]);
       const tradesData = await tradesRes.json();
       const disputesData = await disputesRes.json();
+      const usersRaw = usersRes.ok ? await usersRes.json() : [];
+      const usersData = Array.isArray(usersRaw) ? usersRaw : [];
       if (!tradesRes.ok) {
         showErrorModal(`⚠️ ${tradesData.error || 'Failed to load admin trades'}`);
         return;
@@ -3466,7 +3497,7 @@ export const Dashboard: React.FC = () => {
         return;
       }
       setAdminTrades(tradesData);
-      setAdminDisputes(disputesData);
+      setAdminDisputes(enrichAdminDisputesFdaIds(disputesData, usersData));
 
       // Load settings
       const settingsRes = await fetch(getApiUrl('admin/settings'), {

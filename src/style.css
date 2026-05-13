@@ -6195,6 +6195,24 @@ ul:not([style*="padding"]) li {
   font-weight: 600;
 }
 
+.dispute-card__people-sub {
+  margin-top: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.dispute-card__people-sub > div + div {
+  margin-top: 0.15rem;
+}
+
+.dispute-card__people-sub-k {
+  color: #64748b;
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
 .dispute-card__people-row + .dispute-card__people-row {
   margin-top: 0.5rem;
   padding-top: 0.5rem;

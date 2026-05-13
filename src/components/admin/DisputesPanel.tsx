@@ -9,6 +9,68 @@ interface DisputesPanelProps {
   loadAdminData: () => Promise<void>;
 }
 
+function formatPartyPhone(phone: unknown): string {
+  if (phone == null) return '—';
+  const s = String(phone).trim();
+  return s !== '' ? s : '—';
+}
+
+function formatPartyFdaId(fdaUserId: unknown): string {
+  if (fdaUserId == null) return '—';
+  const s = String(fdaUserId).trim();
+  return s !== '' ? s : '—';
+}
+
+/** Admin API returns snake_case; tolerate camelCase if a proxy ever rewrites keys. */
+function pickFdaId(row: Record<string, unknown>, snake: string, camel: string): unknown {
+  const a = row[snake];
+  if (a != null && String(a).trim() !== '') return a;
+  const b = row[camel];
+  if (b != null && String(b).trim() !== '') return b;
+  return null;
+}
+
+function DisputePartyBlock({
+  label,
+  name,
+  email,
+  phone,
+  fdaUserId,
+  userDbId,
+}: {
+  label: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  fdaUserId?: string | number | null;
+  /** `users.id` for this party — helps match pgAdmin when FDA id is missing on that row. */
+  userDbId?: number | null;
+}) {
+  const headline = [name, email].find((s) => s && String(s).trim()) || '—';
+  const fdaLabel = formatPartyFdaId(fdaUserId);
+  return (
+    <div className="dispute-card__people-row">
+      <div className="dispute-card__people-label">{label}</div>
+      <div className="dispute-card__people-value">
+        <div>{headline}</div>
+        <div className="dispute-card__people-sub">
+          <div>
+            <span className="dispute-card__people-sub-k">Phone</span>
+            {formatPartyPhone(phone)}
+          </div>
+          <div>
+            <span className="dispute-card__people-sub-k">FDA user ID</span>
+            {fdaLabel}
+            {fdaLabel === '—' && userDbId != null && (
+              <span className="text-slate-500 font-medium"> · users.id = {userDbId}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const DisputesPanel: React.FC<DisputesPanelProps> = ({
   auth,
   adminDisputes,
@@ -48,6 +110,12 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
       ${d.seller_email || ''}
       ${d.raised_by_name || ''}
       ${d.raised_by_email || ''}
+      ${d.raised_by_phone || ''}
+      ${d.raised_by_fda_user_id || ''}
+      ${d.buyer_phone || ''}
+      ${d.buyer_fda_user_id || ''}
+      ${d.seller_phone || ''}
+      ${d.seller_fda_user_id || ''}
     `.toLowerCase();
 
       return combined.includes(s);
@@ -256,20 +324,30 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                     </div>
 
                     <div className="dispute-card__people">
-                      <div className="dispute-card__people-row">
-                        <div className="dispute-card__people-label">Raised by</div>
-                        <div className="dispute-card__people-value">
-                          {d.raised_by_name || d.raised_by_email || d.raised_by_phone || '—'}
-                        </div>
-                      </div>
-                      <div className="dispute-card__people-row">
-                        <div className="dispute-card__people-label">Buyer</div>
-                        <div className="dispute-card__people-value">{d.buyer_name || d.buyer_email || d.buyer_phone || '—'}</div>
-                      </div>
-                      <div className="dispute-card__people-row">
-                        <div className="dispute-card__people-label">Seller</div>
-                        <div className="dispute-card__people-value">{d.seller_name || d.seller_email || d.seller_phone || '—'}</div>
-                      </div>
+                      <DisputePartyBlock
+                        label="Raised by"
+                        name={d.raised_by_name}
+                        email={d.raised_by_email}
+                        phone={d.raised_by_phone}
+                        fdaUserId={pickFdaId(d, 'raised_by_fda_user_id', 'raisedByFdaUserId')}
+                        userDbId={typeof d.raised_by_id === 'number' ? d.raised_by_id : Number(d.raised_by_id) || null}
+                      />
+                      <DisputePartyBlock
+                        label="Buyer"
+                        name={d.buyer_name}
+                        email={d.buyer_email}
+                        phone={d.buyer_phone}
+                        fdaUserId={pickFdaId(d, 'buyer_fda_user_id', 'buyerFdaUserId')}
+                        userDbId={typeof d.buyer_id === 'number' ? d.buyer_id : Number(d.buyer_id) || null}
+                      />
+                      <DisputePartyBlock
+                        label="Seller"
+                        name={d.seller_name}
+                        email={d.seller_email}
+                        phone={d.seller_phone}
+                        fdaUserId={pickFdaId(d, 'seller_fda_user_id', 'sellerFdaUserId')}
+                        userDbId={typeof d.seller_id === 'number' ? d.seller_id : Number(d.seller_id) || null}
+                      />
                     </div>
 
                     <div className="dispute-card__reason">
@@ -345,6 +423,33 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
                 </p>
                 <p className="modal-info-text">
                   <strong style={{ color: '#9b9595' }}>Dispute Reason:</strong> {selectedDispute.reason}
+                </p>
+                <p className="modal-info-text mt-2" style={{ fontSize: '0.8rem' }}>
+                  <strong style={{ color: '#9b9595' }}>Raised by</strong> —{' '}
+                  {selectedDispute.raised_by_name || selectedDispute.raised_by_email || '—'} · Phone:{' '}
+                  {formatPartyPhone(selectedDispute.raised_by_phone)} · FDA ID:{' '}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'raised_by_fda_user_id', 'raisedByFdaUserId'))}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'raised_by_fda_user_id', 'raisedByFdaUserId')) === '—' &&
+                    selectedDispute.raised_by_id != null &&
+                    ` · users.id=${selectedDispute.raised_by_id}`}
+                </p>
+                <p className="modal-info-text" style={{ fontSize: '0.8rem' }}>
+                  <strong style={{ color: '#9b9595' }}>Buyer</strong> —{' '}
+                  {selectedDispute.buyer_name || selectedDispute.buyer_email || '—'} · Phone:{' '}
+                  {formatPartyPhone(selectedDispute.buyer_phone)} · FDA ID:{' '}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'buyer_fda_user_id', 'buyerFdaUserId'))}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'buyer_fda_user_id', 'buyerFdaUserId')) === '—' &&
+                    selectedDispute.buyer_id != null &&
+                    ` · users.id=${selectedDispute.buyer_id}`}
+                </p>
+                <p className="modal-info-text" style={{ fontSize: '0.8rem' }}>
+                  <strong style={{ color: '#9b9595' }}>Seller</strong> —{' '}
+                  {selectedDispute.seller_name || selectedDispute.seller_email || '—'} · Phone:{' '}
+                  {formatPartyPhone(selectedDispute.seller_phone)} · FDA ID:{' '}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'seller_fda_user_id', 'sellerFdaUserId'))}
+                  {formatPartyFdaId(pickFdaId(selectedDispute, 'seller_fda_user_id', 'sellerFdaUserId')) === '—' &&
+                    selectedDispute.seller_id != null &&
+                    ` · users.id=${selectedDispute.seller_id}`}
                 </p>
               </div>
 
