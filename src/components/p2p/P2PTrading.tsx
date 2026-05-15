@@ -4,6 +4,7 @@ import { getApiUrl } from '../../config';
 import { type AuthState } from '../types';
 import { MM } from '../../theme/metaMaskShell';
 import { buyerCanDisputeAfterPaid, getReleaseTimeline } from './p2pTradeTimers';
+import { myTradesMobileStatusPill } from './p2pMobileMyTradesCard';
 
 interface P2PTradingProps {
   /** Light MetaMask-style cards/inputs on mobile (matches app shell). */
@@ -51,6 +52,8 @@ interface P2PTradingProps {
   loadMyTrades: () => Promise<void>;
   openReleaseConfirmModal: (trade: any) => void;
   openDisputeModal: (trade: any) => void;
+  /** When set (e.g. from Dashboard), mobile shell shows Chat / Chat Closed like Trade Listing. */
+  openTradeChatModal?: (trade: any) => void;
 }
 
 interface PaymentMethod {
@@ -118,6 +121,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   loadMyTrades,
   openReleaseConfirmModal,
   openDisputeModal,
+  openTradeChatModal,
 }) => {
   const sellableInternalFda =
     internalFdaBalance === null
@@ -1040,9 +1044,20 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
           {/* My Trades */}
           <div>
             <div className="flex justify-between items-center mb-4">
-              <p className="text-sm font-semibold text-slate-300">My Trades ({myTrades.length})</p>
+              <p
+                className={`text-sm font-semibold ${inMobileShell ? '' : 'text-slate-300'}`}
+                style={inMobileShell ? { color: MM.text } : undefined}
+              >
+                My Trades ({myTrades.length})
+              </p>
               <button
-                className="btn btn-secondary text-xs py-2 px-3"
+                type="button"
+                className={`btn text-xs py-2 px-3 ${inMobileShell ? '' : 'btn-secondary'}`}
+                style={
+                  inMobileShell
+                    ? { background: MM.surface, color: MM.text, border: `1px solid ${MM.border}` }
+                    : undefined
+                }
                 onClick={loadMyTrades}
               >
                 🔄 Refresh
@@ -1057,83 +1072,158 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                       const isSeller = trade.seller_id === auth?.user.id;
                       const feeAmount = parseFloat(trade.fee_amount || trade.fee || 0);
                       const amountReceived = parseFloat(trade.amount) - feeAmount;
-                      const statusLabel =
-                        trade.status === 'COMPLETED'
-                          ? '✅ COMPLETED'
-                          : trade.status === 'PAID_PENDING_RELEASE'
-                            ? '💰 PAID'
-                            : trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT'
-                              ? '⏳ PENDING'
-                              : trade.status;
                       const statusUpper = String(trade.status || '').toUpperCase();
-                      const statusToneClass =
-                        statusUpper === 'COMPLETED'
-                          ? 'text-emerald-400 font-semibold'
-                          : statusUpper === 'CANCELLED'
-                            ? 'text-red-400 font-semibold'
-                            : statusUpper === 'PAID_PENDING_RELEASE'
-                              ? 'text-orange-400 font-semibold'
-                              : statusUpper === 'DISPUTED'
-                                ? 'text-amber-400 font-semibold'
-                                : 'text-slate-200 font-medium';
+                      const statusPill = myTradesMobileStatusPill(statusUpper);
+                      const chatClosed = ['COMPLETED', 'CANCELLED'].includes(statusUpper);
                       const releaseTl =
                         statusUpper === 'PAID_PENDING_RELEASE'
                           ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
                           : null;
+                      const counterpartyDisplay = isBuyer
+                        ? trade.seller_name || trade.seller_email || trade.seller_phone || '—'
+                        : trade.buyer_name || trade.buyer_email || trade.buyer_phone || '—';
                       return (
-                        <div key={trade.id} className="card-dark p-3 rounded-xl border border-slate-700">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <p className="text-sm font-semibold text-slate-100">#{trade.id}</p>
-                            <span className={`text-[10px] px-2 py-1 rounded-full font-semibold ${
-                              isBuyer ? 'bg-blue-500/20 text-blue-300' : 'bg-rose-500/20 text-rose-300'
-                            }`}>
+                        <div
+                          key={trade.id}
+                          style={{
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 10,
+                            padding: 12,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <strong style={{ color: '#111827', fontSize: 14 }}>#{trade.id}</strong>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: '4px 10px',
+                                borderRadius: 999,
+                                background: isBuyer ? '#2563eb' : '#dc2626',
+                                color: '#fff',
+                                letterSpacing: '0.02em',
+                              }}
+                            >
                               {isBuyer ? 'BUY' : 'SELL'}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs items-baseline">
-                            <span className="text-slate-400">Amount</span>
-                            <span className="text-right text-slate-100 tabular-nums">{parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}</span>
-                            <span className="text-slate-400">Price</span>
-                            <span className="text-right text-slate-100 tabular-nums">{parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}</span>
-                            <span className="text-slate-400">Total</span>
-                            <span className="text-right text-slate-100 font-semibold tabular-nums">{(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}</span>
-                            <span className="text-slate-400">Status</span>
-                            <span className={`text-right text-[11px] leading-snug ${statusToneClass}`}>{statusLabel}</span>
-                            <span className="text-slate-400">Created</span>
-                            <span className="text-right text-slate-200 text-[11px] leading-snug break-words">{formatTradeDateTime(trade.created_at)}</span>
-                            <span className="text-slate-400">Counterparty</span>
-                            <span className="text-right text-slate-200 break-words">
-                              <span className="block">{isBuyer ? (trade.seller_name || trade.seller_email || trade.seller_phone || 'Unknown') : (trade.buyer_name || trade.buyer_email || trade.buyer_phone || 'Unknown')}</span>
-                              <span className="block text-[11px] text-slate-400 mt-0.5 tabular-nums">
-                                Offer creator FDA USER ID {formatOfferMakerFdaId(trade)}
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                              gap: '6px 10px',
+                              fontSize: 12,
+                              alignItems: 'baseline',
+                            }}
+                          >
+                            <span style={{ color: '#6b7280' }}>Amount</span>
+                            <span style={{ color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {parseFloat(trade.amount).toFixed(4)} {trade.asset_symbol}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Price</span>
+                            <span style={{ color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {parseFloat(trade.price).toFixed(2)} {trade.fiat_currency}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Total</span>
+                            <span
+                              style={{
+                                color: '#111827',
+                                textAlign: 'right',
+                                fontWeight: 700,
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Status</span>
+                            <span style={{ textAlign: 'right' }}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  padding: '4px 10px',
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  background: statusPill.bg,
+                                  color: '#fff',
+                                }}
+                              >
+                                {statusPill.label}
                               </span>
                             </span>
-                            <span className="text-slate-400">
-                              {trade.status === 'COMPLETED' ? (isBuyer ? 'Received' : 'Sent') : 'Received'}
-                            </span>
-                            <span className="text-right text-slate-200">
-                              {trade.status === 'COMPLETED' && feeAmount > 0 && isBuyer
-                                ? `${amountReceived.toFixed(4)} FDA`
-                                : trade.status === 'COMPLETED'
-                                  ? `${parseFloat(trade.amount).toFixed(4)} FDA`
-                                  : '-'}
-                            </span>
-                          </div>
-                          {releaseTl && (
-                            <div
-                              className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] leading-snug ${
-                                releaseTl.overdue
-                                  ? 'border-red-500/40 bg-red-950/30 text-red-200'
-                                  : 'border-amber-500/30 bg-slate-900/80 text-slate-200'
-                              }`}
+                            <span style={{ color: '#6b7280' }}>Created</span>
+                            <span
+                              style={{
+                                color: '#334155',
+                                textAlign: 'right',
+                                fontSize: 11,
+                                lineHeight: 1.35,
+                                wordBreak: 'break-word',
+                              }}
                             >
-                              <div className={`font-semibold ${releaseTl.overdue ? 'text-red-300' : 'text-amber-200'}`}>
-                                {releaseTl.headline}
+                              {formatTradeDateTime(trade.created_at)}
+                            </span>
+                            <span style={{ color: '#6b7280' }}>Counterparty</span>
+                            <span style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#111827', wordBreak: 'break-word', fontWeight: 500 }}>{counterpartyDisplay}</div>
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                                Offer creator FDA USER ID {formatOfferMakerFdaId(trade)}
                               </div>
-                              <div className="mt-1 text-slate-400">{releaseTl.detail}</div>
+                            </span>
+                            {statusUpper === 'COMPLETED' ? (
+                              <>
+                                <span style={{ color: '#6b7280' }}>{isBuyer ? 'Received' : 'Sent'}</span>
+                                <span style={{ color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                                  {feeAmount > 0 && isBuyer
+                                    ? `${amountReceived.toFixed(4)} FDA`
+                                    : `${parseFloat(trade.amount).toFixed(4)} FDA`}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                          {statusUpper === 'PAID_PENDING_RELEASE' && releaseTl && (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: '8px 10px',
+                                background: releaseTl.overdue ? '#fef2f2' : '#f8fafc',
+                                borderRadius: 8,
+                                fontSize: 11,
+                                color: '#334155',
+                                lineHeight: 1.45,
+                                border: `1px solid ${releaseTl.overdue ? '#fecaca' : '#e2e8f0'}`,
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>Release step</div>
+                              <div style={{ fontWeight: 700, color: releaseTl.overdue ? '#b91c1c' : '#0f172a' }}>{releaseTl.headline}</div>
+                              <div style={{ marginTop: 6, color: '#475569' }}>{releaseTl.detail}</div>
+                              {isSeller && (
+                                <div style={{ marginTop: 6, color: '#b45309', fontWeight: 600 }}>
+                                  You are the seller — tap Release after you confirm payment.
+                                </div>
+                              )}
+                              {isBuyer && (
+                                <div style={{ marginTop: 6, color: '#1d4ed8', fontWeight: 600 }}>
+                                  You are the buyer — wait for the seller to release FDA.
+                                </div>
+                              )}
                             </div>
                           )}
-                          <div className="mt-3 space-y-2">
+                          <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+                            {openTradeChatModal && (
+                              <button
+                                type="button"
+                                className="btn w-full text-xs py-2"
+                                onClick={() => openTradeChatModal(trade)}
+                                style={{ background: chatClosed ? '#94a3b8' : '#2563eb', color: '#fff' }}
+                              >
+                                {chatClosed ? '💬 Chat Closed' : '💬 Chat'}
+                              </button>
+                            )}
                             {isBuyer &&
                               (trade.status === 'PENDING' || trade.status === 'PENDING_PAYMENT') && (
                                 <>
@@ -1249,18 +1339,22 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
                               </button>
                             )}
                             {trade.status === 'COMPLETED' && (
-                              <p className="text-xs text-emerald-400 font-semibold text-center">
+                              <span style={{ fontSize: 12, color: '#059669', fontWeight: 600, textAlign: 'center' }}>
                                 ✅ {isBuyer ? 'Received' : 'Sent'}{' '}
                                 {isBuyer && feeAmount > 0
                                   ? `${amountReceived.toFixed(4)} FDA`
                                   : `${parseFloat(trade.amount).toFixed(4)} FDA`}
-                              </p>
+                              </span>
                             )}
                             {trade.status === 'DISPUTED' && (
-                              <p className="text-xs text-amber-400 font-semibold text-center">⚠️ Disputed</p>
+                              <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600, textAlign: 'center' }}>
+                                ⚠️ Disputed
+                              </span>
                             )}
                             {trade.status === 'CANCELLED' && (
-                              <p className="text-xs text-slate-400 font-semibold text-center">❌ Cancelled</p>
+                              <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, textAlign: 'center' }}>
+                                ❌ Cancelled
+                              </span>
                             )}
                           </div>
                         </div>

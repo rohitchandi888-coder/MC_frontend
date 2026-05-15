@@ -4888,6 +4888,7 @@ const getPaymentDetailRows = (pm: any) => {
               loadMyTrades={loadMyTrades}
               openReleaseConfirmModal={openReleaseConfirmModal}
               openDisputeModal={openDisputeModal}
+              openTradeChatModal={openTradeChatModal}
             />
           )}
 

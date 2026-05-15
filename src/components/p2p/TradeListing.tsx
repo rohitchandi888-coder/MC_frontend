@@ -3,6 +3,7 @@ import { type AuthState } from '../types';
 import { SitePagination } from '../common/SitePagination';
 import { getApiUrl } from '../../config';
 import { buyerCanDisputeAfterPaid, getReleaseTimeline } from './p2pTradeTimers';
+import { myTradesMobileStatusPill } from './p2pMobileMyTradesCard';
 
 const MY_TRADES_PER_PAGE = 12;
 
@@ -551,29 +552,39 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                       const feeAmount = parseFloat(trade.fee_amount) || 0;
                       const amountReceived = parseFloat(trade.amount) - feeAmount;
                       const statusUpper = String(trade.status || '').toUpperCase();
+                      const statusPill = myTradesMobileStatusPill(statusUpper);
                       const releaseTl =
                         statusUpper === 'PAID_PENDING_RELEASE'
                           ? getReleaseTimeline(trade, paidReleaseClock, isSeller ? 'seller' : 'buyer')
                           : null;
-                      const statusColor =
-                        statusUpper === 'COMPLETED'
-                          ? '#059669'
-                          : statusUpper === 'CANCELLED'
-                            ? '#991b1b'
-                            : statusUpper === 'PAID_PENDING_RELEASE'
-                              ? '#c2410c'
-                              : statusUpper === 'DISPUTED'
-                                ? '#b45309'
-                                : '#334155';
                       const counterpartyDisplay = isBuyer
                         ? trade.seller_name || trade.seller_email || trade.seller_phone || '—'
                         : trade.buyer_name || trade.buyer_email || trade.buyer_phone || '—';
                       const offerCreatorFdaDisplay = formatOfferMakerFdaId(trade);
                       return (
-                        <div key={trade.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 12 }}>
+                        <div
+                          key={trade.id}
+                          style={{
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 10,
+                            padding: 12,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                          }}
+                        >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                             <strong style={{ color: '#111827', fontSize: 14 }}>#{trade.id}</strong>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: isBuyer ? '#dbeafe' : '#fee2e2', color: isBuyer ? '#1d4ed8' : '#b91c1c' }}>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: '4px 10px',
+                                borderRadius: 999,
+                                background: isBuyer ? '#2563eb' : '#dc2626',
+                                color: '#fff',
+                                letterSpacing: '0.02em',
+                              }}
+                            >
                               {isBuyer ? 'BUY' : 'SELL'}
                             </span>
                           </div>
@@ -599,8 +610,22 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                               {(parseFloat(trade.amount) * parseFloat(trade.price)).toFixed(2)} {trade.fiat_currency}
                             </span>
                             <span style={{ color: '#6b7280' }}>Status</span>
-                            <span style={{ color: statusColor, textAlign: 'right', fontWeight: 700, fontSize: 11, letterSpacing: '0.02em' }}>
-                              {trade.status}
+                            <span style={{ textAlign: 'right' }}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  padding: '4px 10px',
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  background: statusPill.bg,
+                                  color: '#fff',
+                                }}
+                              >
+                                {statusPill.label}
+                              </span>
                             </span>
                             <span style={{ color: '#6b7280' }}>Created</span>
                             <span
@@ -794,7 +819,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                               </span>
                             )}
                             {trade.status === 'CANCELLED' && (
-                              <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>
+                              <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, textAlign: 'center' }}>
                                 ❌ Cancelled
                               </span>
                             )}
