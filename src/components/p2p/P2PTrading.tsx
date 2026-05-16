@@ -990,11 +990,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
               >
                 <p className="text-xs font-semibold p2p-subheading">Settlement ({offerFiatCurrency})</p>
                 <p className="text-xs mt-1.5 leading-relaxed" style={{ color: inMobileShell ? MM.textSecondary : '#94a3b8' }}>
-                  {offerFiatCurrency === 'INR' ? (
-                    <>INR sells use Profile UPI / QR.</>
-                  ) : (
-                    <>USDT: price above; transfer off-app.</>
-                  )}
+                  USDT: price above; transfer off-app.
                 </p>
               </div>
             )}

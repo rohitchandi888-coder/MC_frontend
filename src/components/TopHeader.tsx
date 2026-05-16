@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import type { AuthState } from './types';
-import type { WalletMeta } from '../../walletStorage';
+import type { WalletMeta } from '../walletStorage';
 import { getApiUrl } from '../config';
 
 interface TopHeaderProps {

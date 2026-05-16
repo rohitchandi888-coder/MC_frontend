@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { WalletMeta } from "../../walletStorage";
-import type { CustomToken } from "../../walletStorage";
+import type { CustomToken, WalletMeta } from "../../walletStorage";
 import NetworkModal from "./Modal/NetworkModal";
 import { getApiUrl } from "../../config";
 
-import { AuthState, Tab, FDA_TOKEN_ADDRESS } from "../types";
+import type { AuthState, Tab } from "../types";
+import { FDA_TOKEN_ADDRESS } from "../types";
 import AddCustomTokenModal from "./Modal/AddCustomTokenModal";
 import { fetchAllPopularNetworkPairs } from "../../utils/dexPopularTokens";
 import { MobileExplorePanels } from "./MobileExplorePanels";

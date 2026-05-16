@@ -7,6 +7,7 @@ export { PaymentModal } from './modals/PaymentModal';
 export { CancelOfferModal } from './modals/CancelOfferModal';
 export { ReleaseConfirmModal } from './modals/ReleaseConfirmModal';
 export { DisputeModal } from './modals/DisputeModal';
+export { FdaAuthenticatorModal } from './modals/FdaAuthenticatorModal';
 
 // Wallet components
 export { DashboardView } from './wallet/DashboardView';

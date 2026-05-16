@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import { FDA_TOKEN_ADDRESS, type AuthState } from "../types";
 import type { CustomToken, WalletMeta } from "../../walletStorage";
 import { MM } from "../../theme/metaMaskShell";
+import { QrAddressScannerModal } from "./QrAddressScannerModal";
 
 const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
 const FDA_LOGO_URL = "https://img.lightshot.app/Ge3AnFucTIyQQTmVErIWpw.png";
@@ -21,6 +22,25 @@ function walletDisplayName(
   const raw = w.label?.trim();
   if (raw && !/^new$/i.test(raw)) return raw;
   return `Wallet ${index + 1}`;
+}
+
+function formatInrAmount(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0.00";
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function fdaAmountFromInr(inr: number, pricePerFda: number): string {
+  if (!Number.isFinite(inr) || inr <= 0 || !pricePerFda) return "0";
+  const fda = inr / pricePerFda;
+  return fda.toFixed(4).replace(/\.?0+$/, "") || "0";
+}
+
+function inrAmountFromFda(fda: number, pricePerFda: number): string {
+  if (!Number.isFinite(fda) || fda <= 0 || !pricePerFda) return "";
+  return formatInrAmount(fda * pricePerFda);
 }
 
 type AssetRow = {
@@ -102,14 +122,30 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
   const [step, setStep] = useState<SendStep>("recipient");
   const [assetSearch, setAssetSearch] = useState("");
   const [networkFilter, setNetworkFilter] = useState<"all" | "bnb">("all");
-  const [showFiat, setShowFiat] = useState(false);
+  const [amountInputMode, setAmountInputMode] = useState<"fda" | "inr">("fda");
+  const [inrAmount, setInrAmount] = useState("");
   const [sending, setSending] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  /** Recipient came from QR — skip token picker and amount-step scan UI. */
+  const [recipientFromQrScan, setRecipientFromQrScan] = useState(false);
 
   useEffect(() => {
     if (step === "review" && transferType === "onchain") {
       requestGasEstimate?.();
     }
   }, [step, transferType, requestGasEstimate]);
+
+  useEffect(() => {
+    if (step !== "amount") {
+      setAmountInputMode("fda");
+      setInrAmount("");
+    }
+  }, [step]);
+
+  const fdaUnitPrice = useMemo(() => {
+    const p = fdaPrice as number | null;
+    return p != null && Number.isFinite(p) && p > 0 ? p : null;
+  }, [fdaPrice]);
 
   const otherWallets = useMemo(
     () => allWallets.filter((w) => w.id !== storedMeta?.id),
@@ -234,6 +270,8 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
     assetType === "token" &&
     tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase();
   const hasValidRecipient = !!sendTo.trim() && ethers.isAddress(sendTo.trim());
+  const showQrScanButton = step === "recipient";
+
   const canUseInternalTransfer =
     !!auth &&
     hasValidRecipient &&
@@ -295,11 +333,55 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
     nativeBalance !== null &&
     nativeBalNum < requiredBnbForOnChain;
   const fiatEstimate =
-    selectedSymbol === "FDA" && fdaPrice != null && Number.isFinite(fdaPrice as number)
-      ? amountNum * (fdaPrice as number)
-      : null;
+    selectedSymbol === "FDA" && fdaUnitPrice != null ? amountNum * fdaUnitPrice : null;
+
+  const canEnterAmountInInr = selectedSymbol === "FDA" && fdaUnitPrice != null;
+
+  const inrAmountNum = parseFloat(inrAmount || "0") || 0;
+
+  const applyInrAmount = useCallback(
+    (inrStr: string) => {
+      setInrAmount(inrStr);
+      if (!fdaUnitPrice) return;
+      setSendAmount(fdaAmountFromInr(parseFloat(inrStr) || 0, fdaUnitPrice));
+    },
+    [fdaUnitPrice, setSendAmount],
+  );
+
+  const setInrPreset = useCallback(
+    (inr: number) => {
+      if (!fdaUnitPrice) return;
+      setAmountInputMode("inr");
+      applyInrAmount(formatInrAmount(inr));
+    },
+    [fdaUnitPrice, applyInrAmount],
+  );
+
+  const toggleAmountInputMode = () => {
+    if (!canEnterAmountInInr || !fdaUnitPrice) return;
+    if (amountInputMode === "fda") {
+      setInrAmount(inrAmountFromFda(amountNum, fdaUnitPrice) || "");
+      setAmountInputMode("inr");
+    } else {
+      setAmountInputMode("fda");
+    }
+  };
 
   const appendDigit = (d: string) => {
+    if (amountInputMode === "inr" && canEnterAmountInInr && fdaUnitPrice) {
+      if (d === "." && inrAmount.includes(".")) return;
+      if (d === "." && inrAmount === "") {
+        applyInrAmount("0.");
+        return;
+      }
+      const next = inrAmount + d;
+      if (next.startsWith("0") && !next.startsWith("0.") && next.length > 1 && next[1] !== ".")
+        return;
+      const dec = next.split(".")[1];
+      if (dec && dec.length > 2) return;
+      applyInrAmount(next);
+      return;
+    }
     if (d === "." && sendAmount.includes(".")) return;
     if (d === "." && sendAmount === "") {
       setSendAmount("0.");
@@ -309,14 +391,39 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
     if (next.startsWith("0") && !next.startsWith("0.") && next.length > 1 && next[1] !== ".")
       return;
     setSendAmount(next);
+    if (canEnterAmountInInr && fdaUnitPrice) {
+      setInrAmount(inrAmountFromFda(parseFloat(next) || 0, fdaUnitPrice));
+    }
   };
 
-  const backspace = () => setSendAmount((s) => s.slice(0, -1));
+  const backspace = () => {
+    if (amountInputMode === "inr" && canEnterAmountInInr) {
+      applyInrAmount(inrAmount.slice(0, -1));
+      return;
+    }
+    const next = sendAmount.slice(0, -1);
+    setSendAmount(next);
+    if (canEnterAmountInInr && fdaUnitPrice) {
+      setInrAmount(inrAmountFromFda(parseFloat(next) || 0, fdaUnitPrice));
+    }
+  };
 
   const pct = (p: number) => {
+    if (amountInputMode === "inr" && canEnterAmountInInr && fdaUnitPrice) {
+      const availableInr = availableAmountNum * fdaUnitPrice;
+      const v = availableInr * (p / 100);
+      if (!Number.isFinite(v)) return;
+      applyInrAmount(formatInrAmount(v));
+      return;
+    }
     const v = availableAmountNum * (p / 100);
     if (!Number.isFinite(v)) return;
-    setSendAmount(v.toFixed(assetType === "native" ? 6 : 4).replace(/\.?0+$/, "") || "0");
+    const fdaStr =
+      v.toFixed(assetType === "native" ? 6 : 4).replace(/\.?0+$/, "") || "0";
+    setSendAmount(fdaStr);
+    if (canEnterAmountInInr && fdaUnitPrice) {
+      setInrAmount(inrAmountFromFda(parseFloat(fdaStr) || 0, fdaUnitPrice));
+    }
   };
 
   const goBack = () => {
@@ -448,7 +555,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
   }
 
   return (
-    <div style={shell}>
+    <section style={shell}>
       {step === "recipient" && (
         <>
           {header("Send", true)}
@@ -470,7 +577,10 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
               <input
                 type="text"
                 value={sendTo}
-                onChange={(e) => setSendTo(e.target.value.trim())}
+                onChange={(e) => {
+                  setRecipientFromQrScan(false);
+                  setSendTo(e.target.value.trim());
+                }}
                 placeholder="Enter address to send"
                 style={{
                   flex: 1,
@@ -481,6 +591,25 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   minWidth: 0,
                 }}
               />
+              {showQrScanButton && (
+                <button
+                  type="button"
+                  onClick={() => setShowQrScanner(true)}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#10b981",
+                    color: "#fff",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Scan
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void paste()}
@@ -517,6 +646,7 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   key={w.id}
                   type="button"
                   onClick={() => {
+                    setRecipientFromQrScan(false);
                     setSendTo(w.address);
                     setStep(recipientContinueStep);
                   }}
@@ -818,43 +948,164 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
               padding: "16px",
             }}
           >
+            {hasValidRecipient && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  marginBottom: 14,
+                  padding: "10px 12px",
+                  borderRadius: MM.radius,
+                  border: `1px solid ${MM.borderLight}`,
+                  background: MM.pageBg,
+                }}
+              >
+                <div style={{ minWidth: 0, textAlign: "left" }}>
+                  <p style={{ margin: 0, fontSize: 12, color: MM.textSecondary }}>To</p>
+                  <p
+                    style={{
+                      margin: "2px 0 0",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {toWalletName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientFromQrScan(false);
+                    setStep("recipient");
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${MM.border}`,
+                    background: MM.surface,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+            )}
+            {recipientFromQrScan && (
+              <p
+                style={{
+                  margin: "0 0 12px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#059669",
+                  textAlign: "center",
+                }}
+              >
+                ⚡ Internal FDA — enter amount below
+              </p>
+            )}
             <div style={{ textAlign: "center", marginBottom: 8 }}>
               <div
                 style={{
                   fontSize: 36,
                   fontWeight: 600,
-                  color: amountNum > 0 ? MM.text : MM.textMuted,
+                  color:
+                    (amountInputMode === "inr" ? inrAmountNum : amountNum) > 0
+                      ? MM.text
+                      : MM.textMuted,
                   letterSpacing: "-0.02em",
                 }}
               >
-                {sendAmount || "0"} {selectedSymbol}
+                {amountInputMode === "inr" && canEnterAmountInInr
+                  ? `INR.V ${inrAmount || "0"}`
+                  : `${sendAmount || "0"} ${selectedSymbol}`}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowFiat(!showFiat)}
-                style={{
-                  marginTop: 8,
-                  padding: "6px 12px",
-                  borderRadius: 999,
-                  border: `1px solid ${MM.border}`,
-                  background: MM.pageBg,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {showFiat && fiatEstimate != null
-                  ? `≈ INR.V ${fiatEstimate.toFixed(2)}`
-                  : `${amountNum.toFixed(4)} ${selectedSymbol}`}{" "}
-                <span aria-hidden>⇅</span>
-              </button>
+              {canEnterAmountInInr ? (
+                <button
+                  type="button"
+                  onClick={toggleAmountInputMode}
+                  style={{
+                    marginTop: 8,
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: `1px solid ${MM.border}`,
+                    background: amountInputMode === "inr" ? MM.accentMuted : MM.pageBg,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {amountInputMode === "inr"
+                    ? `≈ ${amountNum.toFixed(4)} FDA`
+                    : fiatEstimate != null
+                      ? `≈ INR.V ${fiatEstimate.toFixed(2)}`
+                      : `${amountNum.toFixed(4)} ${selectedSymbol}`}{" "}
+                  <span aria-hidden>⇅</span>
+                </button>
+              ) : (
+                <p style={{ marginTop: 8, fontSize: 13, color: MM.textSecondary }}>
+                  {amountNum.toFixed(4)} {selectedSymbol}
+                </p>
+              )}
+              {canEnterAmountInInr && fdaUnitPrice != null && (
+                <p style={{ fontSize: 12, color: MM.textMuted, marginTop: 6 }}>
+                  1 FDA = INR.V {formatInrAmount(fdaUnitPrice)}
+                </p>
+              )}
               <p style={{ fontSize: 13, color: MM.textSecondary, marginTop: 10 }}>
                 {availableAmountNum.toLocaleString(undefined, {
                   maximumFractionDigits: 6,
                 })}{" "}
                 {selectedSymbol} available
+                {canEnterAmountInInr && fdaUnitPrice != null ? (
+                  <>
+                    {" "}
+                    · INR.V {formatInrAmount(availableAmountNum * fdaUnitPrice)} max
+                  </>
+                ) : null}
               </p>
             </div>
+            {canEnterAmountInInr && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  justifyContent: "center",
+                  marginBottom: 12,
+                }}
+              >
+                {[10, 25, 50, 100].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setInrPreset(preset)}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      border: `1px solid ${MM.borderLight}`,
+                      background:
+                        amountInputMode === "inr" &&
+                        Math.abs(inrAmountNum - preset) < 0.01
+                          ? MM.accentMuted
+                          : MM.pageBg,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    INR.V {preset}
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               style={{
                 display: "grid",
@@ -896,9 +1147,9 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                 </button>
               ))}
             </div>
-            {isFdaToken && (
-              <div style={{ marginBottom: 14 }}>
-                <div
+            {isFdaToken && !recipientFromQrScan && (
+              <section style={{ marginBottom: 14 }}>
+                <section
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
@@ -942,13 +1193,13 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
                   >
                     ⚡ Internal
                   </button>
-                </div>
+                </section>
                 <p style={{ marginTop: 8, fontSize: 12, color: MM.textSecondary }}>
                   {transferType === "internal" && !canUseInternalTransfer
                     ? "Recipient is not a registered MC wallet yet. You can register recipient in the next step."
                     : "Choose transfer mode for FDA: on-chain (gas fee) or internal (instant)."}
                 </p>
-              </div>
+              </section>
             )}
             <div
               style={{
@@ -1264,6 +1515,25 @@ export const SendTransferMobile: React.FC<SendTransferMobileProps> = ({
           </div>
         </>
       )}
-    </div>
+
+      <QrAddressScannerModal
+        open={showQrScanner}
+        title="Scan FDA wallet QR"
+        subtitle="Internal FDA transfer — scan the recipient MC wallet QR code"
+        onClose={() => setShowQrScanner(false)}
+        onAddress={(address) => {
+          setSendTo(address);
+          setShowQrScanner(false);
+          setRecipientFromQrScan(true);
+          setAssetType("token");
+          setTokenAddress(FDA_TOKEN_ADDRESS);
+          setTransferType("internal");
+          setSendAmount("");
+          setInrAmount("");
+          setAmountInputMode("fda");
+          setStep("amount");
+        }}
+      />
+    </section>
   );
 };

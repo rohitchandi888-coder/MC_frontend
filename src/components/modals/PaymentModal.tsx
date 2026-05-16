@@ -39,9 +39,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         // Comma-separated fallback like "upi1@ok, QR:12, upi2@ybl"
         const parts = value
           .split(',')
-          .map((s) => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean);
-        return parts.map((p) =>
+        return parts.map((p: string) =>
           p.toUpperCase().startsWith('QR:')
             ? { paymentname: p, payment_method: p }
             : { paymentname: 'UPI', upi_id: p }

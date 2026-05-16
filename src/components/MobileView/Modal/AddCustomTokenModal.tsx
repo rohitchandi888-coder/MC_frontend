@@ -296,18 +296,19 @@ const AddCustomTokenModal: React.FC<AddCustomTokenModalProps> = ({
     try {
       setLoading(true);
       const pairs = await fetchPopularPairsForTab(tab);
-      const rows: TokenRow[] = pairs
-        .map((p: Record<string, unknown>) => {
-          const base = p.baseToken as Record<string, string> | undefined;
-          const info = p.info as Record<string, string> | undefined;
-          return {
-            address: base?.address,
-            symbol: base?.symbol || "?",
-            name: base?.name || base?.symbol || "Token",
-            logo: info?.imageUrl || (base as { logoURI?: string })?.logoURI,
-          };
-        })
-        .filter((t) => t.address);
+      const rows: TokenRow[] = [];
+      for (const p of pairs) {
+        const base = (p as Record<string, unknown>).baseToken as Record<string, string> | undefined;
+        const info = (p as Record<string, unknown>).info as Record<string, string> | undefined;
+        const address = base?.address?.trim();
+        if (!address) continue;
+        rows.push({
+          address,
+          symbol: base?.symbol || "?",
+          name: base?.name || base?.symbol || "Token",
+          logo: info?.imageUrl || (base as { logoURI?: string })?.logoURI,
+        });
+      }
 
       const seen = new Set<string>();
       const deduped = rows.filter((t) => {

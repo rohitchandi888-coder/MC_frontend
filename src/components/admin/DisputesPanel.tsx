@@ -22,11 +22,15 @@ function formatPartyFdaId(fdaUserId: unknown): string {
 }
 
 /** Admin API returns snake_case; tolerate camelCase if a proxy ever rewrites keys. */
-function pickFdaId(row: Record<string, unknown>, snake: string, camel: string): unknown {
+function pickFdaId(
+  row: Record<string, unknown>,
+  snake: string,
+  camel: string,
+): string | number | null {
   const a = row[snake];
-  if (a != null && String(a).trim() !== '') return a;
+  if (a != null && String(a).trim() !== '') return a as string | number;
   const b = row[camel];
-  if (b != null && String(b).trim() !== '') return b;
+  if (b != null && String(b).trim() !== '') return b as string | number;
   return null;
 }
 

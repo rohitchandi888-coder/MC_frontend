@@ -6,6 +6,7 @@ import { getApiUrl } from '../../config';
 const ADMIN_TRADES_PER_PAGE_DESKTOP = 12;
 const ADMIN_TRADES_PER_PAGE_MOBILE = 6;
 const BREAK_REQUESTS_PER_PAGE = 8;
+const FDA_PRICE_AUTO_SYNC_MS = 30 * 60 * 1000;
 
 interface AdminPanelProps {
   auth: AuthState | null;
@@ -80,6 +81,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editingMinOfferAmountUsdt, setEditingMinOfferAmountUsdt] = useState(false);
   const [updatingMinOfferAmountUsdt, setUpdatingMinOfferAmountUsdt] = useState(false);
   const [updatingFdaPrice, setUpdatingFdaPrice] = useState(false);
+  const [fetchingLiveFdaPrice, setFetchingLiveFdaPrice] = useState(false);
+  const [syncingFdaPrice, setSyncingFdaPrice] = useState(false);
+  const [lastFdaAutoSyncAt, setLastFdaAutoSyncAt] = useState<string | null>(null);
   const [rewardRate, setRewardRate] = useState('5');
   const [rewardMinAmount, setRewardMinAmount] = useState('25');
   const [rewardPeriodMonths, setRewardPeriodMonths] = useState('12');
@@ -184,6 +188,88 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       setNotice({ type: 'error', text: 'Failed to add token.' });
+    }
+  };
+
+  const loadFdaSyncStatus = async () => {
+    if (!auth?.token) return;
+    try {
+      const res = await fetch(getApiUrl('admin/fda-price-sync-status'), {
+        headers: { Authorization: `Bearer ${auth?.token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (data?.lastAutoSyncAt) {
+        setLastFdaAutoSyncAt(String(data.lastAutoSyncAt));
+      }
+    } catch {
+      /* optional */
+    }
+  };
+
+  const fetchLiveFdaPrice = async (opts?: { silent?: boolean }) => {
+    try {
+      setFetchingLiveFdaPrice(true);
+      const res = await fetch(getApiUrl('admin/fda-live-price'), {
+        headers: { Authorization: `Bearer ${auth?.token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to fetch live FDA price (${res.status})`);
+      }
+      const nextPrice = Number(data?.price ?? data?.data ?? 0);
+      if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+        throw new Error('FDA server returned an invalid price.');
+      }
+      setFdaPrice(String(nextPrice));
+      if (!opts?.silent) {
+        setNotice({
+          type: 'success',
+          text: `Live FDA price loaded: INR.V ${nextPrice.toFixed(2)}`,
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (!opts?.silent) {
+        setNotice({ type: 'error', text: err?.message || 'Failed to fetch live FDA price.' });
+      }
+    } finally {
+      setFetchingLiveFdaPrice(false);
+    }
+  };
+
+  const syncFdaPriceFromSite = async (opts?: { silent?: boolean }) => {
+    try {
+      setSyncingFdaPrice(true);
+      const res = await fetch(getApiUrl('admin/settings/fda_price/sync'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth?.token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to sync FDA price (${res.status})`);
+      }
+      const nextPrice = Number(data?.price ?? data?.data ?? 0);
+      if (Number.isFinite(nextPrice) && nextPrice > 0) {
+        setFdaPrice(String(nextPrice));
+      }
+      if (data?.lastAutoSyncAt) {
+        setLastFdaAutoSyncAt(String(data.lastAutoSyncAt));
+      }
+      await loadFdaPrice();
+      if (!opts?.silent) {
+        setNotice({
+          type: 'success',
+          text: data.message || 'FDA price synced from futuredigiassets.com.',
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (!opts?.silent) {
+        setNotice({ type: 'error', text: err?.message || 'Failed to sync FDA price.' });
+      }
+    } finally {
+      setSyncingFdaPrice(false);
     }
   };
 
@@ -310,7 +396,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   useEffect(() => {
-    loadFdaPrice();
+    if (!auth?.token) return;
+    void loadFdaPrice();
+    void loadFdaSyncStatus();
+    void syncFdaPriceFromSite({ silent: true });
+
+    const timer = window.setInterval(() => {
+      void syncFdaPriceFromSite({ silent: true });
+      void loadFdaSyncStatus();
+    }, FDA_PRICE_AUTO_SYNC_MS);
+
+    return () => window.clearInterval(timer);
   }, [auth?.token]);
 
   const updateMinOfferSetting = async () => {
@@ -614,10 +710,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </label>
 
         <p className=" mb-3">
-          Set the current FDA token price (used across the platform).
+          Live price is pulled from futuredigiassets.com (<code>act=currentPrice</code>) and saved
+          automatically every <strong>30 minutes</strong> (server + this admin page). Used across
+          send, P2P, and holdings. You can also sync manually below.
         </p>
+        {lastFdaAutoSyncAt ? (
+          <p className="text-xs text-gray-600 mb-3">
+            Last auto-sync: {new Date(lastFdaAutoSyncAt).toLocaleString()}
+          </p>
+        ) : null}
 
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-wrap gap-3 items-center">
           <input
             type="number"
             step="0.0001"
@@ -628,12 +731,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           />
 
           <button
-            className={`btn btn-success ${updatingFdaPrice ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-            onClick={updateFdaPrice}
-            disabled={updatingFdaPrice}
+            type="button"
+            className={`btn btn-secondary ${fetchingLiveFdaPrice ? "opacity-60 cursor-not-allowed" : ""}`}
+            onClick={() => void fetchLiveFdaPrice()}
+            disabled={fetchingLiveFdaPrice || syncingFdaPrice}
           >
-            {updatingFdaPrice ? "Saving..." : "Update"}
+            {fetchingLiveFdaPrice ? "Fetching…" : "Fetch from FDA"}
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-primary ${syncingFdaPrice ? "opacity-60 cursor-not-allowed" : ""}`}
+            onClick={() => void syncFdaPriceFromSite()}
+            disabled={syncingFdaPrice || fetchingLiveFdaPrice}
+          >
+            {syncingFdaPrice ? "Syncing…" : "Sync from FDA"}
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-success ${updatingFdaPrice ? "opacity-60 cursor-not-allowed" : ""}`}
+            onClick={() => void updateFdaPrice()}
+            disabled={updatingFdaPrice || syncingFdaPrice}
+          >
+            {updatingFdaPrice ? "Saving…" : "Update"}
           </button>
         </div>
       </div>

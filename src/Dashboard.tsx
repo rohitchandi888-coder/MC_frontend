@@ -50,7 +50,8 @@ async function getEffectiveGasPriceWei(
   const w = fd.gasPrice ?? fd.maxFeePerGas ?? fd.maxPriorityFeePerGas;
   if (w != null && w > 0n) return w;
   try {
-    const legacy = await provider.getGasPrice();
+    const hex = await provider.send('eth_gasPrice', []);
+    const legacy = BigInt(hex);
     if (legacy > 0n) return legacy;
   } catch {
     /* ignore */
@@ -174,6 +175,7 @@ import {
   encryptPrivateKey,
   encryptPhrase,
   walletFromMnemonicAndExtraWord,
+  type EncryptedWalletData,
 } from './walletCrypto';
 import {
   loadEncryptedWallet,
@@ -238,6 +240,9 @@ import MobileDashboard from './components/MobileView/Dashboard';
 import WalletModal from './components/MobileView/Modal/WalletModal';
 import SwapWalletModal from './components/MobileView/Modal/Swap';
 import { TradeChatModal } from './components/modals/TradeChatModal';
+import { FdaAuthenticatorModal } from './components/modals/FdaAuthenticatorModal';
+import { useFdaAuthenticatorGate, shouldGateFdaSend } from './hooks/useFdaAuthenticatorGate';
+import { WalletReceiveQrModal } from './components/wallet/WalletReceiveQrModal';
 
 /** When /admin/disputes omits FDA ids (older API build), fill from /admin/users using `users.id`. */
 function enrichAdminDisputesFdaIds(disputes: unknown, users: unknown): any[] {
@@ -392,7 +397,7 @@ export const Dashboard: React.FC = () => {
   const [offerType, setOfferType] = useState<'BUY' | 'SELL'>('BUY');
   const [offerAmount, setOfferAmount] = useState('');
   const [offerPrice, setOfferPrice] = useState('');
-  const [offerFiatCurrency, setOfferFiatCurrency] = useState('INR');
+  const [offerFiatCurrency, setOfferFiatCurrency] = useState<'INR' | 'USDT'>('INR');
   const [offerMinLimit, setOfferMinLimit] = useState('');
   const [offerMaxLimit, setOfferMaxLimit] = useState('');
   const [offerPaymentMethods, setOfferPaymentMethods] = useState('');
@@ -449,8 +454,9 @@ export const Dashboard: React.FC = () => {
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showReceiveQrModal, setShowReceiveQrModal] = useState(false);
   const [showSwapModal, setShowSwapModal] = useState(false);
-  const [fdaPrice, setFdaPrice] = useState(null);
+  const [fdaPrice, setFdaPrice] = useState<number | null>(null);
   
   // for the customer token to mobile view that can show to 
     const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
@@ -714,6 +720,15 @@ export const Dashboard: React.FC = () => {
     setMessage(null);
     setMessageVariant(null);
   };
+
+  const {
+    showFdaAuthenticator,
+    fdaAuthStep,
+    setFdaAuthStep,
+    requestFdaAuthenticator,
+    closeFdaAuthenticator,
+    onFdaAuthenticatorVerified,
+  } = useFdaAuthenticatorGate(auth, showErrorModal);
 
   /** JWT rejected by API (expired, rotated, or invalid) — clear session and go to login. */
   const onUnauthorizedApi = useCallback(() => {
@@ -993,7 +1008,7 @@ export const Dashboard: React.FC = () => {
       const success = await registerRecipientWallet(metamaskAddress, label);
       if (success) {
         showSuccessModal(`✅ MetaMask address registered as MC wallet!`);
-        await loadRegisteredFdaWallets();
+        await fetchRegisteredFdaWallets();
       } else {
         showErrorModal('⚠️ Failed to register MetaMask address. It may already be registered.');
       }
@@ -1876,16 +1891,30 @@ export const Dashboard: React.FC = () => {
       // If still no encrypted_data, try to get it from local storage and re-register
       if (registeredWallet && !registeredWallet.encrypted_data) {
         console.log('[Unlock Wallet] ⚠️ Still no encrypted_data, checking local storage...');
-        const localWallets = getUserWallets();
-        const localWallet = localWallets.find(w => w.address.toLowerCase() === selectedWallet.address.toLowerCase());
+        const userWalletsKey = auth ? `fda_wallets_user_${auth.user.id}` : null;
+        const rawUserWallets = userWalletsKey ? localStorage.getItem(userWalletsKey) : null;
+        let localEncrypted: EncryptedWalletData | null = null;
+        if (rawUserWallets) {
+          try {
+            const parsed = JSON.parse(rawUserWallets) as StoredWallet[];
+            const stored = parsed.find(
+              (w) =>
+                (w.meta?.address || (w as { address?: string }).address || '')
+                  .toLowerCase() === selectedWallet.address.toLowerCase(),
+            );
+            localEncrypted = stored?.encrypted ?? null;
+          } catch {
+            localEncrypted = null;
+          }
+        }
 
-        if (localWallet && localWallet.encrypted) {
+        if (localEncrypted) {
           console.log('[Unlock Wallet] ✅ Found encrypted data in local storage, re-registering wallet...');
           try {
             await registerWalletAddress(
               selectedWallet.address,
               selectedWallet.label || registeredWallet.label,
-              localWallet.encrypted, // Use encrypted data from local storage
+              localEncrypted,
               selectedWallet.network || registeredWallet.network || 'BNB Chain'
             );
             // Refresh registered wallets to get updated data
@@ -2407,8 +2436,6 @@ export const Dashboard: React.FC = () => {
     console.log('[FRONTEND] offerType JSON:', JSON.stringify(offerType));
     console.log('[FRONTEND] offerType === "BUY":', offerType === 'BUY');
     console.log('[FRONTEND] offerType === "SELL":', offerType === 'SELL');
-    console.log('[FRONTEND] offerType === "buy":', offerType === 'buy');
-    console.log('[FRONTEND] offerType === "sell":', offerType === 'sell');
     console.log('[FRONTEND] Creating offer - Amount:', offerAmount);
 
     // Normalize offerType to uppercase for case-insensitive comparison
@@ -2797,7 +2824,7 @@ export const Dashboard: React.FC = () => {
     setSelectedTradeToRelease(null);
   };
 
-  const releaseTrade = async () => {
+  const releaseTradeCore = async () => {
     if (!auth || !selectedTradeToRelease) return;
     const tradeId = selectedTradeToRelease.id;
     setReleasingTokens(tradeId);
@@ -2831,6 +2858,12 @@ export const Dashboard: React.FC = () => {
     } finally {
       setReleasingTokens(null);
     }
+  };
+
+  const releaseTrade = () => {
+    requestFdaAuthenticator(() => void releaseTradeCore(), {
+      onPrompt: () => setShowReleaseConfirmModal(false),
+    });
   };
 
   const cancelTrade = async (tradeId: number) => {
@@ -3179,7 +3212,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleSend = async () => {
+  const executeSend = async () => {
 
     // Handle internal FDA transfers (zero fee)
     if (transferType === 'internal' && assetType === 'token' && tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase()) {
@@ -3372,6 +3405,10 @@ export const Dashboard: React.FC = () => {
         const contract = new ethers.Contract(tokenAddress.trim(), ERC20_ABI, wallet);
         const decimals: number = await contract.decimals();
         const amountWei = ethers.parseUnits(sendAmount, decimals);
+        const tokenAddrLower = tokenAddress.trim().toLowerCase();
+        const resolvedTokenSymbol =
+          customTokens.find((t) => t.address.toLowerCase() === tokenAddrLower)?.symbol ||
+          (tokenAddrLower === FDA_TOKEN_ADDRESS.toLowerCase() ? 'FDA' : 'TOKEN');
 
         // Check token balance
         const tokenBalance = await contract.balanceOf(walletAddress);
@@ -3402,7 +3439,7 @@ export const Dashboard: React.FC = () => {
         if (receipt) {
           showSuccessModal(`✅ Transaction confirmed! Block: ${receipt.blockNumber}. Tx hash: ${tx.hash}`);
           pushOnchainHistory({
-            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            assetSymbol: resolvedTokenSymbol,
             tokenAddress: tokenAddress.trim(),
             txHash: tx.hash,
             fromAddress: walletAddress,
@@ -3414,14 +3451,14 @@ export const Dashboard: React.FC = () => {
             toAddress: sendTo.trim(),
             amount: sendAmount,
             txHash: tx.hash,
-            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            assetSymbol: resolvedTokenSymbol,
             tokenAddress: tokenAddress.trim(),
             chain: 'BNB',
           });
         } else {
           showSuccessModal(`✅ Transaction sent! Tx hash: ${tx.hash}`);
           pushOnchainHistory({
-            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            assetSymbol: resolvedTokenSymbol,
             tokenAddress: tokenAddress.trim(),
             txHash: tx.hash,
             fromAddress: walletAddress,
@@ -3433,7 +3470,7 @@ export const Dashboard: React.FC = () => {
             toAddress: sendTo.trim(),
             amount: sendAmount,
             txHash: tx.hash,
-            assetSymbol: tokenSymbol.trim() || 'TOKEN',
+            assetSymbol: resolvedTokenSymbol,
             tokenAddress: tokenAddress.trim(),
             chain: 'BNB',
           });
@@ -3465,6 +3502,14 @@ export const Dashboard: React.FC = () => {
       }
       showErrorModal(errorMsg);
     }
+  };
+
+  const handleSend = async () => {
+    if (shouldGateFdaSend(transferType, assetType, tokenAddress)) {
+      requestFdaAuthenticator(() => void executeSend());
+      return;
+    }
+    await executeSend();
   };
 
   const loadAdminData = async () => {
@@ -3736,6 +3781,10 @@ export const Dashboard: React.FC = () => {
 
 
   const handleAddCustomToken = async () => {
+    if (!auth?.token) {
+      showErrorModal('⚠️ Please login to add custom tokens.');
+      return;
+    }
 
     if (!newTokenAddress.trim() || !ethers.isAddress(newTokenAddress.trim())) {
       showErrorModal('⚠️ Please enter a valid token contract address.');
@@ -3860,6 +3909,10 @@ export const Dashboard: React.FC = () => {
 
 
   const handleToggleCustomToken = async (address: string) => {
+    if (!auth?.token) {
+      showErrorModal('⚠️ Please login to update custom tokens.');
+      return;
+    }
     try {
 
       const token = customTokens.find(
@@ -4235,12 +4288,14 @@ export const Dashboard: React.FC = () => {
     }
   };
   
-  useEffect(() =>{
-  loadFdaPrice()
-  },[])
+  useEffect(() => {
+    loadFdaPrice();
+    const timer = window.setInterval(loadFdaPrice, 30 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleChangeTab = (tab: string) => {
-  setActiveTab(tab);
+  setActiveTab(tab as Tab);
 
   // optional: close sidebar on mobile
   if (useMobileLayout) {
@@ -4512,12 +4567,12 @@ const getPaymentDetailRows = (pm: any) => {
                     handleChangeTab('send');
                   },
                 },
-                { label: "Receive", icon: "fa-solid fa-arrow-down", changeTab: () => setShowWalletModal(true) },
+                { label: "Receive", icon: "fa-solid fa-arrow-down", changeTab: () => setShowReceiveQrModal(true) },
               ]}
               tokens={popularTokens}
               tokenPrices={tokenPrices}
-              nativeBalance={nativeBalance}
-              fdaBalance={fdaBalance}
+              nativeBalance={nativeBalance ?? '0'}
+              fdaBalance={fdaBalance ?? '0'}
               customTokens={customTokens}
               customTokenBalances={customTokenBalances}
               allWallets={allWallets}
@@ -4663,7 +4718,7 @@ const getPaymentDetailRows = (pm: any) => {
                 internalFdaBalance={internalFdaBalance}
                 customTokens={customTokens}
                 customTokenBalances={customTokenBalances}
-                onSetActiveTab={setActiveTab}
+                onSetActiveTab={handleChangeTab}
               />
             </div>
           )}
@@ -4672,13 +4727,11 @@ const getPaymentDetailRows = (pm: any) => {
             <CreateWallet
               mnemonic12={mnemonic12}
               extraWord={extraWord}
-              walletPassword={walletPassword}
               walletLabel={walletLabel}
               selectedNetwork={selectedNetwork}
               onNetworkChange={setSelectedNetwork}
               onGenerateSeed={handleGenerateSeed}
               onExtraWordChange={setExtraWord}
-              onPasswordChange={setWalletPassword}
               onLabelChange={setWalletLabel}
               onSaveWallet={handleSaveNewWallet}
             />
@@ -4805,7 +4858,9 @@ const getPaymentDetailRows = (pm: any) => {
               setNewFdaWalletLabel={setNewFdaWalletLabel}
               registeringWallet={registeringWallet}
               handleCreateAndRegisterFdaWallet={handleCreateAndRegisterFdaWallet}
-              registerRecipientWallet={registerRecipientWallet}
+              registerRecipientWallet={async (address, label) => {
+                await registerRecipientWallet(address, label);
+              }}
             />
           )}
 
@@ -4863,7 +4918,9 @@ const getPaymentDetailRows = (pm: any) => {
               offerType={offerType}
               setOfferType={setOfferType}
               offerFiatCurrency={offerFiatCurrency}
-              setOfferFiatCurrency={setOfferFiatCurrency}
+              setOfferFiatCurrency={(currency) => {
+                setOfferFiatCurrency(currency === 'USDT' ? 'USDT' : 'INR');
+              }}
               offerAmount={offerAmount}
               setOfferAmount={setOfferAmount}
               offerPrice={offerPrice}
@@ -5175,6 +5232,18 @@ const getPaymentDetailRows = (pm: any) => {
       {/* Error/Message Modal */}
       <MessageModal show={showMessageModal} message={message} variant={messageVariant} onClose={closeMessageModal} />
 
+      {auth && (
+        <FdaAuthenticatorModal
+          show={showFdaAuthenticator}
+          step={fdaAuthStep}
+          fdaUserId={auth.user.fdaUserId}
+          authToken={auth.token}
+          onStepChange={setFdaAuthStep}
+          onClose={closeFdaAuthenticator}
+          onVerified={() => void onFdaAuthenticatorVerified()}
+        />
+      )}
+
       {/* Accept Offer Modal */}
       {showAcceptModal && selectedOffer && (
         <div className="modal-overlay" onClick={closeAcceptModal}>
@@ -5367,7 +5436,7 @@ const getPaymentDetailRows = (pm: any) => {
               {paymentScreenshot && (
                 <div className="modal-content">
                   <img
-                    src={paymentScreenshot}
+                    src={paymentScreenshot ?? undefined}
                     alt="Payment screenshot preview"
                     className="image-preview"
                   />
@@ -5481,6 +5550,16 @@ const getPaymentDetailRows = (pm: any) => {
       wallets={allWallets}
       onSwitchWallet={handleSwitchWallet}
       storedMeta={storedMeta}
+      onShowReceiveQr={() => {
+        setShowWalletModal(false);
+        setShowReceiveQrModal(true);
+      }}
+    />
+    <WalletReceiveQrModal
+      open={showReceiveQrModal}
+      walletAddress={storedMeta?.address ?? null}
+      walletLabel={storedMeta?.label ?? null}
+      onClose={() => setShowReceiveQrModal(false)}
     />
     <SwapWalletModal
       user={auth}
@@ -5493,6 +5572,7 @@ const getPaymentDetailRows = (pm: any) => {
       unlockedPrivateKeyRef={unlockedPrivateKeyRef}
       nativeBalance={nativeBalance}
       fdaBalance={fdaBalance}
+      requestFdaAuthenticator={requestFdaAuthenticator}
       onSwapComplete={() => {
         if (storedMeta?.address) {
           void fetchBalances(storedMeta.address);

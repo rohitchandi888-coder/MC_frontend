@@ -17,8 +17,12 @@ function getSubtleCrypto(): SubtleCrypto {
   return window.crypto.subtle;
 }
 
-function strToUint8Array(str: string): Uint8Array {
-  return new TextEncoder().encode(str);
+function strToUint8Array(str: string): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(str) as Uint8Array<ArrayBuffer>;
+}
+
+function asBufferSource(bytes: Uint8Array): BufferSource {
+  return bytes as unknown as BufferSource;
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -42,7 +46,7 @@ async function deriveKeyFromPassword(
   const subtle = getSubtleCrypto();
   const baseMaterial = await subtle.importKey(
     'raw',
-    strToUint8Array(`${password}:${extraWord}`) as BufferSource,
+    asBufferSource(strToUint8Array(`${password}:${extraWord}`)),
     { name: 'PBKDF2' },
     false,
     ['deriveKey'],
@@ -51,7 +55,7 @@ async function deriveKeyFromPassword(
   return subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt as BufferSource,
+      salt: asBufferSource(salt),
       iterations,
       hash: 'SHA-256',
     },
@@ -85,10 +89,10 @@ export async function encryptPrivateKey(
   const cipherBuf = await subtle.encrypt(
     {
       name: 'AES-GCM',
-      iv: iv as BufferSource,
+      iv: asBufferSource(iv),
     },
     key,
-    plainBytes as BufferSource,
+    asBufferSource(plainBytes),
   );
 
   const cipherText = new Uint8Array(cipherBuf);
@@ -125,10 +129,10 @@ export async function decryptPrivateKey(
   const plainBuf = await subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: iv as BufferSource,
+      iv: asBufferSource(iv),
     },
     key,
-    cipherBytes as BufferSource,
+    asBufferSource(cipherBytes),
   );
 
   const plainStr = new TextDecoder().decode(plainBuf);
@@ -151,7 +155,7 @@ export async function encryptPhrase(
   // ✅ derive key ONLY from extraWord
   const baseMaterial = await subtle.importKey(
     "raw",
-    strToUint8Array(extraWord.trim()),
+    asBufferSource(strToUint8Array(extraWord.trim())),
     { name: "PBKDF2" },
     false,
     ["deriveKey"]
@@ -160,7 +164,7 @@ export async function encryptPhrase(
   const key = await subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt,
+      salt: asBufferSource(salt),
       iterations: 150000,
       hash: "SHA-256",
     },
@@ -179,9 +183,9 @@ export async function encryptPhrase(
   });
 
   const cipherBuf = await subtle.encrypt(
-    { name:"AES-GCM", iv },
+    { name:"AES-GCM", iv: asBufferSource(iv) },
     key,
-    strToUint8Array(phraseData)
+    asBufferSource(strToUint8Array(phraseData))
   );
 
   return {
@@ -217,7 +221,7 @@ export async function decryptPhrase(
 
     const baseMaterial = await subtle.importKey(
       "raw",
-      strToUint8Array(extraWord.trim()),
+      asBufferSource(strToUint8Array(extraWord.trim())),
       { name:"PBKDF2" },
       false,
       ["deriveKey"]
@@ -226,7 +230,7 @@ export async function decryptPhrase(
     key = await subtle.deriveKey(
       {
         name:"PBKDF2",
-        salt,
+        salt: asBufferSource(salt),
         iterations: encrypted.iterations || 150000,
         hash:"SHA-256"
       },
@@ -243,7 +247,7 @@ export async function decryptPhrase(
 
     const baseMaterial = await subtle.importKey(
       "raw",
-      strToUint8Array(`${password}:${extraWord}`),
+      asBufferSource(strToUint8Array(`${password}:${extraWord}`)),
       { name:"PBKDF2" },
       false,
       ["deriveKey"]
@@ -252,7 +256,7 @@ export async function decryptPhrase(
     key = await subtle.deriveKey(
       {
         name:"PBKDF2",
-        salt,
+        salt: asBufferSource(salt),
         iterations: encrypted.iterations || 150000,
         hash:"SHA-256"
       },
@@ -269,7 +273,7 @@ export async function decryptPhrase(
 
     const baseMaterial = await subtle.importKey(
       "raw",
-      strToUint8Array(password),
+      asBufferSource(strToUint8Array(password)),
       { name:"PBKDF2" },
       false,
       ["deriveKey"]
@@ -278,7 +282,7 @@ export async function decryptPhrase(
     key = await subtle.deriveKey(
       {
         name:"PBKDF2",
-        salt,
+        salt: asBufferSource(salt),
         iterations: encrypted.iterations || 150000,
         hash:"SHA-256"
       },
@@ -291,9 +295,9 @@ export async function decryptPhrase(
   }
 
   const plainBuf = await subtle.decrypt(
-    { name:"AES-GCM", iv },
+    { name:"AES-GCM", iv: asBufferSource(iv) },
     key,
-    cipherBytes
+    asBufferSource(cipherBytes),
   );
 
   return JSON.parse(new TextDecoder().decode(plainBuf));
@@ -331,7 +335,7 @@ export function walletFromMnemonicAndExtraWord(mnemonic: string, extraWord: stri
     publicKey: evmWallet.publicKey,
     mnemonic: evmWallet.mnemonic,
     network: network,
-  } as ethers.Wallet & { network: string };
+  } as unknown as ethers.Wallet & { network: string };
 }
 
 // Address generation functions for different networks

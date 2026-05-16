@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  createChart, 
-  IChartApi, 
-  ISeriesApi, 
-  CandlestickData, 
-  Time, 
+import {
+  createChart,
   ColorType,
   LineStyle,
-  LineType,
-  PriceScaleMode,
   CrosshairMode,
   CandlestickSeries,
+  HistogramSeries,
 } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 import { getApiUrl } from '../../config';
 import { MM } from '../../theme/metaMaskShell';
 
@@ -82,13 +78,13 @@ function buildChartOptions(shell: boolean, width: number, height: number) {
       mode: CrosshairMode.Normal,
       vertLine: {
         color: cross,
-        width: 1,
+        width: 1 as const,
         style: LineStyle.Dashed,
         labelBackgroundColor: bg,
       },
       horzLine: {
         color: cross,
-        width: 1,
+        width: 1 as const,
         style: LineStyle.Dashed,
         labelBackgroundColor: bg,
       },
@@ -364,7 +360,7 @@ export const TradingChart: React.FC<TradingChartProps> = ({
       try {
         const chart = createChart(
           container,
-          buildChartOptions(shell, container.clientWidth, defaultH),
+          buildChartOptions(shell, container.clientWidth, defaultH) as Parameters<typeof createChart>[1],
         );
         chartRef.current = chart;
         setChartReady(true);
@@ -475,7 +471,7 @@ useEffect(() => {
     const date = new Date(item.time);
 
     return {
-      time: Math.floor(date.getTime() / 1000),
+      time: Math.floor(date.getTime() / 1000) as Time,
       open: item.open,
       high: item.high,
       low: item.low,
@@ -491,7 +487,7 @@ useEffect(() => {
 
     return {
 
-      time: Math.floor(date.getTime() / 1000),
+      time: Math.floor(date.getTime() / 1000) as Time,
 
       value: item.volume || 0,
 
@@ -533,7 +529,7 @@ useEffect(() => {
 
 
     // add volume bars
-   const volumeSeries = chart.addHistogramSeries({
+   const volumeSeries = chart.addSeries(HistogramSeries, {
 
       color: '#26a69a',
 
@@ -542,11 +538,6 @@ useEffect(() => {
       },
 
       priceScaleId: '',
-
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
 
     });
 
@@ -702,7 +693,7 @@ useEffect(() => {
             volume: Number(volume.toFixed(2)),
           };
         })
-        .filter((item): item is OHLCData => item !== null);
+        .filter((item) => item !== null) as OHLCData[];
 
       // Ensure data is sorted by time (ascending) - double check
       ohlc.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());

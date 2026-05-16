@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import { FDA_TOKEN_ADDRESS, type AuthState } from "../types";
 import type { CustomToken, WalletMeta } from "../../walletStorage";
 import { SendTransferMobile } from "./SendTransferMobile";
+import { QrAddressScannerModal } from "./QrAddressScannerModal";
 
 interface SendTransferProps {
   storedMeta: WalletMeta | null;
@@ -72,6 +73,11 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
 }) => {
 
     const [isMobile, setIsMobile] = useState(false);
+    const [showQrScanner, setShowQrScanner] = useState(false);
+    const isFdaInternal =
+      transferType === "internal" &&
+      assetType === "token" &&
+      tokenAddress.toLowerCase() === FDA_TOKEN_ADDRESS.toLowerCase();
     const gasFeeNum = parseFloat(estimatedGas || "0") || 0;
     const nativeBalNum = parseFloat(nativeBalance || "0") || 0;
     const sendAmountNum = parseFloat(sendAmount || "0") || 0;
@@ -345,6 +351,16 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
             value={sendTo}
             onChange={(e) => setSendTo(e.target.value.toLowerCase())}
           />
+          {isFdaInternal && (
+            <button
+              type="button"
+              className="btn text-xs py-2 px-3"
+              style={{ background: "#10b981", color: "#fff", whiteSpace: "nowrap" }}
+              onClick={() => setShowQrScanner(true)}
+            >
+              Scan QR
+            </button>
+          )}
           {allWallets.length > 1 && (
             <select
               className="form-select-dark text-xs py-2"
@@ -532,6 +548,16 @@ export const SendTransfer: React.FC<SendTransferProps> = ({
           ⚠️ Please login to use internal transfers.
         </p>
       )}
+      <QrAddressScannerModal
+        open={showQrScanner}
+        title="Scan FDA wallet QR"
+        subtitle="Internal FDA transfer — scan recipient MC wallet QR"
+        onClose={() => setShowQrScanner(false)}
+        onAddress={(address) => {
+          setSendTo(address.toLowerCase());
+          setShowQrScanner(false);
+        }}
+      />
     </div>
   );
 };

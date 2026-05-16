@@ -1,4 +1,5 @@
-import { AUTH_KEY, AuthState } from './components';
+import { AUTH_KEY } from './components';
+import type { AuthState } from './components';
 import { getApiUrl } from './config';
 import type { EncryptedWalletData } from './walletCrypto';
 

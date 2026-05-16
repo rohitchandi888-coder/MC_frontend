@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { AuthState } from '../types';
 import type { CustomToken, WalletMeta } from '../../walletStorage';
 import { getApiUrl } from '../../config';
+import { WalletReceiveQrModal } from './WalletReceiveQrModal';
 
 const popularTokens = [
   {
@@ -67,6 +68,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSetActiveTab,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [showReceiveQr, setShowReceiveQr] = useState(false);
   const [holdingSnapshot, setHoldingSnapshot] = useState<{
     usableForNewHold: number;
     activeHoldingsAmount: number;
@@ -305,11 +307,9 @@ useEffect(() => {
           <button
             className="wallet-action-btn wallet-action-btn-receive"
             onClick={() => {
-              if (activeAddress) {
-                copyToClipboard(activeAddress);
-              }
+              if (activeAddress) setShowReceiveQr(true);
             }}
-            title="Copy wallet address to receive"
+            title="Show QR code to receive"
           >
             <span className="wallet-action-icon">📥</span>
             <span className="wallet-action-label">Receive</span>
@@ -450,6 +450,12 @@ useEffect(() => {
           </button>
         </div>
       </div>
+      <WalletReceiveQrModal
+        open={showReceiveQr}
+        walletAddress={activeAddress ?? null}
+        walletLabel={storedMeta?.label ?? null}
+        onClose={() => setShowReceiveQr(false)}
+      />
     </>
   );
 };

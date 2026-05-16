@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
 import type { WalletMeta } from "../../../walletStorage";
+import type { AuthState } from "../../types";
 import {
-  AuthState,
   DEFAULT_RPC_URL,
   ERC20_ABI,
   FDA_TOKEN_ADDRESS,
 } from "../../types";
 import { getApiUrl } from "../../../config";
 import { MessageModal } from "../../modals/MessageModal";
+import { QrAddressScannerModal } from "../../wallet/QrAddressScannerModal";
 import { MM } from "../../../theme/metaMaskShell";
 
 const PANCAKE_ROUTER_V2 = "0x10ED43C71871416363D554556468E5548C9507D8";
@@ -146,6 +147,8 @@ interface SwapModalProps {
   unlockedPrivateKeyRef: React.MutableRefObject<string | null>;
   nativeBalance: string | null;
   fdaBalance: string | null;
+  /** Android-only FDA Authenticator gate before internal FDA transfer. */
+  requestFdaAuthenticator?: (action: () => void | Promise<void>) => void;
   onSwapComplete?: () => void;
 }
 
@@ -160,6 +163,7 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
   unlockedPrivateKeyRef,
   nativeBalance,
   fdaBalance,
+  requestFdaAuthenticator,
   onSwapComplete,
 }) => {
   const [mode, setMode] = useState<"swap" | "internal">("swap");
@@ -188,6 +192,7 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
   const provider = useMemo(
     () => new ethers.JsonRpcProvider(DEFAULT_RPC_URL),
@@ -507,7 +512,7 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
     }
   };
 
-  const handleTransfer = async () => {
+  const executeTransfer = async () => {
     try {
       if (!storedMeta?.address) {
         showErrorModal("⚠️ No wallet selected.");
@@ -550,6 +555,14 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
       console.error(err);
       showErrorModal("⚠️ Transfer failed. Try again.");
     }
+  };
+
+  const handleTransfer = () => {
+    if (requestFdaAuthenticator) {
+      requestFdaAuthenticator(() => void executeTransfer());
+      return;
+    }
+    void executeTransfer();
   };
 
   if (!isOpen) return null;
@@ -1107,6 +1120,24 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
               </div>
 
               <span style={{ fontSize: 14, fontWeight: 600 }}>To</span>
+              <button
+                type="button"
+                onClick={() => setShowQrScanner(true)}
+                style={{
+                  width: "100%",
+                  marginTop: 8,
+                  padding: "10px 12px",
+                  borderRadius: MM.radius,
+                  border: "none",
+                  background: "#10b981",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Scan wallet QR (internal FDA)
+              </button>
               <div
                 style={{
                   maxHeight: 160,
@@ -1188,7 +1219,7 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => void handleTransfer()}
+                onClick={handleTransfer}
                 style={{
                   width: "100%",
                   marginTop: 14,
@@ -1212,6 +1243,25 @@ const SwapWalletModal: React.FC<SwapModalProps> = ({
         show={showMessageModal}
         message={message}
         onClose={closeMessageModal}
+      />
+      <QrAddressScannerModal
+        open={showQrScanner}
+        title="Scan FDA wallet QR"
+        subtitle="Internal FDA transfer — select recipient by QR"
+        onClose={() => setShowQrScanner(false)}
+        onAddress={(address) => {
+          const match = wallets.find(
+            (w: WalletMeta) => w.address.toLowerCase() === address.toLowerCase(),
+          );
+          if (match) {
+            setSelectedWallet(match.address);
+          } else {
+            showErrorModal(
+              "⚠️ Scanned wallet is not in your saved list. Register it or pick a wallet below.",
+            );
+          }
+          setShowQrScanner(false);
+        }}
       />
     </>
   );

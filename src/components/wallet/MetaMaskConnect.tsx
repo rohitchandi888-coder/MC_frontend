@@ -1,7 +1,7 @@
 import React from 'react';
 import { type AuthState } from '../types';
-import type { WalletMeta } from '../../../walletStorage';
-import { Tab } from '../types';
+import type { WalletMeta } from '../../walletStorage';
+import type { Tab } from '../types';
 
 interface MetaMaskConnectProps {
   auth: AuthState | null;

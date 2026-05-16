@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { WalletMeta } from "../../../walletStorage";
+import type { WalletMeta } from "../../../walletStorage";
 
 interface Wallet {
     id: string;
@@ -14,6 +14,7 @@ interface WalletModalProps {
     wallets: WalletMeta[];
     onSwitchWallet: (walletId: string) => void;
     storedMeta: { address: string; label?: string } | null;
+    onShowReceiveQr?: () => void;
 }
 
 const WalletModal: React.FC<WalletModalProps> = ({
@@ -22,6 +23,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
     wallets,
     onSwitchWallet,
     storedMeta,
+    onShowReceiveQr,
 }) => {
     const [copied, setCopied] = useState<string | null>(null);
 
@@ -63,6 +65,27 @@ const WalletModal: React.FC<WalletModalProps> = ({
                 }}
             >
                 <h3 style={{ color: "#fff", marginBottom: 10 }}>Select Wallet</h3>
+
+                {storedMeta?.address && onShowReceiveQr ? (
+                    <button
+                        type="button"
+                        onClick={onShowReceiveQr}
+                        style={{
+                            width: "100%",
+                            marginBottom: 12,
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            border: "1px solid #3b82f6",
+                            background: "rgba(59, 130, 246, 0.15)",
+                            color: "#93c5fd",
+                            fontWeight: 700,
+                            fontSize: 14,
+                            cursor: "pointer",
+                        }}
+                    >
+                        Show receive QR (current wallet)
+                    </button>
+                ) : null}
 
                 {wallets.map((wallet) => {
                     return (
