@@ -42,6 +42,8 @@ interface TradeListingProps {
   openDisputeModal: (trade: any) => void;
   openReleaseConfirmModal: (trade: any) => void;
   openTradeChatModal: (trade: any) => void;
+  /** Opens the create-offer form (P2P tab). Shown on mobile trade listing header. */
+  onCreateOfferClick?: () => void;
 }
 
 export const TradeListing: React.FC<TradeListingProps> = ({
@@ -78,6 +80,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   openDisputeModal,
   openReleaseConfirmModal,
   openTradeChatModal,
+  onCreateOfferClick,
 }) => {
   const [myTradesSearch, setMyTradesSearch] = useState('');
   const [isCompactMobile, setIsCompactMobile] = useState<boolean>(
@@ -203,9 +206,29 @@ export const TradeListing: React.FC<TradeListingProps> = ({
   return (
     <div>
       <div className="section-header">
-        <h2 className="section-title-light" style={{ padding: '0.5rem 1rem' }}>
-          {isCompactMobile && inMobileShell ? 'P2P' : '📊 Trade Listing'}
-        </h2>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '0.5rem 1rem',
+            flexWrap: 'wrap',
+          }}
+        >
+          <h2 className="section-title-light" style={{ margin: 0 }}>
+            {isCompactMobile && inMobileShell ? 'P2P' : '📊 Trade Listing'}
+          </h2>
+          {onCreateOfferClick && (
+            <button
+              type="button"
+              className="btn btn-primary text-xs py-2 px-3"
+              onClick={onCreateOfferClick}
+            >
+              ➕ Create offer
+            </button>
+          )}
+        </div>
         {!isCompactMobile && (
           <p className="section-subtitle-light" style={{ padding: '0.5rem 1rem' }}>
             Browse all available offers and manage your trades. All trades are MC Wallet to MC Wallet only.
@@ -224,7 +247,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
       {auth && (
         <>
           {/* Available Offers Section */}
-          <div className="offer-form-card mb-6">
+          <div id="p2p-available-offers" className="offer-form-card mb-6">
             <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
               <h3 className="offer-form-title">
                 Available Offers ({loadingOffers ? '…' : filteredOffers.length})

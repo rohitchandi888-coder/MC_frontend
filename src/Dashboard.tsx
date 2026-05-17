@@ -2565,10 +2565,14 @@ export const Dashboard: React.FC = () => {
       setOffersFilterType('ALL');
       setOffersSearch('');
       setOffersPage(1);
+      setActiveTab('trade-listing');
       await loadOffers();
       if (storedMeta?.address) {
         await fetchInternalBalance(storedMeta.address); // Refresh internal FDA balance
       }
+      requestAnimationFrame(() => {
+        document.getElementById('p2p-available-offers')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } catch (err) {
       console.error('Failed to create offer:', err);
       showErrorModal('⚠️ Failed to create offer. Please try again.');
@@ -4095,45 +4099,65 @@ export const Dashboard: React.FC = () => {
     navigate('/login');
   };
 
-  // Filter and paginate offers
-  const filteredOffers = offers.filter((offer) => {
-    // Handle both camelCase and snake_case field names
-    const assetSymbol = offer.assetSymbol || offer.asset_symbol || '';
-    const fiatCurrency = offer.fiatCurrency || offer.fiat_currency || '';
-    const paymentMethods = offer.paymentMethods || offer.payment_methods || '';
-    const offerType = String(offer.type || '').toUpperCase().trim();
-    const status = String(offer.status || 'OPEN').toUpperCase().trim();
+  // Filter and paginate offers (newest first; your open offers pinned to page 1)
+  const filteredOffers = useMemo(() => {
+    return offers.filter((offer) => {
+      const assetSymbol = offer.assetSymbol || offer.asset_symbol || '';
+      const fiatCurrency = offer.fiatCurrency || offer.fiat_currency || '';
+      const paymentMethods = offer.paymentMethods || offer.payment_methods || '';
+      const offerType = String(offer.type || '').toUpperCase().trim();
+      const status = String(offer.status || 'OPEN').toUpperCase().trim();
 
-    // CRITICAL: Filter out offers with 0 remaining/available amount
-    const remaining = parseFloat(String(offer.remaining ?? offer.available_amount ?? 0));
-    if (!Number.isFinite(remaining) || remaining <= 0) {
-      return false; // Don't show offers with 0 or negative available amount
-    }
+      const remaining = parseFloat(String(offer.remaining ?? offer.available_amount ?? 0));
+      if (!Number.isFinite(remaining) || remaining <= 0) {
+        return false;
+      }
 
-    // Filter offers by type (BUY, SELL, or ALL)
-    const makerEmail = String(offer?.maker?.email || '').toLowerCase();
-    const makerPhone = String(offer?.maker?.phone || '').toLowerCase();
-    const makerFdaRaw =
-      offer?.maker?.fdaUserId ||
-      offer?.maker?.fda_user_id ||
-      (Number(offer?.maker?.id) === Number(auth?.user?.id) ? auth?.user?.fdaUserId : null);
-    const makerFda = String(makerFdaRaw || '').toLowerCase();
-    const matchesSearch = !offersSearch ||
-      assetSymbol.toLowerCase().includes(offersSearch.toLowerCase()) ||
-      fiatCurrency.toLowerCase().includes(offersSearch.toLowerCase()) ||
-      paymentMethods.toLowerCase().includes(offersSearch.toLowerCase()) ||
-      makerEmail.includes(offersSearch.toLowerCase()) ||
-      makerPhone.includes(offersSearch.toLowerCase()) ||
-      makerFda.includes(offersSearch.toLowerCase());
-    const matchesType = offersFilterType === 'ALL' || offerType === offersFilterType;
-    return matchesSearch && matchesType && status === 'OPEN';
-  });
+      const makerEmail = String(offer?.maker?.email || '').toLowerCase();
+      const makerPhone = String(offer?.maker?.phone || '').toLowerCase();
+      const makerFdaRaw =
+        offer?.maker?.fdaUserId ||
+        offer?.maker?.fda_user_id ||
+        (Number(offer?.maker?.id) === Number(auth?.user?.id) ? auth?.user?.fdaUserId : null);
+      const makerFda = String(makerFdaRaw || '').toLowerCase();
+      const matchesSearch = !offersSearch ||
+        assetSymbol.toLowerCase().includes(offersSearch.toLowerCase()) ||
+        fiatCurrency.toLowerCase().includes(offersSearch.toLowerCase()) ||
+        paymentMethods.toLowerCase().includes(offersSearch.toLowerCase()) ||
+        makerEmail.includes(offersSearch.toLowerCase()) ||
+        makerPhone.includes(offersSearch.toLowerCase()) ||
+        makerFda.includes(offersSearch.toLowerCase());
+      const matchesType = offersFilterType === 'ALL' || offerType === offersFilterType;
+      return matchesSearch && matchesType && status === 'OPEN';
+    });
+  }, [offers, offersSearch, offersFilterType, auth?.user?.id, auth?.user?.fdaUserId]);
 
-  const totalPages = Math.ceil(filteredOffers.length / offersPerPage);
-  const paginatedOffers = filteredOffers.slice(
+  const sortedFilteredOffers = useMemo(() => {
+    const uid = auth?.user?.id;
+    const createdMs = (offer: (typeof offers)[number]) => {
+      const raw = offer.created_at ?? offer.createdAt ?? 0;
+      const t = new Date(raw as string | number | Date).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
+    return [...filteredOffers].sort((a, b) => {
+      const aMine = uid != null && Number(a.maker?.id) === Number(uid) ? 1 : 0;
+      const bMine = uid != null && Number(b.maker?.id) === Number(uid) ? 1 : 0;
+      if (aMine !== bMine) return bMine - aMine;
+      return createdMs(b) - createdMs(a);
+    });
+  }, [filteredOffers, auth?.user?.id]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredOffers.length / offersPerPage));
+  const paginatedOffers = sortedFilteredOffers.slice(
     (offersPage - 1) * offersPerPage,
     offersPage * offersPerPage
   );
+
+  useEffect(() => {
+    if (offersPage > totalPages) {
+      setOffersPage(totalPages);
+    }
+  }, [totalPages, offersPage]);
 
   const handleSetActiveTab = (tab: Tab) => {
     setActiveTab(tab);
@@ -4955,7 +4979,7 @@ const getPaymentDetailRows = (pm: any) => {
               inMobileShell={useMobileLayout}
               p2pFeeRate={p2pFeeRate}
               canAcceptAnotherOffer={canAcceptAnotherOffer}
-              filteredOffers={filteredOffers}
+              filteredOffers={sortedFilteredOffers}
               paginatedOffers={paginatedOffers}
               totalPages={totalPages}
               offersPage={offersPage}
@@ -4984,6 +5008,7 @@ const getPaymentDetailRows = (pm: any) => {
               openDisputeModal={openDisputeModal}
               openTradeChatModal={openTradeChatModal}
               openReleaseConfirmModal={openReleaseConfirmModal}
+              onCreateOfferClick={() => setActiveTab('p2p')}
             />
           )}
 
@@ -5128,7 +5153,7 @@ const getPaymentDetailRows = (pm: any) => {
 
             <div
               role="presentation"
-              onClick={() => setActiveTab("p2p")}
+              onClick={() => setActiveTab("trade-listing")}
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -5146,7 +5171,7 @@ const getPaymentDetailRows = (pm: any) => {
                 aria-label="Trade"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setActiveTab("p2p");
+                  setActiveTab("trade-listing");
                 }}
                 style={{
                   position: "absolute",
@@ -5190,8 +5215,8 @@ const getPaymentDetailRows = (pm: any) => {
                   marginTop: MM.navFabRise - 6,
                   fontSize: 10,
                   letterSpacing: "0.02em",
-                  color: activeTab === "p2p" ? MM.accent : MM.navInactive,
-                  fontWeight: activeTab === "p2p" ? 600 : 500,
+                  color: activeTab === "trade-listing" || activeTab === "p2p" ? MM.accent : MM.navInactive,
+                  fontWeight: activeTab === "trade-listing" || activeTab === "p2p" ? 600 : 500,
                   lineHeight: 1.1,
                 }}
               >
