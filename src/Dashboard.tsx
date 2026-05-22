@@ -244,30 +244,78 @@ import { FdaAuthenticatorModal } from './components/modals/FdaAuthenticatorModal
 import { useFdaAuthenticatorGate, shouldGateFdaSend } from './hooks/useFdaAuthenticatorGate';
 import { WalletReceiveQrModal } from './components/wallet/WalletReceiveQrModal';
 
-/** When /admin/disputes omits FDA ids (older API build), fill from /admin/users using `users.id`. */
+function isNumericFdaPublicId(value: unknown): boolean {
+  return value != null && /^\d+$/.test(String(value).trim());
+}
+
+/** Fill numeric FDA ids, phone, email, name from /admin/users (fixes email stored in fda_user_id). */
 function enrichAdminDisputesFdaIds(disputes: unknown, users: unknown): any[] {
   if (!Array.isArray(disputes)) return [];
   if (!Array.isArray(users) || users.length === 0) return disputes as any[];
-  const fdaById = new Map<number, string>();
+
+  const userById = new Map<number, any>();
+  const userByEmail = new Map<string, any>();
   for (const u of users as any[]) {
     const id = Number(u?.id);
-    const raw = u?.fda_user_id ?? u?.fdaUserId;
-    if (!Number.isFinite(id) || raw == null) continue;
-    const s = String(raw).trim();
-    if (s) fdaById.set(id, s);
+    if (Number.isFinite(id)) userById.set(id, u);
+    const em = String(u?.email ?? '').trim().toLowerCase();
+    if (em) userByEmail.set(em, u);
   }
-  const pick = (existing: unknown, userPk: unknown) => {
-    if (existing != null && String(existing).trim() !== '') return existing;
-    const id = Number(userPk);
-    if (!Number.isFinite(id)) return existing ?? null;
-    return fdaById.get(id) ?? existing ?? null;
+
+  const numericFdaFromUser = (u: any): string | null => {
+    const raw = u?.fda_user_id ?? u?.fdaUserId;
+    if (!isNumericFdaPublicId(raw)) return null;
+    return String(raw).trim();
   };
-  return (disputes as any[]).map((d) => ({
-    ...d,
-    buyer_fda_user_id: pick(d.buyer_fda_user_id, d.buyer_id),
-    seller_fda_user_id: pick(d.seller_fda_user_id, d.seller_id),
-    raised_by_fda_user_id: pick(d.raised_by_fda_user_id, d.raised_by_id),
-  }));
+
+  const enrichParty = (row: any, prefix: 'buyer' | 'seller' | 'raised_by', idKey: string) => {
+    const next = { ...row };
+    const pk = Number(row[idKey]);
+    let u = Number.isFinite(pk) ? userById.get(pk) : undefined;
+    const fdaKey = `${prefix}_fda_user_id`;
+    const emailKey = `${prefix}_email`;
+    const phoneKey = `${prefix}_phone`;
+    const nameKey = `${prefix}_name`;
+    const rawFda = row[fdaKey];
+    const rawEmail = row[emailKey];
+
+    if (!u) {
+      const em = String(rawEmail || (typeof rawFda === 'string' && rawFda.includes('@') ? rawFda : ''))
+        .trim()
+        .toLowerCase();
+      if (em.includes('@')) u = userByEmail.get(em);
+    }
+
+    if (u) {
+      const numericFda = numericFdaFromUser(u);
+      if (numericFda) next[fdaKey] = numericFda;
+      else if (typeof rawFda === 'string' && rawFda.includes('@')) next[fdaKey] = null;
+
+      if (!String(next[phoneKey] ?? '').trim() && u.phone != null && String(u.phone).trim() !== '') {
+        next[phoneKey] = u.phone;
+      }
+      if (!String(next[emailKey] ?? '').trim() && u.email != null && String(u.email).trim() !== '') {
+        next[emailKey] = u.email;
+      }
+      if (!String(next[nameKey] ?? '').trim() && u.full_name != null && String(u.full_name).trim() !== '') {
+        next[nameKey] = u.full_name;
+      }
+    } else if (typeof rawFda === 'string' && rawFda.includes('@')) {
+      next[fdaKey] = null;
+      if (!String(next[emailKey] ?? '').trim()) next[emailKey] = rawFda;
+    } else if (!isNumericFdaPublicId(rawFda)) {
+      next[fdaKey] = isNumericFdaPublicId(row[fdaKey]) ? row[fdaKey] : null;
+    }
+
+    return next;
+  };
+
+  return (disputes as any[]).map((d) => {
+    let row = enrichParty(d, 'buyer', 'buyer_id');
+    row = enrichParty(row, 'seller', 'seller_id');
+    row = enrichParty(row, 'raised_by', 'raised_by_id');
+    return row;
+  });
 }
 
 export const Dashboard: React.FC = () => {

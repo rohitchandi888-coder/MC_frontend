@@ -18,7 +18,8 @@ function formatPartyPhone(phone: unknown): string {
 function formatPartyFdaId(fdaUserId: unknown): string {
   if (fdaUserId == null) return '—';
   const s = String(fdaUserId).trim();
-  return s !== '' ? s : '—';
+  if (s === '' || s.includes('@')) return '—';
+  return s;
 }
 
 /** Admin API returns snake_case; tolerate camelCase if a proxy ever rewrites keys. */
@@ -28,9 +29,9 @@ function pickFdaId(
   camel: string,
 ): string | number | null {
   const a = row[snake];
-  if (a != null && String(a).trim() !== '') return a as string | number;
+  if (a != null && String(a).trim() !== '' && !String(a).includes('@')) return a as string | number;
   const b = row[camel];
-  if (b != null && String(b).trim() !== '') return b as string | number;
+  if (b != null && String(b).trim() !== '' && !String(b).includes('@')) return b as string | number;
   return null;
 }
 
@@ -88,9 +89,14 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
   const [tradeAction, setTradeAction] = useState<'release' | 'cancel' | 'none'>('none');
   const [disputeSearch, setDisputeSearch] = useState('');
 
-  /** Only disputes awaiting admin action (not RESOLVED / REJECTED / CLOSED). */
+  /** Open disputes whose linked trade is not already completed (no admin action needed). */
   const openDisputesOnly = useMemo(
-    () => adminDisputes.filter((d) => String(d.status || '').trim().toUpperCase() === 'OPEN'),
+    () =>
+      adminDisputes.filter((d) => {
+        const disputeOpen = String(d.status || '').trim().toUpperCase() === 'OPEN';
+        const tradeCompleted = String(d.trade_status || '').trim().toUpperCase() === 'COMPLETED';
+        return disputeOpen && !tradeCompleted;
+      }),
     [adminDisputes],
   );
 
@@ -206,7 +212,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
       <div className="section-header">
         <h2 className="section-title">⚠️ Disputes Management</h2>
         <p className="section-subtitle">
-          Open disputes only — resolve or reject from here. Resolved history stays in the database but is not listed.
+          Open disputes on active trades only. Completed trades are hidden. Resolved disputes stay in the database but are not listed here.
         </p>
       </div>
 
@@ -245,7 +251,7 @@ export const DisputesPanel: React.FC<DisputesPanelProps> = ({
               No open disputes
             </p>
             <p className="text-sm text-gray-600">
-              Nothing needs admin action right now. Resolved disputes are kept in the database but not shown here.
+              Nothing needs admin action right now. Disputes on completed trades and resolved disputes are not shown here.
             </p>
           </div>
         ) : filteredDisputes.length === 0 ? (
