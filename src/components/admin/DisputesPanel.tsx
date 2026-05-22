@@ -18,8 +18,7 @@ function formatPartyPhone(phone: unknown): string {
 function formatPartyFdaId(fdaUserId: unknown): string {
   if (fdaUserId == null) return '—';
   const s = String(fdaUserId).trim();
-  if (s === '' || s.includes('@')) return '—';
-  return s;
+  return s !== '' ? s : '—';
 }
 
 /** Admin API returns snake_case; tolerate camelCase if a proxy ever rewrites keys. */
@@ -29,9 +28,9 @@ function pickFdaId(
   camel: string,
 ): string | number | null {
   const a = row[snake];
-  if (a != null && String(a).trim() !== '' && !String(a).includes('@')) return a as string | number;
+  if (a != null && String(a).trim() !== '') return a as string | number;
   const b = row[camel];
-  if (b != null && String(b).trim() !== '' && !String(b).includes('@')) return b as string | number;
+  if (b != null && String(b).trim() !== '') return b as string | number;
   return null;
 }
 
