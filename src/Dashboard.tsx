@@ -1494,23 +1494,43 @@ export const Dashboard: React.FC = () => {
     if (activeTab === 'p2p' && auth) {
       // Only load trades and balance for P2P Trading tab (for creating offers)
       loadMyTrades();
-      if (storedMeta?.address) {
-        fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+      const activeId = getActiveWalletId();
+      const activeRegisteredWallet = activeId
+        ? registeredFdaWallets.find((w: any) => String(w?.id) === String(activeId))
+        : null;
+      const fallbackRegisteredWallet = activeRegisteredWallet || registeredFdaWallets[0];
+      const balanceWalletAddress = storedMeta?.address || fallbackRegisteredWallet?.address || null;
+      if (storedMeta?.id && activeId !== storedMeta.id) {
+        // Keep local active wallet id in sync with currently selected UI wallet.
+        setActiveWalletId(storedMeta.id);
+      }
+      if (balanceWalletAddress) {
+        fetchInternalBalance(balanceWalletAddress); // Pass wallet address explicitly
       }
     }
     if (activeTab === 'trade-listing' && auth) {
       // Load offers, trades, and balance for Trade Listing tab
       loadOffers();
       loadMyTrades();
-      if (storedMeta?.address) {
-        fetchInternalBalance(storedMeta.address); // Pass wallet address explicitly
+      const activeId = getActiveWalletId();
+      const activeRegisteredWallet = activeId
+        ? registeredFdaWallets.find((w: any) => String(w?.id) === String(activeId))
+        : null;
+      const fallbackRegisteredWallet = activeRegisteredWallet || registeredFdaWallets[0];
+      const balanceWalletAddress = storedMeta?.address || fallbackRegisteredWallet?.address || null;
+      if (storedMeta?.id && activeId !== storedMeta.id) {
+        // Keep local active wallet id in sync with currently selected UI wallet.
+        setActiveWalletId(storedMeta.id);
+      }
+      if (balanceWalletAddress) {
+        fetchInternalBalance(balanceWalletAddress); // Pass wallet address explicitly
       }
     }
     if ((activeTab === 'admin' || activeTab === 'disputes') && auth && auth.user.isAdmin) {
       // Load admin data (settings, trades, disputes) for Admin Panel and Disputes
       loadAdminData();
     }
-  }, [activeTab, auth]);
+  }, [activeTab, auth, storedMeta?.id, storedMeta?.address, registeredFdaWallets]);
 
   const handleGenerateSeed = () => {
     const wallet = ethers.Wallet.createRandom();
@@ -2265,7 +2285,7 @@ export const Dashboard: React.FC = () => {
     }
     setLoadingOffers(true);
     try {
-      const res = await fetch(getApiUrl('offers'), {
+      const res = await fetch(getApiUrl('offers?limit=120'), {
         headers: {
           Authorization: `Bearer ${auth.token}`,
         },
@@ -4930,6 +4950,7 @@ const getPaymentDetailRows = (pm: any) => {
               inMobileShell={useMobileLayout}
               auth={auth}
               canUseUsdt={/^0x[a-fA-F0-9]{40}$/i.test((p2pUsdtPayoutAddress || '').trim())}
+              walletAddress={storedMeta?.address || null}
               internalFdaBalance={internalFdaBalance}
               internalFdaUsable={internalFdaUsable}
               internalFdaLocked={internalFdaLocked}

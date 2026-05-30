@@ -12,6 +12,7 @@ interface P2PTradingProps {
   auth: AuthState | null;
   /** When false, USDT is hidden and any USDT selection is coerced to INR. */
   canUseUsdt?: boolean;
+  walletAddress?: string | null;
   internalFdaBalance: number | null;
   /** FDA you can list in new SELL offers (excludes active holds + holding reserve). Matches home "Available". */
   internalFdaUsable: number | null;
@@ -84,6 +85,7 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   inMobileShell = false,
   auth,
   canUseUsdt = false,
+  walletAddress = null,
   internalFdaBalance,
   internalFdaUsable,
   internalFdaLocked,
@@ -123,12 +125,65 @@ export const P2PTrading: React.FC<P2PTradingProps> = ({
   openDisputeModal,
   openTradeChatModal,
 }) => {
-  const sellableInternalFda =
-    internalFdaBalance === null
-      ? null
-      : internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
+  const [holdingUsableForNewHold, setHoldingUsableForNewHold] = useState<number | null>(null);
+
+  useEffect(() => {
+    const loadHoldingUsable = async () => {
+      if (!auth?.token || !walletAddress) {
+        setHoldingUsableForNewHold(null);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${getApiUrl('internal/holdings/reward-status')}?wallet_address=${encodeURIComponent(String(walletAddress))}`,
+          { headers: { Authorization: `Bearer ${auth.token}` } },
+        );
+        if (!res.ok) {
+          setHoldingUsableForNewHold(null);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const value = data?.holdingBalanceSummary?.usableForNewHold;
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          setHoldingUsableForNewHold(Math.max(0, Number(value)));
+        } else {
+          setHoldingUsableForNewHold(null);
+        }
+      } catch {
+        setHoldingUsableForNewHold(null);
+      }
+    };
+    void loadHoldingUsable();
+  }, [auth?.token, walletAddress]);
+
+  const sellableInternalFda = useMemo(() => {
+    const balance =
+      internalFdaBalance !== null && Number.isFinite(internalFdaBalance)
+        ? Math.max(0, internalFdaBalance)
+        : null;
+    // Prefer the same holding-adjusted available value used on Home.
+    const homeAvailable =
+      holdingUsableForNewHold !== null && Number.isFinite(holdingUsableForNewHold)
+        ? Math.max(0, holdingUsableForNewHold)
+        : null;
+    const usable =
+      internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
         ? Math.max(0, internalFdaUsable)
-        : internalFdaBalance;
+        : null;
+    const locked =
+      internalFdaLocked !== null && Number.isFinite(internalFdaLocked)
+        ? Math.max(0, internalFdaLocked)
+        : 0;
+
+    if (homeAvailable !== null) {
+      return balance === null ? homeAvailable : Math.min(homeAvailable, balance);
+    }
+    if (balance === null) return null;
+    if (usable === null) return balance;
+    // If everything says unlocked and usable is stale 0, keep a safe fallback.
+    if (usable <= 0 && balance > 0 && locked <= 0) return balance;
+    return Math.min(usable, balance);
+  }, [internalFdaBalance, internalFdaUsable, internalFdaLocked, holdingUsableForNewHold]);
 
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = React.useState(false);
