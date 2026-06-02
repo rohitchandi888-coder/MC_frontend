@@ -91,6 +91,13 @@ export const TradeListing: React.FC<TradeListingProps> = ({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  const scrollToMyTrades = () => {
+    void loadMyTrades();
+    requestAnimationFrame(() => {
+      document.getElementById('p2p-my-trades')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
   // const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
 
   const formatParticipantFdaId = (fdaUserId: unknown, userId: unknown) => {
@@ -283,40 +290,68 @@ export const TradeListing: React.FC<TradeListingProps> = ({
                 <div style={{ width: '100%', display: 'grid', gap: 10 }}>
                   <div
                     style={{
-                      display: 'inline-flex',
-                      padding: 4,
-                      borderRadius: 999,
-                      border: '1px solid #334155',
-                      background: '#0f172a',
-                      width: 'fit-content',
-                      gap: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      flexWrap: 'wrap',
                     }}
                   >
-                    {(['BUY', 'SELL'] as const).map((t) => {
-                      const active = offersFilterType === t;
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => {
-                            setOffersFilterType(t);
-                            setOffersPage(1);
-                          }}
-                          style={{
-                            borderRadius: 999,
-                            border: 'none',
-                            minWidth: 66,
-                            height: 30,
-                            background: active ? '#f8fafc' : 'transparent',
-                            color: active ? '#0f172a' : '#cbd5e1',
-                            fontWeight: 700,
-                            fontSize: 12,
-                          }}
-                        >
-                          {t === 'BUY' ? 'Buy' : 'Sell'}
-                        </button>
-                      );
-                    })}
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        padding: 4,
+                        borderRadius: 999,
+                        border: '1px solid #334155',
+                        background: '#0f172a',
+                        width: 'fit-content',
+                        gap: 4,
+                      }}
+                    >
+                      {(['BUY', 'SELL'] as const).map((t) => {
+                        const active = offersFilterType === t;
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              setOffersFilterType(t);
+                              setOffersPage(1);
+                            }}
+                            style={{
+                              borderRadius: 999,
+                              border: 'none',
+                              minWidth: 66,
+                              height: 30,
+                              background: active ? '#f8fafc' : 'transparent',
+                              color: active ? '#0f172a' : '#cbd5e1',
+                              fontWeight: 700,
+                              fontSize: 12,
+                            }}
+                          >
+                            {t === 'BUY' ? 'Buy' : 'Sell'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={scrollToMyTrades}
+                      style={{
+                        borderRadius: 999,
+                        border: '1px solid #facc15',
+                        background: '#fef9c3',
+                        color: '#713f12',
+                        fontWeight: 700,
+                        fontSize: 11,
+                        letterSpacing: '0.02em',
+                        padding: '7px 12px',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      GO TO MY TRADES
+                    </button>
                   </div>
                   <input
                     type="text"
@@ -534,7 +569,7 @@ export const TradeListing: React.FC<TradeListingProps> = ({
           </div>
 
           {/* My Trades Section */}
-          <div className="offer-form-card mb-6">
+          <div id="p2p-my-trades" className="offer-form-card mb-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="offer-form-title">My Trades ({myTrades.length})</h3>
               <button
