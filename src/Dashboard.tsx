@@ -422,6 +422,26 @@ export const Dashboard: React.FC = () => {
   const [internalFdaLocked, setInternalFdaLocked] = useState<number | null>(null);
   const [internalFdaHolding, setInternalFdaHolding] = useState<number | null>(null);
   const [internalFdaUsable, setInternalFdaUsable] = useState<number | null>(null);
+  /** Wallet-scoped sell cap (same as Home "Available FDA" — ignores holds on other wallets). */
+  const [walletUsableForSell, setWalletUsableForSell] = useState<number | null>(null);
+
+  const resolveSellableFda = React.useCallback((): number | null => {
+    const walletScoped =
+      walletUsableForSell !== null && Number.isFinite(walletUsableForSell)
+        ? Math.max(0, walletUsableForSell)
+        : null;
+    const usable =
+      internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
+        ? Math.max(0, internalFdaUsable)
+        : null;
+    const balance =
+      internalFdaBalance !== null && Number.isFinite(internalFdaBalance)
+        ? Math.max(0, internalFdaBalance)
+        : null;
+    if (walletScoped !== null) return walletScoped;
+    if (usable !== null && usable > 0) return usable;
+    return balance;
+  }, [walletUsableForSell, internalFdaUsable, internalFdaBalance]);
   const [customTokenBalances, setCustomTokenBalances] = useState<Record<string, string>>({});
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [checkAddress, setCheckAddress] = useState('');
@@ -762,6 +782,7 @@ export const Dashboard: React.FC = () => {
       setInternalFdaLocked(null);
       setInternalFdaHolding(null);
       setInternalFdaUsable(null);
+      setWalletUsableForSell(null);
       return;
     }
 
@@ -794,6 +815,24 @@ export const Dashboard: React.FC = () => {
       setInternalFdaLocked(data.locked !== undefined ? data.locked : 0);
       setInternalFdaHolding(data.holding !== undefined ? data.holding : 0);
       setInternalFdaUsable(data.usable !== undefined ? data.usable : (data.available || data.balance));
+
+      try {
+        const holdRes = await fetch(
+          getApiUrl(`internal/holdings/reward-status?wallet_address=${encodeURIComponent(address)}`),
+          { headers: { Authorization: `Bearer ${auth.token}` } },
+        );
+        if (holdRes.ok) {
+          const holdData = await holdRes.json().catch(() => ({}));
+          const u = holdData?.holdingBalanceSummary?.usableForNewHold;
+          setWalletUsableForSell(
+            typeof u === 'number' && Number.isFinite(u) ? Math.max(0, u) : null,
+          );
+        } else {
+          setWalletUsableForSell(null);
+        }
+      } catch {
+        setWalletUsableForSell(null);
+      }
     } catch (err) {
       console.error('[fetchInternalBalance] Failed to fetch internal balance:', err);
     }
@@ -2495,10 +2534,7 @@ export const Dashboard: React.FC = () => {
     // Only check balance for SELL offers - must be explicitly SELL
     else if (isSell) {
       console.log('[FRONTEND] ✅ This is a SELL offer, checking balance...');
-      const fdaSellCap =
-        internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
-          ? Math.max(0, internalFdaUsable)
-          : internalFdaBalance;
+      const fdaSellCap = resolveSellableFda();
       if (fdaSellCap === null || fdaSellCap < Number(offerAmount)) {
         console.log('[FRONTEND] ❌ Balance check failed for SELL offer');
         showErrorModal(
@@ -2681,10 +2717,7 @@ export const Dashboard: React.FC = () => {
     const offerType = (selectedOffer.type || selectedOffer.offer_type || 'SELL').toUpperCase();
     if (offerType === 'BUY' && selectedOffer.assetSymbol === 'FDA') {
       console.log('[FRONTEND] ✅ Accepting BUY offer - user will be SELLER, checking FDA balance...');
-      const fdaSellCap =
-        internalFdaUsable !== null && Number.isFinite(internalFdaUsable)
-          ? Math.max(0, internalFdaUsable)
-          : internalFdaBalance;
+      const fdaSellCap = resolveSellableFda();
       if (fdaSellCap === null || fdaSellCap < amountNum) {
         closeAcceptModal(); // Close modal first
         showErrorModal(
